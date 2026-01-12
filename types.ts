@@ -40,3 +40,9 @@ export enum DashboardTab {
   SEO_BY_COUNTRY = 'seo_by_country',
   KEYWORD_DEEP_DIVE = 'keyword_deep_dive'
 }
+
+export interface ComparisonMetrics {
+  current: number;
+  previous: number;
+  change: number;
+}
