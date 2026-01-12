@@ -1,7 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  LayoutDashboard, 
   BarChart3, 
   Search, 
   Calendar,
@@ -18,21 +17,24 @@ import {
   LogOut,
   RefreshCw,
   Lock,
-  CheckCircle2,
   ShieldCheck,
-  ChevronRight,
+  Layers,
+  CheckCircle2,
+  Database,
+  ExternalLink,
   ChevronDown,
-  Layers
+  Activity
 } from 'lucide-react';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart, Cell, ComposedChart, Line
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart
 } from 'recharts';
 import { generateMockDailyData, generateMockKeywordData } from './mockData';
-import { DashboardTab, DashboardFilters, DailyData, KeywordData, QueryType, ComparisonMetrics } from './types';
+import { DashboardTab, DashboardFilters, DailyData, KeywordData, ComparisonMetrics, Ga4Property, GscSite } from './types';
 import { getDashboardInsights } from './geminiService';
 
 const CLIENT_ID = "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com";
-const SCOPES = "https://www.googleapis.com/auth/analytics.readonly https://www.googleapis.com/auth/webmasters.readonly";
+const SCOPE_GA4 = "https://www.googleapis.com/auth/analytics.readonly";
+const SCOPE_GSC = "https://www.googleapis.com/auth/webmasters.readonly";
 
 const KpiCard: React.FC<{ 
   title: string; 
@@ -63,11 +65,22 @@ const KpiCard: React.FC<{
 );
 
 const App: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState<{ name: string; email: string; picture: string; accessToken?: string } | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [hasScopes, setHasScopes] = useState(false);
-  const tokenClientRef = useRef<any>(null);
+  // Auth State
+  const [ga4Auth, setGa4Auth] = useState<{ token: string; property: Ga4Property | null } | null>(null);
+  const [gscAuth, setGscAuth] = useState<{ token: string; site: GscSite | null } | null>(null);
+  const [user, setUser] = useState<{ name: string; email: string; picture: string } | null>(null);
+  
+  // Entity Lists (Mocks for the demo)
+  const ga4Properties: Ga4Property[] = [
+    { id: '123456', name: 'Web Principal (GA4)' },
+    { id: '789012', name: 'Blog Corporativo' },
+    { id: '345678', name: 'E-commerce Staging' }
+  ];
+  const gscSites: GscSite[] = [
+    { siteUrl: 'https://example.com/', permissionLevel: 'siteOwner' },
+    { siteUrl: 'https://blog.example.com/', permissionLevel: 'siteFullUser' },
+    { siteUrl: 'sc-domain:example.com', permissionLevel: 'siteOwner' }
+  ];
 
   const [activeTab, setActiveTab] = useState<DashboardTab>(DashboardTab.ORGANIC_VS_PAID);
   const [filters, setFilters] = useState<DashboardFilters>({
@@ -79,54 +92,59 @@ const App: React.FC = () => {
   const [aiInsights, setAiInsights] = useState<string | null>(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
 
+  const tokenClientGa4 = useRef<any>(null);
+  const tokenClientGsc = useRef<any>(null);
+
   useEffect(() => {
     if (typeof window !== 'undefined' && (window as any).google) {
+      // Basic profile identity
       (window as any).google.accounts.id.initialize({
         client_id: CLIENT_ID,
-        callback: handleGoogleResponse,
-        auto_select: false,
+        callback: handleIdentityResponse,
       });
 
       (window as any).google.accounts.id.renderButton(
-        document.getElementById("googleSignInBtn"),
-        { theme: "filled_blue", size: "large", width: "320", text: "signin_with", shape: "pill" }
+        document.getElementById("googleIdentityBtn"),
+        { theme: "outline", size: "large", width: "100%", text: "continue_with" }
       );
 
-      tokenClientRef.current = (window as any).google.accounts.oauth2.initTokenClient({
+      // Dedicated Auth Clients
+      tokenClientGa4.current = (window as any).google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: (tokenResponse: any) => {
-          if (tokenResponse && tokenResponse.access_token) {
-            setHasScopes(true);
-            setUser(prev => prev ? { ...prev, accessToken: tokenResponse.access_token } : null);
-          }
+        scope: SCOPE_GA4,
+        callback: (resp: any) => {
+          if (resp.access_token) setGa4Auth({ token: resp.access_token, property: ga4Properties[0] });
+        },
+      });
+
+      tokenClientGsc.current = (window as any).google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPE_GSC,
+        callback: (resp: any) => {
+          if (resp.access_token) setGscAuth({ token: resp.access_token, site: gscSites[0] });
         },
       });
     }
   }, []);
 
-  const handleGoogleResponse = (response: any) => {
+  const handleIdentityResponse = (response: any) => {
     const base64Url = response.credential.split('.')[1];
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
-    const decoded = JSON.parse(jsonPayload);
+    const decoded = JSON.parse(atob(base64));
     setUser({ name: decoded.name, email: decoded.email, picture: decoded.picture });
-    setIsAuthenticated(true);
-    setTimeout(() => tokenClientRef.current.requestAccessToken({ prompt: 'consent' }), 1000);
   };
+
+  const connectGa4 = () => tokenClientGa4.current.requestAccessToken();
+  const connectGsc = () => tokenClientGsc.current.requestAccessToken();
 
   const rawDailyData = useMemo(() => generateMockDailyData(), []);
   const rawKeywordData = useMemo(() => generateMockKeywordData(), []);
 
-  // Filter current period and previous year period
   const processedData = useMemo(() => {
-    const currentStart = new Date(filters.dateRange.start);
-    const currentEnd = new Date(filters.dateRange.end);
-    
-    const prevStart = new Date(currentStart);
-    prevStart.setFullYear(prevStart.getFullYear() - 1);
-    const prevEnd = new Date(currentEnd);
-    prevEnd.setFullYear(prevEnd.getFullYear() - 1);
+    const currentStart = filters.dateRange.start;
+    const currentEnd = filters.dateRange.end;
+    const prevStart = new Date(new Date(currentStart).setFullYear(new Date(currentStart).getFullYear() - 1)).toISOString().split('T')[0];
+    const prevEnd = new Date(new Date(currentEnd).setFullYear(new Date(currentEnd).getFullYear() - 1)).toISOString().split('T')[0];
 
     const filterBase = (d: DailyData) => {
       const countryMatch = filters.country === 'All' || d.country === filters.country;
@@ -134,14 +152,14 @@ const App: React.FC = () => {
       return countryMatch && queryMatch;
     };
 
-    const current = rawDailyData.filter(d => filterBase(d) && d.date >= filters.dateRange.start && d.date <= filters.dateRange.end);
-    const previous = rawDailyData.filter(d => filterBase(d) && d.date >= prevStart.toISOString().split('T')[0] && d.date <= prevEnd.toISOString().split('T')[0]);
+    const current = rawDailyData.filter(d => filterBase(d) && d.date >= currentStart && d.date <= currentEnd);
+    const previous = rawDailyData.filter(d => filterBase(d) && d.date >= prevStart && d.date <= prevEnd);
 
     return { current, previous };
   }, [rawDailyData, filters]);
 
   const aggregateMetrics = (data: DailyData[]) => {
-    const metrics = data.reduce((acc, curr) => ({
+    const m = data.reduce((acc, curr) => ({
       sessions: acc.sessions + curr.sessions,
       sales: acc.sales + curr.sales,
       revenue: acc.revenue + curr.revenue,
@@ -149,25 +167,14 @@ const App: React.FC = () => {
       impressions: acc.impressions + curr.impressions,
     }), { sessions: 0, sales: 0, revenue: 0, clicks: 0, impressions: 0 });
 
-    return {
-      ...metrics,
-      cr: metrics.sessions > 0 ? (metrics.sales / metrics.sessions) * 100 : 0,
-      ctr: metrics.impressions > 0 ? (metrics.clicks / metrics.impressions) * 100 : 0,
-    };
+    return { ...m, cr: m.sessions > 0 ? (m.sales / m.sessions) * 100 : 0, ctr: m.impressions > 0 ? (m.clicks / m.impressions) * 100 : 0 };
   };
 
-  const channelComparison = useMemo(() => {
-    const getChannelStats = (data: DailyData[], channel: 'Organic Search' | 'Paid Search') => aggregateMetrics(data.filter(d => d.channel === channel));
-    
+  const channelStats = useMemo(() => {
+    const getStats = (data: DailyData[], ch: string) => aggregateMetrics(data.filter(d => d.channel === ch));
     return {
-      organic: {
-        current: getChannelStats(processedData.current, 'Organic Search'),
-        previous: getChannelStats(processedData.previous, 'Organic Search')
-      },
-      paid: {
-        current: getChannelStats(processedData.current, 'Paid Search'),
-        previous: getChannelStats(processedData.previous, 'Paid Search')
-      }
+      organic: { current: getStats(processedData.current, 'Organic Search'), previous: getStats(processedData.previous, 'Organic Search') },
+      paid: { current: getStats(processedData.current, 'Paid Search'), previous: getStats(processedData.previous, 'Paid Search') }
     };
   }, [processedData]);
 
@@ -175,270 +182,126 @@ const App: React.FC = () => {
 
   const handleGenerateInsights = async () => {
     setLoadingInsights(true);
-    const summary = `Dashboard: ${activeTab}. Country: ${filters.country}. Query: ${filters.queryType}. Organic Revenue: €${channelComparison.organic.current.revenue.toLocaleString()}. Paid Revenue: €${channelComparison.paid.current.revenue.toLocaleString()}. YoY change Organic: ${calcChange(channelComparison.organic.current.revenue, channelComparison.organic.previous.revenue).toFixed(1)}%`;
+    const summary = `Dashboard: ${activeTab}. Rev: €${(channelStats.organic.current.revenue + channelStats.paid.current.revenue).toLocaleString()}.`;
     const insights = await getDashboardInsights(summary, activeTab);
-    setAiInsights(insights || "No hay datos suficientes para el análisis.");
+    setAiInsights(insights);
     setLoadingInsights(false);
   };
 
-  const DashboardOrganicVsPaid = () => {
-    const chartData = useMemo(() => {
-      const groups: Record<string, { date: string; organic: number; paid: number }> = {};
-      processedData.current.forEach(d => {
-        if (!groups[d.date]) groups[d.date] = { date: d.date, organic: 0, paid: 0 };
-        if (d.channel === 'Organic Search') groups[d.date].organic += d.sessions;
-        else groups[d.date].paid += d.sessions;
-      });
-      return Object.values(groups).sort((a, b) => a.date.localeCompare(b.date));
-    }, [processedData]);
-
-    return (
-      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white"><Search className="w-4 h-4" /></div>
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Canal: Organic Search</h3>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <KpiCard title="Sesiones" value={channelComparison.organic.current.sessions.toLocaleString()} icon={<TrendingUp className="w-4 h-4" />} comparison={{current: 0, previous: 0, change: calcChange(channelComparison.organic.current.sessions, channelComparison.organic.previous.sessions)}} />
-              <KpiCard title="Conv. Rate" value={`${channelComparison.organic.current.cr.toFixed(2)}%`} icon={<BarChart3 className="w-4 h-4" />} />
-              <KpiCard title="Revenue" value={`€${channelComparison.organic.current.revenue.toLocaleString()}`} icon={<Tag className="w-4 h-4" />} comparison={{current: 0, previous: 0, change: calcChange(channelComparison.organic.current.revenue, channelComparison.organic.previous.revenue)}} />
-              <KpiCard title="Sales" value={channelComparison.organic.current.sales.toLocaleString()} icon={<ShoppingBag className="w-4 h-4" />} />
-            </div>
+  // UI Components
+  const AuthScreen = () => (
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 relative">
+      <div className="absolute top-0 -left-40 w-96 h-96 bg-indigo-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-10 animate-pulse" />
+      <div className="absolute bottom-0 -right-40 w-96 h-96 bg-emerald-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-10 animate-pulse delay-700" />
+      
+      <div className="w-full max-w-2xl bg-white rounded-[40px] p-12 shadow-2xl border border-slate-100 z-10">
+        <div className="text-center mb-12">
+          <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center text-white mx-auto shadow-xl mb-6 transform -rotate-6">
+            <Activity className="w-8 h-8" />
           </div>
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center text-white"><Layers className="w-4 h-4" /></div>
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Canal: Paid Search</h3>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <KpiCard title="Sesiones" value={channelComparison.paid.current.sessions.toLocaleString()} color="amber" icon={<TrendingUp className="w-4 h-4" />} comparison={{current: 0, previous: 0, change: calcChange(channelComparison.paid.current.sessions, channelComparison.paid.previous.sessions)}} />
-              <KpiCard title="Conv. Rate" value={`${channelComparison.paid.current.cr.toFixed(2)}%`} color="amber" icon={<BarChart3 className="w-4 h-4" />} />
-              <KpiCard title="Revenue" value={`€${channelComparison.paid.current.revenue.toLocaleString()}`} color="amber" icon={<Tag className="w-4 h-4" />} comparison={{current: 0, previous: 0, change: calcChange(channelComparison.paid.current.revenue, channelComparison.paid.previous.revenue)}} />
-              <KpiCard title="Sales" value={channelComparison.paid.current.sales.toLocaleString()} color="amber" icon={<ShoppingBag className="w-4 h-4" />} />
-            </div>
-          </div>
+          <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight">Centro de Conexiones</h1>
+          <p className="text-slate-500 font-medium text-sm">Configura tus fuentes de datos para comenzar el análisis.</p>
         </div>
 
-        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between mb-8">
-            <h4 className="font-black text-slate-900 flex items-center gap-2 text-sm uppercase tracking-widest">
-              <TrendingUp className="w-4 h-4 text-indigo-600" /> Evolución Comparativa de Tráfico
-            </h4>
-            <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest">
-              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-indigo-600" /> Organic</div>
-              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-amber-500" /> Paid</div>
-            </div>
+        {!user ? (
+          <div className="max-w-xs mx-auto">
+            <div id="googleIdentityBtn"></div>
           </div>
-          <div className="h-[350px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="colorOrg" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorPaid" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" hide />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 600}} stroke="#94a3b8" />
-                <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px'}} />
-                <Area type="monotone" dataKey="organic" name="Organic" stroke="#6366f1" strokeWidth={3} fill="url(#colorOrg)" />
-                <Area type="monotone" dataKey="paid" name="Paid" stroke="#f59e0b" strokeWidth={3} fill="url(#colorPaid)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const DashboardSeoMarketplace = () => {
-    const seoCurrent = aggregateMetrics(processedData.current.filter(d => d.channel === 'Organic Search'));
-    const seoPrevious = aggregateMetrics(processedData.previous.filter(d => d.channel === 'Organic Search'));
-
-    return (
-      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <KpiCard title="Impresiones" value={seoCurrent.impressions.toLocaleString()} icon={<Eye className="w-4 h-4" />} comparison={{current: 0, previous: 0, change: calcChange(seoCurrent.impressions, seoPrevious.impressions)}} suffix="YoY" />
-          <KpiCard title="Clicks" value={seoCurrent.clicks.toLocaleString()} icon={<MousePointer2 className="w-4 h-4" />} comparison={{current: 0, previous: 0, change: calcChange(seoCurrent.clicks, seoPrevious.clicks)}} suffix="YoY" />
-          <KpiCard title="CTR" value={`${seoCurrent.ctr.toFixed(2)}%`} icon={<Percent className="w-4 h-4" />} color="emerald" />
-          <KpiCard title="Conv. Rate" value={`${seoCurrent.cr.toFixed(2)}%`} icon={<BarChart3 className="w-4 h-4" />} />
-          <KpiCard title="Revenue" value={`€${seoCurrent.revenue.toLocaleString()}`} icon={<Tag className="w-4 h-4" />} comparison={{current: 0, previous: 0, change: calcChange(seoCurrent.revenue, seoPrevious.revenue)}} suffix="YoY" />
-          <KpiCard title="Sales" value={seoCurrent.sales.toLocaleString()} icon={<ShoppingBag className="w-4 h-4" />} />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-            <h4 className="font-black text-slate-900 mb-6 text-sm uppercase tracking-widest flex items-center gap-2">
-              <Globe className="w-4 h-4 text-emerald-500" /> Distribución por Mercado (SEO)
-            </h4>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={Object.entries(processedData.current.filter(d => d.channel === 'Organic Search').reduce((acc, curr) => {
-                  acc[curr.country] = (acc[curr.country] || 0) + curr.revenue;
-                  return acc;
-                }, {} as any)).map(([country, rev]) => ({ country, revenue: rev }))}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="country" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700}} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 600}} />
-                  <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                  <Bar dataKey="revenue" fill="#10b981" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          <div className="bg-slate-900 p-8 rounded-3xl text-white flex flex-col justify-center relative overflow-hidden">
-             <div className="absolute top-0 right-0 p-8 opacity-10">
-                <ShieldCheck className="w-32 h-32" />
-             </div>
-             <h4 className="text-xl font-black mb-4 relative z-10">Sincronización de Search Console</h4>
-             <p className="text-slate-400 text-sm mb-8 relative z-10 leading-relaxed">Conecta directamente con la API de GSC para obtener métricas YoY en tiempo real por cada mercado seleccionado.</p>
-             <button 
-              onClick={() => { setIsSyncing(true); setTimeout(() => setIsSyncing(false), 2000); }} 
-              className="w-full py-4 bg-white text-slate-900 rounded-2xl font-bold hover:bg-emerald-500 hover:text-white transition-all flex items-center justify-center gap-3 relative z-10"
-             >
-                {isSyncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                Actualizar Datos YoY
-             </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const DashboardDeepDive = () => {
-    const filteredKeywords = useMemo(() => {
-      return rawKeywordData.filter(d => {
-        const countryMatch = filters.country === 'All' || d.country === filters.country;
-        const queryMatch = filters.queryType === 'All' || d.queryType === filters.queryType;
-        const searchMatch = d.keyword.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            d.landingPage.toLowerCase().includes(searchTerm.toLowerCase());
-        return countryMatch && queryMatch && searchMatch;
-      });
-    }, [filters, searchTerm]);
-
-    return (
-      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
-          <div className="p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-50/50">
-            <div>
-              <h3 className="text-lg font-black text-slate-900">Análisis Granular de SEO</h3>
-              <p className="text-slate-500 text-xs font-medium">Keywords y Landing Pages con mayor potencial comercial.</p>
-            </div>
-            <div className="relative w-full md:w-80">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-              <input 
-                type="text" 
-                value={searchTerm} 
-                onChange={e => setSearchTerm(e.target.value)} 
-                placeholder="Buscar keyword o URL..." 
-                className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-semibold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all outline-none shadow-sm"
-              />
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="bg-slate-50 text-slate-400 font-black uppercase text-[10px] tracking-[0.15em] border-b border-slate-100">
-                  <th className="px-8 py-5">Keyword & URL</th>
-                  <th className="px-8 py-5">Impressions</th>
-                  <th className="px-8 py-5">CTR</th>
-                  <th className="px-8 py-5">Conv. Rate</th>
-                  <th className="px-8 py-5 text-right">Revenue</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredKeywords.slice(0, 20).map((row, i) => (
-                  <tr key={i} className="hover:bg-slate-50 transition-colors group">
-                    <td className="px-8 py-5">
-                      <div className="flex flex-col">
-                        <span className="font-bold text-slate-900 text-base mb-1 group-hover:text-indigo-600 transition-colors">{row.keyword}</span>
-                        <span className="text-slate-400 text-[10px] font-medium flex items-center gap-1">
-                          <Globe className="w-3 h-3" /> {row.landingPage}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-8 py-5 font-bold tabular-nums text-slate-600">{row.impressions.toLocaleString()}</td>
-                    <td className="px-8 py-5">
-                      <div className="flex flex-col gap-1.5 min-w-[100px]">
-                        <span className="font-black text-indigo-600">{row.ctr.toFixed(2)}%</span>
-                        <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden">
-                          <div className="bg-indigo-500 h-full" style={{ width: `${Math.min(row.ctr * 5, 100)}%` }} />
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-8 py-5">
-                      <div className="flex flex-col gap-1.5 min-w-[100px]">
-                        <span className="font-black text-emerald-600">{row.conversionRate.toFixed(2)}%</span>
-                        <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden">
-                          <div className="bg-emerald-500 h-full" style={{ width: `${Math.min(row.conversionRate * 10, 100)}%` }} />
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-8 py-5 text-right">
-                      <div className="flex flex-col items-end">
-                        <span className="text-lg font-black text-slate-900">€{row.revenue.toLocaleString()}</span>
-                        <span className="text-[10px] font-bold text-slate-400">{row.sales} ventas</span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {filteredKeywords.length === 0 && (
-            <div className="p-20 text-center flex flex-col items-center">
-              <Search className="w-12 h-12 text-slate-200 mb-4" />
-              <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">No se encontraron resultados para los filtros seleccionados</p>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden">
-        <div className="absolute top-0 -left-40 w-96 h-96 bg-indigo-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-20 animate-pulse" />
-        <div className="absolute bottom-0 -right-40 w-96 h-96 bg-emerald-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-20 animate-pulse delay-700" />
-        <div className="w-full max-w-md bg-white rounded-[40px] p-12 shadow-2xl relative z-10 border border-white/20">
-            <div className="text-center mb-10">
-                <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white mx-auto shadow-2xl shadow-indigo-200 mb-6 transform -rotate-6">
-                    <Lock className="w-8 h-8" />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* GA4 Card */}
+            <div className={`p-6 rounded-3xl border-2 transition-all ${ga4Auth ? 'border-indigo-500 bg-indigo-50/30' : 'border-slate-100 bg-white'}`}>
+              <div className="flex justify-between items-start mb-6">
+                <div className={`p-3 rounded-2xl ${ga4Auth ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                  <BarChart3 className="w-6 h-6" />
                 </div>
-                <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight">SEO Reporting</h1>
-                <p className="text-slate-500 font-medium">Panel avanzado de marketing para <br/><span className="text-indigo-600 font-bold">Google Search Console</span> y <span className="text-indigo-600 font-bold">GA4</span>.</p>
-            </div>
-            <div className="flex flex-col items-center gap-6">
-                <div id="googleSignInBtn" className="w-full flex justify-center"></div>
-                <div className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3">
-                    <ShieldCheck className="w-5 h-5 text-indigo-500" />
-                    <p className="text-[11px] text-slate-500 font-medium leading-relaxed">OAuth 2.0 de alta seguridad con scopes de solo lectura para GA4 y Webmasters.</p>
+                {ga4Auth && <CheckCircle2 className="w-6 h-6 text-indigo-500" />}
+              </div>
+              <h3 className="text-lg font-black text-slate-900 mb-1">Google Analytics 4</h3>
+              <p className="text-xs text-slate-500 mb-6 font-medium">Acceso a sesiones, CR y revenue transaccional.</p>
+              
+              {!ga4Auth ? (
+                <button onClick={connectGa4} className="w-full py-3 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-indigo-600 transition-all flex items-center justify-center gap-2">
+                  Conectar GA4
+                </button>
+              ) : (
+                <div className="space-y-3">
+                   <p className="text-[10px] font-black uppercase text-indigo-600 tracking-widest">Propiedad Activa</p>
+                   <select 
+                    value={ga4Auth.property?.id} 
+                    onChange={e => setGa4Auth({...ga4Auth, property: ga4Properties.find(p => p.id === e.target.value) || null})}
+                    className="w-full p-2 bg-white border border-indigo-200 rounded-lg text-xs font-bold outline-none"
+                   >
+                     {ga4Properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                   </select>
                 </div>
+              )}
             </div>
-        </div>
+
+            {/* GSC Card */}
+            <div className={`p-6 rounded-3xl border-2 transition-all ${gscAuth ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-100 bg-white'}`}>
+              <div className="flex justify-between items-start mb-6">
+                <div className={`p-3 rounded-2xl ${gscAuth ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                  <Search className="w-6 h-6" />
+                </div>
+                {gscAuth && <CheckCircle2 className="w-6 h-6 text-emerald-500" />}
+              </div>
+              <h3 className="text-lg font-black text-slate-900 mb-1">Search Console</h3>
+              <p className="text-xs text-slate-500 mb-6 font-medium">Datos de impresiones, clicks y keywords SEO.</p>
+              
+              {!gscAuth ? (
+                <button onClick={connectGsc} className="w-full py-3 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-emerald-600 transition-all flex items-center justify-center gap-2">
+                  Conectar GSC
+                </button>
+              ) : (
+                <div className="space-y-3">
+                   <p className="text-[10px] font-black uppercase text-emerald-600 tracking-widest">Dominio / Sitio</p>
+                   <select 
+                    value={gscAuth.site?.siteUrl} 
+                    onChange={e => setGscAuth({...gscAuth, site: gscSites.find(s => s.siteUrl === e.target.value) || null})}
+                    className="w-full p-2 bg-white border border-emerald-200 rounded-lg text-xs font-bold outline-none"
+                   >
+                     {gscSites.map(s => <option key={s.siteUrl} value={s.siteUrl}>{s.siteUrl}</option>)}
+                   </select>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {(ga4Auth && gscAuth) && (
+          <div className="mt-12 flex justify-center animate-in fade-in slide-in-from-top-4">
+            <button 
+              onClick={() => {}} // User is already "in", state logic handles conditional rendering
+              className="px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-xl hover:bg-indigo-700 transition-all transform hover:scale-105"
+            >
+              Entrar al Dashboard
+            </button>
+          </div>
+        )}
       </div>
-    );
-  }
+      
+      <div className="mt-12 flex items-center gap-8 opacity-40 grayscale pointer-events-none">
+        <div className="flex items-center gap-2 font-black text-xs text-slate-400"><ShieldCheck className="w-4 h-4" /> OAuth 2.0 Secure</div>
+        <div className="flex items-center gap-2 font-black text-xs text-slate-400"><Database className="w-4 h-4" /> SSL Encryption</div>
+      </div>
+    </div>
+  );
+
+  if (!ga4Auth || !gscAuth) return <AuthScreen />;
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex text-slate-900">
+      {/* Sidebar */}
       <aside className="w-72 bg-white border-r border-slate-200 hidden lg:flex flex-col fixed inset-y-0 shadow-sm z-30">
         <div className="p-8 border-b border-slate-100">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-xl shadow-indigo-200">
-              <BarChart3 className="w-6 h-6" />
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-xl">
+              <Activity className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-lg font-black text-slate-900 leading-none">SEOMetric</h1>
-              <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mt-1">Reporting Suite</p>
+              <h1 className="text-lg font-black text-slate-900 leading-none">SEO & SEM</h1>
+              <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider mt-1">Advanced Suite</p>
             </div>
           </div>
         </div>
@@ -449,33 +312,44 @@ const App: React.FC = () => {
           <NavItem active={activeTab === DashboardTab.KEYWORD_DEEP_DIVE} onClick={() => setActiveTab(DashboardTab.KEYWORD_DEEP_DIVE)} icon={<Search className="w-5 h-5" />} label="SEO Deep Dive" />
         </nav>
 
-        <div className="p-6 border-t border-slate-100 space-y-4">
-            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100 group">
-                <div className="flex items-center gap-2 overflow-hidden">
-                    <img src={user?.picture} alt="profile" className="w-8 h-8 rounded-full border border-white shadow-sm" />
+        <div className="p-6 border-t border-slate-100">
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="flex items-center gap-3 mb-4">
+                    <img src={user?.picture} className="w-8 h-8 rounded-full" alt="avatar" />
                     <div className="truncate">
-                        <p className="text-[10px] font-black text-slate-900 leading-none truncate">{user?.name}</p>
+                        <p className="text-[10px] font-black text-slate-900 truncate">{user?.name}</p>
                         <p className="text-[8px] text-slate-400 truncate">{user?.email}</p>
                     </div>
                 </div>
-                <button onClick={() => setIsAuthenticated(false)} className="p-2 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors">
-                    <LogOut className="w-4 h-4" />
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between text-[8px] font-black uppercase text-indigo-500">
+                        <span>GA4: {ga4Auth.property?.name.split(' ')[0]}...</span>
+                        <CheckCircle2 className="w-2.5 h-2.5" />
+                    </div>
+                    <div className="flex items-center justify-between text-[8px] font-black uppercase text-emerald-500">
+                        <span>GSC: {gscAuth.site?.siteUrl.split('//')[1]?.substring(0, 10)}...</span>
+                        <CheckCircle2 className="w-2.5 h-2.5" />
+                    </div>
+                </div>
+                <button onClick={() => {setGa4Auth(null); setGscAuth(null);}} className="w-full mt-4 py-2 text-[10px] font-black text-slate-400 hover:text-rose-600 transition-colors flex items-center justify-center gap-2">
+                    <LogOut className="w-3 h-3" /> Cerrar Sesión
                 </button>
             </div>
         </div>
       </aside>
 
+      {/* Main Content */}
       <main className="flex-1 lg:ml-72 p-8 lg:p-12 overflow-y-auto">
         <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 mb-12">
           <div>
             <div className="flex items-center gap-2 mb-2">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Live Data: {filters.country === 'All' ? 'Global Markets' : filters.country}</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Data Real-Time: {filters.country}</span>
             </div>
             <h2 className="text-4xl font-black text-slate-900 tracking-tighter">
-              {activeTab === DashboardTab.ORGANIC_VS_PAID && "Organic vs Paid Search"}
-              {activeTab === DashboardTab.SEO_BY_COUNTRY && "Evolución SEO y YoY"}
-              {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && "Análisis de Contenido"}
+              {activeTab === DashboardTab.ORGANIC_VS_PAID && "Organic vs Paid"}
+              {activeTab === DashboardTab.SEO_BY_COUNTRY && "SEO por Mercado"}
+              {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && "Keywords & Landing Pages"}
             </h2>
           </div>
 
@@ -483,17 +357,16 @@ const App: React.FC = () => {
             <div className="flex items-center gap-3 px-4 py-2 border-r border-slate-100">
               <Calendar className="w-4 h-4 text-slate-400" />
               <div className="flex items-center gap-2 text-[11px] font-bold">
-                <input type="date" value={filters.dateRange.start} onChange={e => setFilters({...filters, dateRange: {...filters.dateRange, start: e.target.value}})} className="bg-transparent focus:outline-none" />
+                <input type="date" value={filters.dateRange.start} onChange={e => setFilters({...filters, dateRange: {...filters.dateRange, start: e.target.value}})} className="bg-transparent outline-none" />
                 <span className="text-slate-300">-</span>
-                <input type="date" value={filters.dateRange.end} onChange={e => setFilters({...filters, dateRange: {...filters.dateRange, end: e.target.value}})} className="bg-transparent focus:outline-none" />
+                <input type="date" value={filters.dateRange.end} onChange={e => setFilters({...filters, dateRange: {...filters.dateRange, end: e.target.value}})} className="bg-transparent outline-none" />
               </div>
             </div>
             <select className="px-4 py-2 bg-transparent text-[11px] font-black uppercase tracking-wider outline-none border-r border-slate-100 cursor-pointer" value={filters.country} onChange={e => setFilters({...filters, country: e.target.value})}>
-                <option value="All">Todos los Países</option>
+                <option value="All">Global</option>
                 <option value="Spain">España</option>
                 <option value="Mexico">México</option>
                 <option value="USA">USA</option>
-                <option value="UK">Reino Unido</option>
             </select>
             <select className="px-4 py-2 bg-transparent text-[11px] font-black uppercase tracking-wider outline-none cursor-pointer" value={filters.queryType} onChange={e => setFilters({...filters, queryType: e.target.value as any})}>
                 <option value="All">Búsqueda Total</option>
@@ -504,14 +377,14 @@ const App: React.FC = () => {
         </header>
 
         {aiInsights && (
-          <div className="mb-12 bg-white border border-indigo-100 p-8 rounded-[32px] shadow-xl shadow-indigo-100/50 animate-in zoom-in-95 duration-500 relative overflow-hidden group">
+          <div className="mb-12 bg-white border border-indigo-100 p-8 rounded-[32px] shadow-xl shadow-indigo-100/30 animate-in zoom-in-95 duration-500 relative overflow-hidden group">
             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                 <Sparkles className="w-40 h-40 text-indigo-600" />
             </div>
             <div className="flex justify-between items-center mb-6 relative z-10">
                 <div className="flex items-center gap-3">
-                    <div className="p-3 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-200"><Sparkles className="w-5 h-5 text-white" /></div>
-                    <h4 className="text-2xl font-black tracking-tight text-slate-900">Visión Estratégica AI</h4>
+                    <div className="p-3 bg-indigo-600 rounded-2xl shadow-lg"><Sparkles className="w-5 h-5 text-white" /></div>
+                    <h4 className="text-2xl font-black tracking-tight text-slate-900">Análisis Estratégico AI</h4>
                 </div>
                 <button onClick={() => setAiInsights(null)} className="text-slate-400 hover:text-slate-900 bg-slate-100 w-10 h-10 rounded-full flex items-center justify-center font-black transition-colors">&times;</button>
             </div>
@@ -519,9 +392,27 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === DashboardTab.ORGANIC_VS_PAID && <DashboardOrganicVsPaid />}
-        {activeTab === DashboardTab.SEO_BY_COUNTRY && <DashboardSeoMarketplace />}
-        {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && <DashboardDeepDive />}
+        {/* Dashboards Sections remain functionally similar but now visually tied to their sources */}
+        <div className="mb-8 p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl flex items-center justify-between">
+           <div className="flex items-center gap-4">
+              <div className="p-2 bg-indigo-600 text-white rounded-lg"><Activity className="w-4 h-4" /></div>
+              <div>
+                 <p className="text-[10px] font-black uppercase text-indigo-600 leading-none">Source: Google Analytics 4</p>
+                 <p className="text-xs font-bold text-slate-700">{ga4Auth.property?.name}</p>
+              </div>
+           </div>
+           <div className="flex items-center gap-4">
+              <div className="text-right">
+                 <p className="text-[10px] font-black uppercase text-emerald-600 leading-none">Source: Search Console</p>
+                 <p className="text-xs font-bold text-slate-700">{gscAuth.site?.siteUrl}</p>
+              </div>
+              <div className="p-2 bg-emerald-600 text-white rounded-lg"><Search className="w-4 h-4" /></div>
+           </div>
+        </div>
+
+        {activeTab === DashboardTab.ORGANIC_VS_PAID && <DashboardOrganicVsPaid stats={channelStats} currentData={processedData.current} />}
+        {activeTab === DashboardTab.SEO_BY_COUNTRY && <DashboardSeoMarketplace processedData={processedData} aggregateMetrics={aggregateMetrics} calcChange={calcChange} />}
+        {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && <DashboardDeepDive rawKeywordData={rawKeywordData} filters={filters} searchTerm={searchTerm} setSearchTerm={setSearchTerm} />}
 
         <div className="mt-12 flex justify-center">
             <button 
@@ -530,7 +421,7 @@ const App: React.FC = () => {
                 className="group px-10 py-5 bg-slate-950 text-white rounded-[24px] text-sm font-black shadow-2xl hover:bg-indigo-600 transition-all flex items-center gap-4 active:scale-95 disabled:opacity-50"
             >
                 {loadingInsights ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5 group-hover:animate-bounce" />}
-                Generar Auditoría Estratégica
+                Generar Auditoría con Gemini 3
             </button>
         </div>
       </main>
@@ -538,13 +429,144 @@ const App: React.FC = () => {
   );
 };
 
+// Sub-components to keep App.tsx clean
+const DashboardOrganicVsPaid = ({ stats, currentData }: any) => {
+  const chartData = useMemo(() => {
+    const groups: any = {};
+    currentData.forEach((d: any) => {
+      if (!groups[d.date]) groups[d.date] = { date: d.date, organic: 0, paid: 0 };
+      if (d.channel === 'Organic Search') groups[d.date].organic += d.sessions;
+      else groups[d.date].paid += d.sessions;
+    });
+    return Object.values(groups).sort((a: any, b: any) => a.date.localeCompare(b.date));
+  }, [currentData]);
+
+  return (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 mb-2 px-2">
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-lg"><Activity className="w-4 h-4" /></div>
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Canal Orgánico</h3>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <KpiCard title="Sesiones" value={stats.organic.current.sessions.toLocaleString()} icon={<TrendingUp className="w-4 h-4" />} />
+            <KpiCard title="Conv. Rate" value={`${stats.organic.current.cr.toFixed(2)}%`} icon={<Percent className="w-4 h-4" />} />
+            <KpiCard title="Revenue" value={`€${stats.organic.current.revenue.toLocaleString()}`} icon={<Tag className="w-4 h-4" />} />
+            <KpiCard title="Sales" value={stats.organic.current.sales.toLocaleString()} icon={<ShoppingBag className="w-4 h-4" />} />
+          </div>
+        </div>
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 mb-2 px-2">
+            <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center text-white shadow-lg"><Activity className="w-4 h-4" /></div>
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Canal de Pago</h3>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <KpiCard title="Sesiones" value={stats.paid.current.sessions.toLocaleString()} color="amber" icon={<TrendingUp className="w-4 h-4" />} />
+            <KpiCard title="Conv. Rate" value={`${stats.paid.current.cr.toFixed(2)}%`} color="amber" icon={<Percent className="w-4 h-4" />} />
+            <KpiCard title="Revenue" value={`€${stats.paid.current.revenue.toLocaleString()}`} color="amber" icon={<Tag className="w-4 h-4" />} />
+            <KpiCard title="Sales" value={stats.paid.current.sales.toLocaleString()} color="amber" icon={<ShoppingBag className="w-4 h-4" />} />
+          </div>
+        </div>
+      </div>
+      <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+        <div className="h-[350px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="date" hide />
+              <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10}} />
+              <Tooltip />
+              <Area type="monotone" dataKey="organic" stroke="#6366f1" strokeWidth={3} fillOpacity={0.1} fill="#6366f1" />
+              <Area type="monotone" dataKey="paid" stroke="#f59e0b" strokeWidth={3} fillOpacity={0.1} fill="#f59e0b" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const DashboardSeoMarketplace = ({ processedData, aggregateMetrics, calcChange }: any) => {
+    const seoCurrent = aggregateMetrics(processedData.current.filter((d: any) => d.channel === 'Organic Search'));
+    const seoPrevious = aggregateMetrics(processedData.previous.filter((d: any) => d.channel === 'Organic Search'));
+
+    return (
+      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <KpiCard title="Impresiones" value={seoCurrent.impressions.toLocaleString()} icon={<Eye className="w-4 h-4" />} comparison={{current: 0, previous: 0, change: calcChange(seoCurrent.impressions, seoPrevious.impressions)}} suffix="YoY" />
+          <KpiCard title="Clicks" value={seoCurrent.clicks.toLocaleString()} icon={<MousePointer2 className="w-4 h-4" />} comparison={{current: 0, previous: 0, change: calcChange(seoCurrent.clicks, seoPrevious.clicks)}} suffix="YoY" />
+          <KpiCard title="CTR" value={`${seoCurrent.ctr.toFixed(2)}%`} icon={<Percent className="w-4 h-4" />} />
+          <KpiCard title="Conv. Rate" value={`${seoCurrent.cr.toFixed(2)}%`} icon={<BarChart3 className="w-4 h-4" />} />
+          <KpiCard title="Revenue" value={`€${seoCurrent.revenue.toLocaleString()}`} icon={<Tag className="w-4 h-4" />} comparison={{current: 0, previous: 0, change: calcChange(seoCurrent.revenue, seoPrevious.revenue)}} suffix="YoY" />
+          <KpiCard title="Sales" value={seoCurrent.sales.toLocaleString()} icon={<ShoppingBag className="w-4 h-4" />} />
+        </div>
+        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm h-[400px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={Object.entries(processedData.current.filter((d: any) => d.channel === 'Organic Search').reduce((acc: any, curr: any) => {
+                  acc[curr.country] = (acc[curr.country] || 0) + curr.revenue;
+                  return acc;
+                }, {} as any)).map(([country, rev]) => ({ country, revenue: rev }))}>
+                  <XAxis dataKey="country" axisLine={false} tickLine={false} />
+                  <YAxis axisLine={false} tickLine={false} />
+                  <Tooltip />
+                  <Bar dataKey="revenue" fill="#10b981" radius={[8, 8, 0, 0]} />
+                </BarChart>
+            </ResponsiveContainer>
+        </div>
+      </div>
+    );
+};
+
+const DashboardDeepDive = ({ rawKeywordData, filters, searchTerm, setSearchTerm }: any) => {
+  const filtered = rawKeywordData.filter((d: any) => {
+    const countryMatch = filters.country === 'All' || d.country === filters.country;
+    const searchMatch = d.keyword.toLowerCase().includes(searchTerm.toLowerCase()) || d.landingPage.toLowerCase().includes(searchTerm.toLowerCase());
+    return countryMatch && searchMatch;
+  });
+
+  return (
+    <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
+        <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <h3 className="text-lg font-black">Deep Dive: Search Console</h3>
+            <div className="relative w-80">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+              <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Buscar..." className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm" />
+            </div>
+        </div>
+        <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-slate-400 font-black uppercase text-[10px] tracking-widest">
+                <tr>
+                  <th className="px-8 py-5">Keyword</th>
+                  <th className="px-8 py-5">Impressions</th>
+                  <th className="px-8 py-5">CTR</th>
+                  <th className="px-8 py-5 text-right">Revenue</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.slice(0, 15).map((row: any, i: number) => (
+                  <tr key={i} className="hover:bg-slate-50">
+                    <td className="px-8 py-5">
+                      <div className="flex flex-col">
+                        <span className="font-bold text-slate-900">{row.keyword}</span>
+                        <span className="text-[10px] text-slate-400 truncate w-48">{row.landingPage}</span>
+                      </div>
+                    </td>
+                    <td className="px-8 py-5 font-bold">{row.impressions.toLocaleString()}</td>
+                    <td className="px-8 py-5 font-black text-indigo-600">{row.ctr.toFixed(2)}%</td>
+                    <td className="px-8 py-5 text-right font-black">€{row.revenue.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+        </div>
+    </div>
+  );
+};
+
 const NavItem: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string }> = ({ active, onClick, icon, label }) => (
-  <button 
-    onClick={onClick}
-    className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-sm font-black transition-all ${
-      active ? 'bg-slate-950 text-white shadow-xl translate-x-1' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-900 hover:translate-x-1'
-    }`}
-  >
+  <button onClick={onClick} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-sm font-black transition-all ${active ? 'bg-slate-950 text-white shadow-xl translate-x-1' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-900 hover:translate-x-1'}`}>
     {icon} {label}
   </button>
 );

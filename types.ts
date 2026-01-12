@@ -2,6 +2,16 @@
 export type ChannelType = 'Organic Search' | 'Paid Search';
 export type QueryType = 'Branded' | 'Non-Branded';
 
+export interface Ga4Property {
+  id: string;
+  name: string;
+}
+
+export interface GscSite {
+  siteUrl: string;
+  permissionLevel: string;
+}
+
 export interface BaseMetrics {
   impressions: number;
   clicks: number;
