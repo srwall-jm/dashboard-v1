@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock
@@ -68,6 +69,9 @@ const App: React.FC = () => {
   const [availableProperties, setAvailableProperties] = useState<Ga4Property[]>([]);
   const [availableSites, setAvailableSites] = useState<GscSite[]>([]);
   const [availableDimensions, setAvailableDimensions] = useState<{ label: string; value: string }[]>([]);
+  
+  const [ga4Search, setGa4Search] = useState('');
+  const [gscSearch, setGscSearch] = useState('');
   
   const [realDailyData, setRealDailyData] = useState<DailyData[]>([]);
   const [realKeywordData, setRealKeywordData] = useState<KeywordData[]>([]);
@@ -349,7 +353,6 @@ const App: React.FC = () => {
     sessionStorage.removeItem('gsc_auth');
   };
 
-  // NUEVAS FUNCIONES PARA CONECTAR
   const handleConnectGa4 = () => {
     if (tokenClientGa4.current) {
       tokenClientGa4.current.requestAccessToken();
@@ -466,6 +469,14 @@ const App: React.FC = () => {
 
   const isAnythingLoading = isLoadingGa4 || isLoadingGsc;
 
+  const filteredProperties = useMemo(() => {
+    return availableProperties.filter(p => p.name.toLowerCase().includes(ga4Search.toLowerCase()));
+  }, [availableProperties, ga4Search]);
+
+  const filteredSites = useMemo(() => {
+    return availableSites.filter(s => s.siteUrl.toLowerCase().includes(gscSearch.toLowerCase()));
+  }, [availableSites, gscSearch]);
+
   if (!user) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-white relative overflow-hidden">
@@ -523,17 +534,6 @@ const App: React.FC = () => {
                 <label className="text-[8px] font-black uppercase text-slate-500 tracking-widest block mb-1">Branded Regex</label>
                 <input type="text" value={brandRegexStr} onChange={e => setBrandRegexStr(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 focus:ring-1 ring-indigo-500 outline-none" placeholder="brand|tienda" />
               </div>
-              <div className="pt-2 border-t border-white/5">
-                <label className="text-[8px] font-black uppercase text-slate-500 tracking-widest block mb-2">Comparativa</label>
-                <div className="flex items-center gap-2 mb-2">
-                  <input type="checkbox" id="comp_enabled" checked={filters.comparison.enabled} onChange={e => setFilters({...filters, comparison: {...filters.comparison, enabled: e.target.checked}})} className="rounded border-white/10 bg-slate-900" />
-                  <label htmlFor="comp_enabled" className="text-[10px] font-bold">Activar comparación</label>
-                </div>
-                <select disabled={!filters.comparison.enabled} className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 outline-none cursor-pointer disabled:opacity-30" value={filters.comparison.type} onChange={e => setFilters({...filters, comparison: {...filters.comparison, type: e.target.value as any}})}>
-                  <option value="previous_period">Periodo Anterior</option>
-                  <option value="previous_year">Año Anterior (YoY)</option>
-                </select>
-              </div>
             </div>
           </div>
         </div>
@@ -549,7 +549,6 @@ const App: React.FC = () => {
               </div>
               
               <div className="space-y-4">
-                 {/* LÓGICA CORREGIDA PARA GA4 */}
                  <div className="space-y-2">
                     <label className="text-[8px] font-black uppercase text-slate-500 tracking-widest block">GA4 Property</label>
                     {!ga4Auth?.token ? (
@@ -560,17 +559,28 @@ const App: React.FC = () => {
                         <ExternalLink className="w-3 h-3" /> Conectar GA4
                       </button>
                     ) : (
-                      <select className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 outline-none cursor-pointer" value={ga4Auth?.property?.id || ''} onChange={e => {
-                           const selected = availableProperties.find(p => p.id === e.target.value) || null;
-                           const updated = {...ga4Auth, property: selected};
-                           setGa4Auth(updated as any);
-                      }}>
-                           {availableProperties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </select>
+                      <div className="space-y-1.5">
+                        <div className="relative">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500" />
+                          <input 
+                            type="text" 
+                            placeholder="Buscar propiedad..." 
+                            value={ga4Search} 
+                            onChange={e => setGa4Search(e.target.value)} 
+                            className="w-full bg-slate-900 border border-white/10 rounded-lg text-[9px] pl-8 pr-2 py-1.5 outline-none focus:ring-1 ring-indigo-500"
+                          />
+                        </div>
+                        <select className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 outline-none cursor-pointer" value={ga4Auth?.property?.id || ''} onChange={e => {
+                             const selected = availableProperties.find(p => p.id === e.target.value) || null;
+                             const updated = {...ga4Auth, property: selected};
+                             setGa4Auth(updated as any);
+                        }}>
+                             {filteredProperties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                      </div>
                     )}
                  </div>
 
-                 {/* LÓGICA CORREGIDA PARA GSC */}
                  <div className="space-y-2">
                     <label className="text-[8px] font-black uppercase text-slate-500 tracking-widest block">GSC Domain</label>
                     {!gscAuth?.token ? (
@@ -581,13 +591,25 @@ const App: React.FC = () => {
                         <ExternalLink className="w-3 h-3" /> Conectar GSC
                       </button>
                     ) : (
-                      <select className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 outline-none cursor-pointer" value={gscAuth?.site?.siteUrl || ''} onChange={e => {
-                           const selected = availableSites.find(s => s.siteUrl === e.target.value) || null;
-                           const updated = {...gscAuth, site: selected};
-                           setGscAuth(updated as any);
-                      }}>
-                           {availableSites.map(s => <option key={s.siteUrl} value={s.siteUrl}>{s.siteUrl}</option>)}
-                      </select>
+                      <div className="space-y-1.5">
+                        <div className="relative">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500" />
+                          <input 
+                            type="text" 
+                            placeholder="Buscar sitio..." 
+                            value={gscSearch} 
+                            onChange={e => setGscSearch(e.target.value)} 
+                            className="w-full bg-slate-900 border border-white/10 rounded-lg text-[9px] pl-8 pr-2 py-1.5 outline-none focus:ring-1 ring-indigo-500"
+                          />
+                        </div>
+                        <select className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 outline-none cursor-pointer" value={gscAuth?.site?.siteUrl || ''} onChange={e => {
+                             const selected = availableSites.find(s => s.siteUrl === e.target.value) || null;
+                             const updated = {...gscAuth, site: selected};
+                             setGscAuth(updated as any);
+                        }}>
+                             {filteredSites.map(s => <option key={s.siteUrl} value={s.siteUrl}>{s.siteUrl}</option>)}
+                        </select>
+                      </div>
                     )}
                  </div>
               </div>
@@ -616,11 +638,39 @@ const App: React.FC = () => {
               </h2>
             </div>
             
-            <div className="flex flex-wrap items-center gap-2">
-              <button onClick={() => setShortcut('this_month')} className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[9px] font-black uppercase hover:bg-slate-50 transition-colors">Este Mes</button>
-              <button onClick={() => setShortcut('last_month')} className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[9px] font-black uppercase hover:bg-slate-50 transition-colors">Mes Pasado</button>
-              <button onClick={() => setShortcut('last_7')} className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[9px] font-black uppercase hover:bg-slate-50 transition-colors">7 Días</button>
-              <button onClick={() => setShortcut('last_30')} className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[9px] font-black uppercase hover:bg-slate-50 transition-colors">30 Días</button>
+            <div className="flex flex-col items-end gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <button onClick={() => setShortcut('this_month')} className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[9px] font-black uppercase hover:bg-slate-50 transition-colors shadow-sm">Este Mes</button>
+                <button onClick={() => setShortcut('last_month')} className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[9px] font-black uppercase hover:bg-slate-50 transition-colors shadow-sm">Mes Pasado</button>
+                <button onClick={() => setShortcut('last_7')} className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[9px] font-black uppercase hover:bg-slate-50 transition-colors shadow-sm">7 Días</button>
+                <button onClick={() => setShortcut('last_30')} className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[9px] font-black uppercase hover:bg-slate-50 transition-colors shadow-sm">30 Días</button>
+              </div>
+              
+              <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-2xl border border-slate-200 shadow-sm animate-in fade-in duration-500">
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="checkbox" 
+                    id="comp_enabled_header" 
+                    checked={filters.comparison.enabled} 
+                    onChange={e => setFilters({...filters, comparison: {...filters.comparison, enabled: e.target.checked}})} 
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <label htmlFor="comp_enabled_header" className="text-[10px] font-black uppercase text-slate-600 tracking-tight cursor-pointer">Comparar</label>
+                </div>
+                {filters.comparison.enabled && (
+                  <div className="h-4 w-px bg-slate-200 mx-1"></div>
+                )}
+                {filters.comparison.enabled && (
+                  <select 
+                    className="bg-transparent text-[10px] font-bold text-indigo-600 outline-none cursor-pointer" 
+                    value={filters.comparison.type} 
+                    onChange={e => setFilters({...filters, comparison: {...filters.comparison, type: e.target.value as any}})}
+                  >
+                    <option value="previous_period">vs Periodo Anterior</option>
+                    <option value="previous_year">vs Año Anterior (YoY)</option>
+                  </select>
+                )}
+              </div>
             </div>
           </div>
 
@@ -896,7 +946,7 @@ const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, compa
       <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-50/50">
         <div className="w-full">
            <h3 className="text-xl font-black mb-1">Deep Dive SEO</h3>
-           <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">URL completa y desglose de Keywords</p>
+           <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Desglose completo de URLs y Palabras Clave</p>
         </div>
         <div className="relative w-full md:w-80">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
@@ -904,11 +954,11 @@ const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, compa
         </div>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs table-fixed min-w-[1000px]">
+        <table className="w-full text-left text-xs table-fixed min-w-[1200px]">
           <thead className="bg-slate-50 text-slate-400 font-black uppercase text-[9px] tracking-widest border-b border-slate-100">
             <tr>
               <th className="px-6 py-4 w-16"></th>
-              <th className="px-4 py-4 w-[45%]">Página de Destino (URL Completa)</th>
+              <th className="px-4 py-4 w-[50%]">Página de Destino (Full URL)</th>
               <th className="px-6 py-4 text-center w-32">Impr.</th>
               <th className="px-6 py-4 text-center w-32">Clicks</th>
               {comparisonEnabled && <th className="px-6 py-4 text-center w-28">Var. Clicks</th>}
@@ -916,13 +966,13 @@ const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, compa
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {aggregatedByUrl.slice(0, 50).map((row, i) => {
+            {aggregatedByUrl.slice(0, 100).map((row, i) => {
               const isExpanded = expandedUrls.has(row.url);
               return (
                 <React.Fragment key={row.url}>
                   <tr onClick={() => toggleUrl(row.url)} className={`group cursor-pointer transition-all ${isExpanded ? 'bg-indigo-50/30' : 'hover:bg-slate-50/50'}`}>
                     <td className="pl-6 py-5"><div className="flex justify-center">{isExpanded ? <ChevronDown className="w-4 h-4 text-indigo-600" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}</div></td>
-                    <td className="px-4 py-5"><div className="flex items-center gap-3"><FileText className="w-4 h-4 text-indigo-500 flex-shrink-0" /><span className="font-bold text-slate-900 break-all leading-relaxed whitespace-normal">{row.url}</span></div></td>
+                    <td className="px-4 py-5"><div className="flex items-center gap-3"><FileText className="w-4 h-4 text-indigo-500 flex-shrink-0" /><span className="font-bold text-slate-900 break-all leading-relaxed whitespace-normal pr-4">{row.url}</span></div></td>
                     <td className="px-6 py-5 text-center text-slate-600 font-medium">{row.impressions.toLocaleString()}</td>
                     <td className="px-6 py-5 text-center font-black text-slate-900">{row.clicks.toLocaleString()}</td>
                     {comparisonEnabled && (
