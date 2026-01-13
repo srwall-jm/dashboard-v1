@@ -1,36 +1,6 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  BarChart3, 
-  Search, 
-  Calendar,
-  ArrowUpRight, 
-  ArrowDownRight,
-  TrendingUp,
-  Sparkles,
-  Globe,
-  Tag,
-  MousePointer2,
-  Eye,
-  Percent,
-  ShoppingBag,
-  LogOut,
-  RefreshCw,
-  CheckCircle2,
-  Layers,
-  Activity,
-  Filter,
-  ArrowRight,
-  Target,
-  FileText,
-  AlertCircle,
-  Settings2,
-  Info,
-  Menu,
-  X,
-  ChevronDown,
-  ChevronRight,
-  ExternalLink
+  BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Legend, LineChart, Line
@@ -38,28 +8,21 @@ import {
 import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, QueryType, ChannelType } from './types';
 import { getDashboardInsights } from './geminiService';
 
-const CLIENT_ID = "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com";
+// --- IMPORTANTE: Importamos tu componente de Login ---
+import GoogleLogin from './GoogleLogin'; 
+
+const CLIENT_ID = "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com"; // Asegúrate que este sea tu ID real
 const SCOPE_GA4 = "https://www.googleapis.com/auth/analytics.readonly";
 const SCOPE_GSC = "https://www.googleapis.com/auth/webmasters.readonly";
 
 const countryMap: Record<string, string> = {
-  'esp': 'Spain',
-  'mex': 'Mexico',
-  'usa': 'United States',
-  'gbr': 'United Kingdom',
-  'fra': 'France',
-  'deu': 'Germany',
-  'ita': 'Italy',
-  'prt': 'Portugal'
+  'esp': 'Spain', 'mex': 'Mexico', 'usa': 'United States', 'gbr': 'United Kingdom',
+  'fra': 'France', 'deu': 'Germany', 'ita': 'Italy', 'prt': 'Portugal'
 };
 
+// --- Componentes Auxiliares ---
 const KpiCard: React.FC<{ 
-  title: string; 
-  value: string | number; 
-  comparison?: number; 
-  icon: React.ReactNode; 
-  color?: string;
-  isPercent?: boolean;
+  title: string; value: string | number; comparison?: number; icon: React.ReactNode; color?: string; isPercent?: boolean;
 }> = ({ title, value, comparison, icon, color = "indigo", isPercent = false }) => (
   <div className="bg-white p-5 md:p-6 rounded-[24px] border border-slate-200 shadow-sm hover:shadow-md transition-all group">
     <div className="flex justify-between items-start mb-4">
@@ -80,24 +43,27 @@ const KpiCard: React.FC<{
   </div>
 );
 
+// --- Componente Principal APP ---
 const App: React.FC = () => {
+  // Estados de Autenticación
+  const [user, setUser] = useState<{ name: string; email: string; picture: string } | null>(null);
   const [ga4Auth, setGa4Auth] = useState<{ token: string; property: Ga4Property | null } | null>(null);
   const [gscAuth, setGscAuth] = useState<{ token: string; site: GscSite | null } | null>(null);
-  const [user, setUser] = useState<{ name: string; email: string; picture: string } | null>(null);
   
+  // Estados de Datos
   const [availableProperties, setAvailableProperties] = useState<Ga4Property[]>([]);
   const [availableSites, setAvailableSites] = useState<GscSite[]>([]);
-  
   const [realDailyData, setRealDailyData] = useState<DailyData[]>([]);
   const [realKeywordData, setRealKeywordData] = useState<KeywordData[]>([]);
   
+  // UI States
   const [isLoadingGa4, setIsLoadingGa4] = useState(false);
   const [isLoadingGsc, setIsLoadingGsc] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
   const [brandRegexStr, setBrandRegexStr] = useState('tienda|deportes|pro|brandname');
 
+  // Filtros y Tabs
   const [activeTab, setActiveTab] = useState<DashboardTab>(DashboardTab.ORGANIC_VS_PAID);
   const [filters, setFilters] = useState<DashboardFilters>({
     dateRange: { 
@@ -112,18 +78,20 @@ const App: React.FC = () => {
   const [aiInsights, setAiInsights] = useState<string | null>(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
 
+  // Refs para OAuth (Permisos de Datos)
   const tokenClientGa4 = useRef<any>(null);
   const tokenClientGsc = useRef<any>(null);
 
+  // --- Funciones Auxiliares ---
   const isBranded = (text: string) => {
     try {
       const regex = new RegExp(brandRegexStr, 'i');
       return regex.test(text);
-    } catch (e) {
-      return false;
-    }
+    } catch (e) { return false; }
   };
 
+  // --- Data Fetching Logic (GA4 & GSC) ---
+  // (Mantenemos tu lógica original de fetch aquí)
   const fetchGa4Properties = async (token: string) => {
     try {
       const resp = await fetch('https://analyticsadmin.googleapis.com/v1beta/accountSummaries', {
@@ -177,12 +145,7 @@ const App: React.FC = () => {
         body: JSON.stringify({
           dateRanges: [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }],
           dimensions: [{ name: 'date' }, { name: 'sessionDefaultChannelGroup' }, { name: 'country' }, { name: 'landingPage' }],
-          metrics: [
-            { name: 'sessions' }, 
-            { name: 'totalRevenue' }, 
-            { name: 'transactions' }, 
-            { name: 'sessionConversionRate' }
-          ]
+          metrics: [{ name: 'sessions' }, { name: 'totalRevenue' }, { name: 'transactions' }, { name: 'sessionConversionRate' }]
         })
       });
       
@@ -234,22 +197,16 @@ const App: React.FC = () => {
       const keywordMapped: KeywordData[] = (gscData.rows || []).map((row: any) => {
         const countryCode = row.keys[2]?.toLowerCase() || 'unknown';
         const normCountry = countryMap[countryCode] || row.keys[2];
-        const query = row.keys[0];
-        const date = row.keys[3];
-
         return {
-          keyword: query,
+          keyword: row.keys[0],
           landingPage: row.keys[1],
           country: normCountry,
           queryType: 'Non-Branded' as QueryType,
-          date: date,
+          date: row.keys[3],
           clicks: row.clicks,
           impressions: row.impressions,
           ctr: row.ctr * 100,
-          sessions: 0,
-          conversionRate: 0, 
-          revenue: 0, 
-          sales: 0
+          sessions: 0, conversionRate: 0, revenue: 0, sales: 0
         };
       });
       setRealKeywordData(keywordMapped);
@@ -261,17 +218,12 @@ const App: React.FC = () => {
     }
   };
 
+  // --- Handlers de Autenticación ---
+  
+  // 1. Inicialización de clientes OAuth (Solo permisos, no Login de identidad)
   useEffect(() => {
     if (typeof window !== 'undefined' && (window as any).google) {
-      (window as any).google.accounts.id.initialize({
-        client_id: CLIENT_ID,
-        callback: handleIdentityResponse,
-      });
-      (window as any).google.accounts.id.renderButton(
-        document.getElementById("googleIdentityBtn"),
-        { theme: "filled_black", size: "large", width: "100%", shape: "pill" }
-      );
-
+      // Configuramos GA4 OAuth Client
       tokenClientGa4.current = (window as any).google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: SCOPE_GA4,
@@ -284,6 +236,7 @@ const App: React.FC = () => {
         },
       });
 
+      // Configuramos GSC OAuth Client
       tokenClientGsc.current = (window as any).google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: SCOPE_GSC,
@@ -298,49 +251,51 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleIdentityResponse = (response: any) => {
-    const base64Url = response.credential.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const decoded = JSON.parse(atob(base64));
-    setUser({ name: decoded.name, email: decoded.email, picture: decoded.picture });
+  // 2. Manejador del Login Exitoso (Viene de GoogleLogin.tsx)
+  const handleLoginSuccess = (credentialToken: string) => {
+    try {
+      const base64Url = credentialToken.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const decoded = JSON.parse(atob(base64));
+      
+      setUser({ 
+        name: decoded.name, 
+        email: decoded.email, 
+        picture: decoded.picture 
+      });
+    } catch (error) {
+      console.error("Error decodificando token:", error);
+    }
   };
 
+  // --- Efectos de Datos ---
   useEffect(() => {
-    if (ga4Auth?.token && ga4Auth.property) {
-      fetchGa4Data();
-    }
+    if (ga4Auth?.token && ga4Auth.property) fetchGa4Data();
   }, [ga4Auth?.property?.id, filters.dateRange]);
 
   useEffect(() => {
-    if (gscAuth?.token && gscAuth.site) {
-      fetchGscData();
-    }
+    if (gscAuth?.token && gscAuth.site) fetchGscData();
   }, [gscAuth?.site?.siteUrl, filters.dateRange]);
 
+  // --- Cálculos y Memoización ---
   const filteredDailyData = useMemo((): DailyData[] => {
     return realDailyData.filter(d => {
       const isBrandedVal = isBranded(d.landingPage || '');
-      const queryTypeActual: QueryType = isBrandedVal ? 'Branded' : 'Non-Branded';
+      const queryTypeActual = isBrandedVal ? 'Branded' : 'Non-Branded';
       const countryMatch = filters.country === 'All' || d.country === filters.country;
       const queryMatch = filters.queryType === 'All' || queryTypeActual === filters.queryType;
       return countryMatch && queryMatch;
-    }).map(d => ({ 
-      ...d, 
-      queryType: (isBranded(d.landingPage || '') ? 'Branded' : 'Non-Branded') as QueryType 
-    }));
+    }).map(d => ({ ...d, queryType: (isBranded(d.landingPage || '') ? 'Branded' : 'Non-Branded') as QueryType }));
   }, [realDailyData, filters, brandRegexStr]);
 
   const filteredKeywordData = useMemo((): KeywordData[] => {
     return realKeywordData.filter(k => {
       const isBrandedVal = isBranded(k.keyword);
-      const queryTypeActual: QueryType = isBrandedVal ? 'Branded' : 'Non-Branded';
+      const queryTypeActual = isBrandedVal ? 'Branded' : 'Non-Branded';
       const countryMatch = filters.country === 'All' || k.country === filters.country;
       const queryMatch = filters.queryType === 'All' || queryTypeActual === filters.queryType;
       return countryMatch && queryMatch;
-    }).map(k => ({ 
-      ...k, 
-      queryType: (isBranded(k.keyword) ? 'Branded' : 'Non-Branded') as QueryType 
-    }));
+    }).map(k => ({ ...k, queryType: (isBranded(k.keyword) ? 'Branded' : 'Non-Branded') as QueryType }));
   }, [realKeywordData, filters, brandRegexStr]);
 
   const aggregate = (data: DailyData[]) => {
@@ -349,11 +304,7 @@ const App: React.FC = () => {
       sales: acc.sales + curr.sales,
       revenue: acc.revenue + curr.revenue,
     }), { sessions: 0, sales: 0, revenue: 0 });
-
-    return { 
-      ...sum, 
-      cr: sum.sessions > 0 ? (sum.sales / sum.sessions) * 100 : 0, 
-    };
+    return { ...sum, cr: sum.sessions > 0 ? (sum.sales / sum.sessions) * 100 : 0 };
   };
 
   const channelStats = useMemo(() => {
@@ -376,60 +327,36 @@ const App: React.FC = () => {
     }
   };
 
-  if (!user || (!ga4Auth && !gscAuth)) {
+  const isAnythingLoading = isLoadingGa4 || isLoadingGsc;
+
+  // --- VISTA 1: LOGIN (Si no hay usuario) ---
+  if (!user) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-white relative overflow-hidden">
+        {/* Background Effects */}
         <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none">
             <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-600 blur-[120px] rounded-full animate-pulse" />
             <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-600 blur-[120px] rounded-full animate-pulse delay-1000" />
         </div>
+        
+        {/* Login Card */}
         <div className="w-full max-w-xl bg-white/5 backdrop-blur-xl border border-white/10 rounded-[48px] p-8 md:p-12 text-center z-10 shadow-2xl">
           <div className="w-16 h-16 md:w-20 md:h-20 bg-indigo-600 rounded-[24px] md:rounded-[28px] flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-indigo-500/20 transform -rotate-6">
             <Activity className="w-8 h-8 md:w-10 md:h-10 text-white" />
           </div>
           <h1 className="text-3xl md:text-4xl font-black mb-4 tracking-tighter">SEO & SEM Reporting</h1>
-          <p className="text-slate-400 font-medium mb-10 text-base md:text-lg">Conecta al menos una fuente para empezar.</p>
-          <div className="space-y-4 md:space-y-6">
-            {!user ? (
-               <div id="googleIdentityBtn" className="flex justify-center"></div>
-            ) : (
-              <div className="grid grid-cols-1 gap-4">
-                <button 
-                  onClick={() => tokenClientGa4.current.requestAccessToken()} 
-                  className={`flex items-center justify-between p-5 md:p-6 rounded-3xl border-2 transition-all ${ga4Auth?.token ? 'border-indigo-500 bg-indigo-500/10' : 'border-white/10 hover:border-white/30'}`}
-                >
-                  <div className="flex items-center gap-4">
-                    <BarChart3 className={ga4Auth?.token ? 'text-indigo-400' : 'text-slate-500'} />
-                    <div className="text-left">
-                      <p className="font-bold text-sm md:text-base">Google Analytics 4</p>
-                      <p className="text-[10px] md:text-xs text-slate-400">{ga4Auth?.token ? 'Conectado' : 'Click para conectar'}</p>
-                    </div>
-                  </div>
-                  {ga4Auth?.token && <CheckCircle2 className="text-indigo-500" />}
-                </button>
-                <button 
-                  onClick={() => tokenClientGsc.current.requestAccessToken()} 
-                  className={`flex items-center justify-between p-5 md:p-6 rounded-3xl border-2 transition-all ${gscAuth?.token ? 'border-emerald-500 bg-emerald-500/10' : 'border-white/10 hover:border-white/30'}`}
-                >
-                  <div className="flex items-center gap-4">
-                    <Search className={gscAuth?.token ? 'text-emerald-400' : 'text-slate-500'} />
-                    <div className="text-left">
-                      <p className="font-bold text-sm md:text-base">Search Console</p>
-                      <p className="text-[10px] md:text-xs text-slate-400">{gscAuth?.token ? 'Conectado' : 'Click para conectar'}</p>
-                    </div>
-                  </div>
-                  {gscAuth?.token && <CheckCircle2 className="text-emerald-500" />}
-                </button>
-              </div>
-            )}
+          <p className="text-slate-400 font-medium mb-10 text-base md:text-lg">Inicia sesión con Google para acceder al dashboard.</p>
+          
+          {/* Aquí usamos tu componente GoogleLogin importado */}
+          <div className="flex justify-center w-full">
+             <GoogleLogin onLoginSuccess={handleLoginSuccess} />
           </div>
         </div>
       </div>
     );
   }
 
-  const isAnythingLoading = isLoadingGa4 || isLoadingGsc;
-
+  // --- VISTA 2: DASHBOARD (Usuario autenticado) ---
   return (
     <div className="min-h-screen bg-[#f8fafc] flex flex-col md:flex-row">
       {/* Mobile Toggle Button */}
@@ -464,6 +391,7 @@ const App: React.FC = () => {
             <SidebarLink active={activeTab === DashboardTab.KEYWORD_DEEP_DIVE} onClick={() => {setActiveTab(DashboardTab.KEYWORD_DEEP_DIVE); setIsSidebarOpen(false);}} icon={<Target />} label="Análisis SEO Deep" />
           </nav>
 
+          {/* Configuración SEO */}
           <div className="space-y-8">
             <div className="bg-white/5 rounded-3xl p-6 border border-white/10">
               <div className="flex items-center gap-2 mb-4 text-indigo-400">
@@ -489,6 +417,7 @@ const App: React.FC = () => {
           </div>
         </div>
 
+        {/* User Info & Connections */}
         <div className="p-8 border-t border-white/5 bg-slate-950">
            <div className="bg-white/5 rounded-3xl p-5">
               <div className="flex items-center gap-3 mb-6">
@@ -536,7 +465,7 @@ const App: React.FC = () => {
         </div>
       </aside>
 
-      {/* Main Content */}
+      {/* Main Content Dashboard */}
       <main className="flex-1 xl:ml-80 p-5 md:p-8 xl:p-14 transition-all overflow-x-hidden">
         <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 mb-12">
           <div className="w-full xl:w-auto">
@@ -600,7 +529,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Dashboards */}
+        {/* Dashboards Views */}
         <div className="w-full overflow-x-hidden">
           {activeTab === DashboardTab.ORGANIC_VS_PAID && <OrganicVsPaidView stats={channelStats} data={filteredDailyData} />}
           {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={filteredKeywordData} aggregate={aggregate} />}
@@ -616,24 +545,14 @@ const App: React.FC = () => {
             {loadingInsights ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
             Obtener Reporte Estratégico IA
           </button>
-          <main className="flex-1 overflow-y-auto">
-    <div className="bg-white p-4 shadow mb-4 flex justify-between items-center">
-        <h2 className="text-xl">Mi Dashboard</h2>
-        
-        {/* Aquí pones el botón integrado en tu diseño */}
-        <GoogleLogin />
-        
-    </div>
-    
-    {/* ... resto de tus gráficos ... */}
-</main>
         </div>
       </main>
     </div>
   );
 };
 
-// --- Dashboard 1: Organic vs Paid ---
+// --- Sub-Componentes Dashboard ---
+
 const OrganicVsPaidView = ({ stats, data }: any) => {
   const chartData = useMemo(() => {
     if (!data.length) return [];
@@ -704,7 +623,6 @@ const OrganicVsPaidView = ({ stats, data }: any) => {
   );
 };
 
-// --- Dashboard 2: SEO by Country ---
 const SeoMarketplaceView = ({ data, keywordData, aggregate }: any) => {
   const seoGa4 = aggregate(data.filter((d: any) => d.channel === 'Organic Search'));
   const gscStats = useMemo(() => {
@@ -810,7 +728,6 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate }: any) => {
   );
 };
 
-// --- Dashboard 3: Deep Dive Expandable by URL ---
 const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading }: any) => {
   const [expandedUrls, setExpandedUrls] = useState<Set<string>>(new Set());
 
@@ -823,12 +740,7 @@ const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading }: any
 
   const aggregatedByUrl = useMemo(() => {
     const map: Record<string, { 
-      url: string; 
-      clicks: number; 
-      impressions: number; 
-      ctr: number; 
-      children: Record<string, KeywordData>; 
-      brandedCount: number 
+      url: string; clicks: number; impressions: number; ctr: number; children: Record<string, KeywordData>; brandedCount: number 
     }> = {};
     
     keywords.forEach((k: KeywordData) => {
@@ -991,4 +903,5 @@ const EmptyState = ({ text }: { text: string }) => (
     </div>
   </div>
 );
+
 export default App;
