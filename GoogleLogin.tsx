@@ -1,45 +1,47 @@
 import { useEffect } from 'react';
 
-// Esto soluciona el error de TypeScript "Property 'google' does not exist on type 'Window'"
+// Definimos los tipos para TypeScript
 declare global {
   interface Window {
     google: any;
   }
 }
 
-const GoogleLogin = () => {
+interface GoogleLoginProps {
+  onLoginSuccess: (token: string) => void; // Prop para avisar al padre
+}
+
+const GoogleLogin = ({ onLoginSuccess }: GoogleLoginProps) => {
   useEffect(() => {
     const renderGoogleButton = () => {
-      // Si google existe y tiene accounts
       if (window.google && window.google.accounts) {
-        console.log("✅ Google script detectado. Inicializando...");
         
         window.google.accounts.id.initialize({
-          client_id: "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com", // <--- IMPORTANTE: REVISA ESTO
+          client_id: "TU_CLIENT_ID_AQUI", // <--- ¡PON TU ID REAL OTRA VEZ!
           callback: (response: any) => {
-            console.log("Login exitoso. Token:", response.credential);
+            console.log("Login OK. Token recibido.");
+            // Aquí avisamos a App.tsx de que el usuario entró
+            onLoginSuccess(response.credential);
           }
         });
 
         const buttonDiv = document.getElementById("googleButtonDiv");
-        
         if (buttonDiv) {
           window.google.accounts.id.renderButton(buttonDiv, {
             theme: "outline",
             size: "large",
+            width: 250
           });
         }
       } else {
-        // Si no ha cargado, lo intentamos de nuevo en medio segundo
-        console.log("⏳ Google aún no carga, reintentando...");
         setTimeout(renderGoogleButton, 500);
       }
     };
 
     renderGoogleButton();
-  }, []);
+  }, [onLoginSuccess]);
 
-  return <div id="googleButtonDiv" className="mt-4 h-12 w-full flex justify-center"></div>;
+  return <div id="googleButtonDiv" className="mt-6 flex justify-center"></div>;
 };
 
 export default GoogleLogin;
