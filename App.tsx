@@ -19,11 +19,13 @@ const countryMap: Record<string, string> = {
   'fra': 'France', 'deu': 'Germany', 'ita': 'Italy', 'prt': 'Portugal'
 };
 
-const DEFAULT_GA4_DIMENSIONS = [
-  { label: 'Default Channel Group', value: 'sessionDefaultChannelGroup' },
-  { label: 'Session Source', value: 'sessionSource' },
-  { label: 'Session Medium', value: 'sessionMedium' },
-  { label: 'Source / Medium', value: 'sessionSourceMedium' },
+const PRIORITY_DIMENSIONS = [
+  'sessionDefaultChannelGroup',
+  'sessionSource',
+  'sessionMedium',
+  'sessionSourceMedium',
+  'sessionCampaignName',
+  'sessionSourcePlatform'
 ];
 
 const KpiCard: React.FC<{ 
@@ -66,7 +68,7 @@ const App: React.FC = () => {
   
   const [availableProperties, setAvailableProperties] = useState<Ga4Property[]>([]);
   const [availableSites, setAvailableSites] = useState<GscSite[]>([]);
-  const [availableDimensions, setAvailableDimensions] = useState<{ label: string; value: string }[]>(DEFAULT_GA4_DIMENSIONS);
+  const [availableDimensions, setAvailableDimensions] = useState<{ label: string; value: string }[]>([]);
   const [ga4Search, setGa4Search] = useState('');
   const [gscSearch, setGscSearch] = useState('');
   
@@ -135,17 +137,36 @@ const App: React.FC = () => {
       if (!resp.ok) return;
       const data = await resp.json();
       
-      // We filter for some common dimensions to avoid cluttering too much, but allow them to be dynamic
-      // Usually users want traffic source, geography, or device info.
-      const dims = (data.dimensions || [])
-        .map((d: any) => ({
-          label: d.uiName || d.apiName,
-          value: d.apiName
-        }))
-        .sort((a: any, b: any) => a.label.localeCompare(b.label));
+      const filtered = (data.dimensions || []).filter((d: any) => {
+        const apiName = d.apiName.toLowerCase();
+        // Filtrar dimensiones de tiempo y técnicas ruidosas
+        const noise = ['year', 'week', 'month', 'day', 'hour', 'minute', 'isconversion', 'ordertoken', 'creativeid', 'adgroupid'];
+        if (noise.some(n => apiName.includes(n))) return false;
+        
+        // Incluir solo dimensiones relevantes para tráfico, geografía y página
+        const relevant = ['session', 'source', 'medium', 'channel', 'campaign', 'country', 'region', 'page', 'landing', 'device'];
+        return relevant.some(r => apiName.includes(r));
+      });
 
-      if (dims.length > 0) {
-        setAvailableDimensions(dims);
+      const mapped = filtered.map((d: any) => ({
+        label: d.uiName || d.apiName,
+        value: d.apiName
+      }));
+
+      // Ordenar: Prioritarias arriba, luego el resto alfabéticamente
+      const sorted = mapped.sort((a: any, b: any) => {
+        const aIndex = PRIORITY_DIMENSIONS.indexOf(a.value);
+        const bIndex = PRIORITY_DIMENSIONS.indexOf(b.value);
+        
+        if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+        if (aIndex !== -1) return -1;
+        if (bIndex !== -1) return 1;
+        
+        return a.label.localeCompare(b.label);
+      });
+
+      if (sorted.length > 0) {
+        setAvailableDimensions(sorted);
       }
     } catch (e) {
       console.error("Error fetching metadata:", e);
@@ -524,7 +545,11 @@ const App: React.FC = () => {
             <div className="flex items-center gap-2 px-3 py-1.5 border-b sm:border-b-0 sm:border-r border-slate-100">
                <HardDrive className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                <select className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer max-w-[150px] truncate" value={filters.ga4Dimension} onChange={e => setFilters({...filters, ga4Dimension: e.target.value})}>
-                  {availableDimensions.map(dim => <option key={dim.value} value={dim.value}>{dim.label}</option>)}
+                  {availableDimensions.length > 0 ? (
+                    availableDimensions.map(dim => <option key={dim.value} value={dim.value}>{dim.label}</option>)
+                  ) : (
+                    <option value="sessionDefaultChannelGroup">Session Default Channel Group</option>
+                  )}
                </select>
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5">
