@@ -616,6 +616,17 @@ const App: React.FC = () => {
             {loadingInsights ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
             Obtener Reporte Estratégico IA
           </button>
+          <main className="flex-1 overflow-y-auto">
+    <div className="bg-white p-4 shadow mb-4 flex justify-between items-center">
+        <h2 className="text-xl">Mi Dashboard</h2>
+        
+        {/* Aquí pones el botón integrado en tu diseño */}
+        <GoogleLogin />
+        
+    </div>
+    
+    {/* ... resto de tus gráficos ... */}
+</main>
         </div>
       </main>
     </div>
@@ -980,17 +991,4 @@ const EmptyState = ({ text }: { text: string }) => (
     </div>
   </div>
 );
-import GoogleLogin from './GoogleLogin'; // Importa el archivo nuevo
-
-function App() {
-  return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center">
-      <h1 className="text-2xl font-bold mb-5">Login</h1>
-      
-      {/* Aquí se mostrará el botón */}
-      <GoogleLogin />
-      
-    </div>
-  );
-}
 export default App;
