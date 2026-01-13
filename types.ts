@@ -22,10 +22,9 @@ export interface BaseMetrics {
   sales: number;
 }
 
-// Fixed DailyData by adding optional landingPage property
 export interface DailyData extends BaseMetrics {
   date: string;
-  channel: ChannelType;
+  channel: ChannelType | string; // Permite cualquier channel group de GA4
   country: string;
   queryType: QueryType;
   landingPage?: string;
@@ -36,7 +35,7 @@ export interface KeywordData extends BaseMetrics {
   landingPage: string;
   country: string;
   queryType: QueryType;
-  date?: string; // Campo añadido para análisis mensual
+  date?: string; 
 }
 
 export interface DashboardFilters {
@@ -46,6 +45,7 @@ export interface DashboardFilters {
   };
   country: string;
   queryType: QueryType | 'All';
+  channelGroup: string; // Nuevo filtro de canal
 }
 
 export enum DashboardTab {

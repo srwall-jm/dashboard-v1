@@ -1,6 +1,6 @@
+
 import { useEffect } from 'react';
 
-// Definimos los tipos para TypeScript
 declare global {
   interface Window {
     google: any;
@@ -8,19 +8,16 @@ declare global {
 }
 
 interface GoogleLoginProps {
-  onLoginSuccess: (token: string) => void; // Prop para avisar al padre
+  onLoginSuccess: (token: string) => void;
 }
 
 const GoogleLogin = ({ onLoginSuccess }: GoogleLoginProps) => {
   useEffect(() => {
     const renderGoogleButton = () => {
       if (window.google && window.google.accounts) {
-        
         window.google.accounts.id.initialize({
-          client_id: "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com", // <--- ¡PON TU ID REAL OTRA VEZ!
+          client_id: "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com",
           callback: (response: any) => {
-            console.log("Login OK. Token recibido.");
-            // Aquí avisamos a App.tsx de que el usuario entró
             onLoginSuccess(response.credential);
           }
         });
@@ -37,12 +34,10 @@ const GoogleLogin = ({ onLoginSuccess }: GoogleLoginProps) => {
         setTimeout(renderGoogleButton, 500);
       }
     };
-
     renderGoogleButton();
   }, [onLoginSuccess]);
 
-  return <div id="googleButtonDiv" className="mt-6 flex justify-center"></div>;
+  return <div id="googleButtonDiv" className="mt-6 flex justify-center min-h-[50px]"></div>;
 };
 
 export default GoogleLogin;
-
