@@ -22,11 +22,13 @@ export interface BaseMetrics {
   sales: number;
 }
 
+// Fixed DailyData by adding optional landingPage property
 export interface DailyData extends BaseMetrics {
   date: string;
   channel: ChannelType;
   country: string;
   queryType: QueryType;
+  landingPage?: string;
 }
 
 export interface KeywordData extends BaseMetrics {
@@ -34,6 +36,7 @@ export interface KeywordData extends BaseMetrics {
   landingPage: string;
   country: string;
   queryType: QueryType;
+  date?: string; // Campo añadido para análisis mensual
 }
 
 export interface DashboardFilters {

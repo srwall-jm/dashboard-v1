@@ -1,18 +1,16 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App' 
 
-// ⚠️ IMPORTANTE: Si tenías líneas como "import './index.css'", 
-// BORRALAS, porque ese archivo no existe en tu lista y rompe la web.
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
 
 const rootElement = document.getElementById('root');
-
 if (!rootElement) {
-  console.error("❌ FATAL: No encuentro el div 'root' en index.html");
-} else {
-  ReactDOM.createRoot(rootElement).render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>,
-  )
+  throw new Error("Could not find root element to mount to");
 }
+
+const root = ReactDOM.createRoot(rootElement);
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
