@@ -24,10 +24,11 @@ export interface BaseMetrics {
 
 export interface DailyData extends BaseMetrics {
   date: string;
-  channel: string; // Representa el valor de la dimensión seleccionada (Source, Medium, etc.)
+  channel: string; 
   country: string;
   queryType: QueryType;
   landingPage?: string;
+  dateRangeLabel?: 'current' | 'previous';
 }
 
 export interface KeywordData extends BaseMetrics {
@@ -36,6 +37,7 @@ export interface KeywordData extends BaseMetrics {
   country: string;
   queryType: QueryType;
   date?: string; 
+  dateRangeLabel?: 'current' | 'previous';
 }
 
 export interface DashboardFilters {
@@ -43,9 +45,13 @@ export interface DashboardFilters {
     start: string;
     end: string;
   };
+  comparison: {
+    enabled: boolean;
+    type: 'previous_period' | 'previous_year';
+  };
   country: string;
   queryType: QueryType | 'All';
-  ga4Dimension: string; // Dimensión técnica de GA4 (ej: sessionDefaultChannelGroup)
+  ga4Dimension: string;
 }
 
 export enum DashboardTab {
