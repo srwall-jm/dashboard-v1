@@ -1,7 +1,7 @@
 
 import { DailyData, KeywordData, ChannelType, QueryType } from './types';
 
-const COUNTRIES = ['Spain', 'Mexico', 'USA', 'UK', 'France', 'Germany'];
+export const COUNTRIES = ['Spain', 'Mexico', 'United States', 'United Kingdom', 'France', 'Germany', 'Italy', 'Portugal'];
 const QUERY_TYPES: QueryType[] = ['Branded', 'Non-Branded'];
 const CHANNELS: ChannelType[] = ['Organic Search', 'Paid Search'];
 
@@ -21,7 +21,6 @@ export const generateMockDailyData = (): DailyData[] => {
     COUNTRIES.forEach(country => {
       CHANNELS.forEach(channel => {
         QUERY_TYPES.forEach(qType => {
-          // Add some seasonal/yearly variance
           const multiplier = isPreviousYear ? 0.85 : 1.0; 
           const baseSessions = channel === 'Paid Search' ? 300 : 700;
           
@@ -63,16 +62,17 @@ export const generateMockKeywordData = (): KeywordData[] => {
     '/guias/entrenamiento', '/accesorios/running'
   ];
 
-  return Array.from({ length: 60 }).map((_, i) => {
+  return Array.from({ length: 150 }).map((_, i) => {
     const sessions = Math.floor(Math.random() * 5000) + 500;
     const clicks = Math.floor(sessions * 0.85);
     const impressions = clicks * (12 + Math.random() * 10);
     const sales = Math.floor(sessions * 0.035);
+    const country = COUNTRIES[Math.floor(Math.random() * COUNTRIES.length)];
     
     return {
       keyword: keywords[i % keywords.length] + (i > 10 ? ` ${i}` : ''),
       landingPage: pages[i % pages.length],
-      country: COUNTRIES[Math.floor(Math.random() * COUNTRIES.length)],
+      country,
       queryType: i % 4 === 0 ? 'Branded' : 'Non-Branded',
       impressions,
       clicks,
