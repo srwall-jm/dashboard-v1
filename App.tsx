@@ -11,7 +11,7 @@ import { getDashboardInsights } from './geminiService';
 // --- IMPORTANTE: Importamos tu componente de Login ---
 import GoogleLogin from './GoogleLogin'; 
 
-const CLIENT_ID = "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com"; // Asegúrate que este sea tu ID real
+const CLIENT_ID = "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com"; 
 const SCOPE_GA4 = "https://www.googleapis.com/auth/analytics.readonly";
 const SCOPE_GSC = "https://www.googleapis.com/auth/webmasters.readonly";
 
@@ -91,7 +91,6 @@ const App: React.FC = () => {
   };
 
   // --- Data Fetching Logic (GA4 & GSC) ---
-  // (Mantenemos tu lógica original de fetch aquí)
   const fetchGa4Properties = async (token: string) => {
     try {
       const resp = await fetch('https://analyticsadmin.googleapis.com/v1beta/accountSummaries', {
@@ -218,40 +217,48 @@ const App: React.FC = () => {
     }
   };
 
-  // --- Handlers de Autenticación ---
-  
-  // 1. Inicialización de clientes OAuth (Solo permisos, no Login de identidad)
+  // --- Handlers de Autenticación (CORREGIDO CON POLLING) ---
   useEffect(() => {
-    if (typeof window !== 'undefined' && (window as any).google) {
-      // Configuramos GA4 OAuth Client
-      tokenClientGa4.current = (window as any).google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPE_GA4,
-        prompt: 'consent',
-        callback: (resp: any) => {
-          if (resp.access_token) {
-            setGa4Auth({ token: resp.access_token, property: null });
-            fetchGa4Properties(resp.access_token);
-          }
-        },
-      });
+    // Esta función intenta conectarse hasta que Google está listo
+    const initializeOAuth = () => {
+      if (typeof window !== 'undefined' && (window as any).google && (window as any).google.accounts) {
+        console.log("✅ Google Script detectado. Inicializando OAuth...");
+        
+        // Configuramos GA4 OAuth Client
+        tokenClientGa4.current = (window as any).google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: SCOPE_GA4,
+          prompt: 'consent',
+          callback: (resp: any) => {
+            if (resp.access_token) {
+              setGa4Auth({ token: resp.access_token, property: null });
+              fetchGa4Properties(resp.access_token);
+            }
+          },
+        });
 
-      // Configuramos GSC OAuth Client
-      tokenClientGsc.current = (window as any).google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPE_GSC,
-        prompt: 'consent',
-        callback: (resp: any) => {
-          if (resp.access_token) {
-            setGscAuth({ token: resp.access_token, site: null });
-            fetchGscSites(resp.access_token);
-          }
-        },
-      });
-    }
+        // Configuramos GSC OAuth Client
+        tokenClientGsc.current = (window as any).google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: SCOPE_GSC,
+          prompt: 'consent',
+          callback: (resp: any) => {
+            if (resp.access_token) {
+              setGscAuth({ token: resp.access_token, site: null });
+              fetchGscSites(resp.access_token);
+            }
+          },
+        });
+      } else {
+        // Si falla, reintenta en 500ms
+        console.log("⏳ Esperando script de Google para OAuth...");
+        setTimeout(initializeOAuth, 500);
+      }
+    };
+
+    initializeOAuth();
   }, []);
 
-  // 2. Manejador del Login Exitoso (Viene de GoogleLogin.tsx)
   const handleLoginSuccess = (credentialToken: string) => {
     try {
       const base64Url = credentialToken.split('.')[1];
@@ -440,7 +447,19 @@ const App: React.FC = () => {
                         </select>
                     </div>
                  ) : (
-                    <button onClick={() => tokenClientGa4.current.requestAccessToken()} className="w-full py-2 bg-indigo-600/20 text-indigo-400 text-[9px] font-black uppercase rounded-xl border border-indigo-600/30 hover:bg-indigo-600 hover:text-white transition-all">Conectar GA4</button>
+                    // BOTÓN CONECTAR GA4 SEGURO
+                    <button 
+                      onClick={() => {
+                        if (tokenClientGa4.current) {
+                          tokenClientGa4.current.requestAccessToken();
+                        } else {
+                          console.warn("Cliente GA4 no listo. Reintentando...");
+                        }
+                      }} 
+                      className="w-full py-2 bg-indigo-600/20 text-indigo-400 text-[9px] font-black uppercase rounded-xl border border-indigo-600/30 hover:bg-indigo-600 hover:text-white transition-all"
+                    >
+                      Conectar GA4
+                    </button>
                  )}
 
                  {gscAuth?.token ? (
@@ -455,7 +474,19 @@ const App: React.FC = () => {
                         </select>
                     </div>
                  ) : (
-                    <button onClick={() => tokenClientGsc.current.requestAccessToken()} className="w-full py-2 bg-emerald-600/20 text-emerald-400 text-[9px] font-black uppercase rounded-xl border border-emerald-600/30 hover:bg-emerald-600 hover:text-white transition-all">Conectar GSC</button>
+                    // BOTÓN CONECTAR GSC SEGURO
+                    <button 
+                      onClick={() => {
+                         if (tokenClientGsc.current) {
+                           tokenClientGsc.current.requestAccessToken();
+                         } else {
+                           console.warn("Cliente GSC no listo. Reintentando...");
+                         }
+                      }} 
+                      className="w-full py-2 bg-emerald-600/20 text-emerald-400 text-[9px] font-black uppercase rounded-xl border border-emerald-600/30 hover:bg-emerald-600 hover:text-white transition-all"
+                    >
+                      Conectar GSC
+                    </button>
                  )}
               </div>
               <button onClick={() => window.location.reload()} className="w-full mt-6 py-2 text-[10px] font-black text-slate-400 hover:text-white transition-colors flex items-center justify-center gap-2">
