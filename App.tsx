@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink
+  BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Legend, LineChart, Line
@@ -18,6 +18,14 @@ const countryMap: Record<string, string> = {
   'esp': 'Spain', 'mex': 'Mexico', 'usa': 'United States', 'gbr': 'United Kingdom',
   'fra': 'France', 'deu': 'Germany', 'ita': 'Italy', 'prt': 'Portugal'
 };
+
+const GA4_DIMENSIONS = [
+  { label: 'Default Channel Group', value: 'sessionDefaultChannelGroup' },
+  { label: 'Session Source', value: 'sessionSource' },
+  { label: 'Session Medium', value: 'sessionMedium' },
+  { label: 'Source / Medium', value: 'sessionSourceMedium' },
+  { label: 'Primary Channel Group', value: 'sessionPrimaryChannelGroup' },
+];
 
 const KpiCard: React.FC<{ 
   title: string; value: string | number; comparison?: number; icon: React.ReactNode; color?: string; isPercent?: boolean;
@@ -42,7 +50,6 @@ const KpiCard: React.FC<{
 );
 
 const App: React.FC = () => {
-  // Persistence: Check localStorage on mount
   const [user, setUser] = useState<{ name: string; email: string; picture: string } | null>(() => {
     const saved = localStorage.getItem('seo_suite_user');
     return saved ? JSON.parse(saved) : null;
@@ -80,7 +87,7 @@ const App: React.FC = () => {
     },
     country: 'All',
     queryType: 'All',
-    channelGroup: 'All'
+    ga4Dimension: 'sessionDefaultChannelGroup'
   });
   
   const [searchTerm, setSearchTerm] = useState('');
@@ -147,7 +154,7 @@ const App: React.FC = () => {
         headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           dateRanges: [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }],
-          dimensions: [{ name: 'date' }, { name: 'sessionDefaultChannelGroup' }, { name: 'country' }, { name: 'landingPage' }],
+          dimensions: [{ name: 'date' }, { name: filters.ga4Dimension }, { name: 'country' }, { name: 'landingPage' }],
           metrics: [{ name: 'sessions' }, { name: 'totalRevenue' }, { name: 'transactions' }, { name: 'sessionConversionRate' }]
         })
       });
@@ -246,7 +253,6 @@ const App: React.FC = () => {
           },
         });
 
-        // Re-fetch properties if token is already present from session
         if (ga4Auth?.token) fetchGa4Properties(ga4Auth.token);
         if (gscAuth?.token) fetchGscSites(gscAuth.token);
       } else {
@@ -276,7 +282,7 @@ const App: React.FC = () => {
     sessionStorage.removeItem('gsc_auth');
   };
 
-  useEffect(() => { if (ga4Auth?.token && ga4Auth.property) fetchGa4Data(); }, [ga4Auth?.property?.id, filters.dateRange]);
+  useEffect(() => { if (ga4Auth?.token && ga4Auth.property) fetchGa4Data(); }, [ga4Auth?.property?.id, filters.dateRange, filters.ga4Dimension]);
   useEffect(() => { if (gscAuth?.token && gscAuth.site) fetchGscData(); }, [gscAuth?.site?.siteUrl, filters.dateRange]);
 
   const filteredDailyData = useMemo((): DailyData[] => {
@@ -285,8 +291,7 @@ const App: React.FC = () => {
       const queryTypeActual = isBrandedVal ? 'Branded' : 'Non-Branded';
       const countryMatch = filters.country === 'All' || d.country === filters.country;
       const queryMatch = filters.queryType === 'All' || queryTypeActual === filters.queryType;
-      const channelMatch = filters.channelGroup === 'All' || d.channel === filters.channelGroup;
-      return countryMatch && queryMatch && channelMatch;
+      return countryMatch && queryMatch;
     }).map(d => ({ ...d, queryType: (isBranded(d.landingPage || '') ? 'Branded' : 'Non-Branded') as QueryType }));
   }, [realDailyData, filters, brandRegexStr]);
 
@@ -299,10 +304,6 @@ const App: React.FC = () => {
       return countryMatch && queryMatch;
     }).map(k => ({ ...k, queryType: (isBranded(k.keyword) ? 'Branded' : 'Non-Branded') as QueryType }));
   }, [realKeywordData, filters, brandRegexStr]);
-
-  const uniqueChannelGroups = useMemo(() => {
-    return Array.from(new Set(realDailyData.map(d => d.channel))).sort();
-  }, [realDailyData]);
 
   const filteredProperties = useMemo(() => {
     return availableProperties.filter(p => p.name.toLowerCase().includes(ga4Search.toLowerCase()));
@@ -322,8 +323,9 @@ const App: React.FC = () => {
   };
 
   const channelStats = useMemo(() => {
-    const organic = aggregate(filteredDailyData.filter(d => d.channel.includes('Organic Search')));
-    const paid = aggregate(filteredDailyData.filter(d => d.channel.includes('Paid Search')));
+    // Definición estricta solicitada por el usuario
+    const organic = aggregate(filteredDailyData.filter(d => d.channel.toLowerCase().includes('organic')));
+    const paid = aggregate(filteredDailyData.filter(d => d.channel.toLowerCase().includes('paid') || d.channel.toLowerCase().includes('cpc')));
     return { organic, paid };
   }, [filteredDailyData]);
 
@@ -490,10 +492,9 @@ const App: React.FC = () => {
                </select>
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5 border-b sm:border-b-0 sm:border-r border-slate-100">
-               <Filter className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-               <select className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" value={filters.channelGroup} onChange={e => setFilters({...filters, channelGroup: e.target.value})}>
-                  <option value="All">Todos Canales</option>
-                  {uniqueChannelGroups.map(cg => <option key={cg} value={cg}>{cg}</option>)}
+               <HardDrive className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+               <select className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" value={filters.ga4Dimension} onChange={e => setFilters({...filters, ga4Dimension: e.target.value})}>
+                  {GA4_DIMENSIONS.map(dim => <option key={dim.value} value={dim.value}>{dim.label}</option>)}
                </select>
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5">
@@ -553,9 +554,13 @@ const OrganicVsPaidView = ({ stats, data }: any) => {
     if (!data.length) return [];
     const map: any = {};
     data.forEach((d: any) => {
+      const isOrg = d.channel.toLowerCase().includes('organic');
+      const isPaid = d.channel.toLowerCase().includes('paid') || d.channel.toLowerCase().includes('cpc');
+      if (!isOrg && !isPaid) return;
+
       if (!map[d.date]) map[d.date] = { date: d.date, organic: 0, paid: 0 };
-      if (d.channel.includes('Organic Search')) map[d.date].organic += d.sessions;
-      else if (d.channel.includes('Paid Search')) map[d.date].paid += d.sessions;
+      if (isOrg) map[d.date].organic += d.sessions;
+      if (isPaid) map[d.date].paid += d.sessions;
     });
     return Object.values(map).sort((a: any, b: any) => a.date.localeCompare(b.date));
   }, [data]);
@@ -589,7 +594,7 @@ const OrganicVsPaidView = ({ stats, data }: any) => {
         </div>
       </div>
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm h-[350px]">
-        <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-8">Evolución de Canales</h4>
+        <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-8">Evolución de Canales (Strict Organic vs Paid)</h4>
         {chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height="90%">
             <AreaChart data={chartData}>
@@ -608,8 +613,8 @@ const OrganicVsPaidView = ({ stats, data }: any) => {
               <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
               <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
               <Legend verticalAlign="top" align="center" iconType="circle" />
-              <Area name="Orgánico" type="monotone" dataKey="organic" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorOrg)" />
-              <Area name="Pago" type="monotone" dataKey="paid" stroke="#f59e0b" strokeWidth={3} fillOpacity={1} fill="url(#colorPaid)" />
+              <Area name="Organic Search" type="monotone" dataKey="organic" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorOrg)" />
+              <Area name="Paid Search" type="monotone" dataKey="paid" stroke="#f59e0b" strokeWidth={3} fillOpacity={1} fill="url(#colorPaid)" />
             </AreaChart>
           </ResponsiveContainer>
         ) : <EmptyState text="Sincroniza GA4 para visualizar tendencias" /> }
@@ -619,7 +624,7 @@ const OrganicVsPaidView = ({ stats, data }: any) => {
 };
 
 const SeoMarketplaceView = ({ data, keywordData, aggregate }: any) => {
-  const seoGa4 = aggregate(data.filter((d: any) => d.channel.includes('Organic Search')));
+  const seoGa4 = aggregate(data.filter((d: any) => d.channel.toLowerCase().includes('organic')));
   const gscStats = useMemo(() => {
     return keywordData.reduce((acc: any, curr: any) => ({
       impressions: acc.impressions + curr.impressions,
@@ -643,9 +648,9 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate }: any) => {
         <KpiCard title="Impresiones GSC" value={gscStats.impressions} icon={<Eye />} />
         <KpiCard title="Clicks GSC" value={gscStats.clicks} icon={<MousePointer2 />} />
         <KpiCard title="CTR GSC" value={`${(gscStats.impressions > 0 ? (gscStats.clicks / gscStats.impressions) * 100 : 0).toFixed(2)}%`} icon={<Percent />} />
-        <KpiCard title="CR GA4" value={`${seoGa4.cr.toFixed(2)}%`} icon={<TrendingUp />} color="emerald" />
-        <KpiCard title="Revenue GA4" value={`€${seoGa4.revenue.toLocaleString()}`} icon={<Tag />} color="emerald" />
-        <KpiCard title="Sales GA4" value={seoGa4.sales} icon={<ShoppingBag />} color="emerald" />
+        <KpiCard title="CR GA4 (Organic)" value={`${seoGa4.cr.toFixed(2)}%`} icon={<TrendingUp />} color="emerald" />
+        <KpiCard title="Revenue GA4 (Organic)" value={`€${seoGa4.revenue.toLocaleString()}`} icon={<Tag />} color="emerald" />
+        <KpiCard title="Sales GA4 (Organic)" value={seoGa4.sales} icon={<ShoppingBag />} color="emerald" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

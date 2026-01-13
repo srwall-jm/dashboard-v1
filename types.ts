@@ -24,7 +24,7 @@ export interface BaseMetrics {
 
 export interface DailyData extends BaseMetrics {
   date: string;
-  channel: ChannelType | string; // Permite cualquier channel group de GA4
+  channel: string; // Representa el valor de la dimensión seleccionada (Source, Medium, etc.)
   country: string;
   queryType: QueryType;
   landingPage?: string;
@@ -45,7 +45,7 @@ export interface DashboardFilters {
   };
   country: string;
   queryType: QueryType | 'All';
-  channelGroup: string; // Nuevo filtro de canal
+  ga4Dimension: string; // Dimensión técnica de GA4 (ej: sessionDefaultChannelGroup)
 }
 
 export enum DashboardTab {
