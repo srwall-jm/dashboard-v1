@@ -36,18 +36,39 @@ const formatDate = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
+const getStartOfWeek = (date: Date) => {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Monday start
+  return new Date(d.setDate(diff));
+};
+
 const KpiCard: React.FC<{ 
-  title: string; value: string | number; comparison?: number; icon: React.ReactNode; color?: string; isPercent?: boolean;
-}> = ({ title, value, comparison, icon, color = "indigo", isPercent = false }) => (
+  title: string; 
+  value: string | number; 
+  comparison?: number; 
+  absoluteChange?: number;
+  icon: React.ReactNode; 
+  color?: string; 
+  isPercent?: boolean;
+  prefix?: string;
+}> = ({ title, value, comparison, absoluteChange, icon, color = "indigo", isPercent = false, prefix = "" }) => (
   <div className="bg-white p-5 md:p-6 rounded-[24px] border border-slate-200 shadow-sm hover:shadow-md transition-all group">
     <div className="flex justify-between items-start mb-4">
       <div className={`p-3 bg-${color}-50 text-${color}-600 rounded-2xl group-hover:scale-110 transition-transform`}>
         {icon}
       </div>
       {comparison !== undefined && !isNaN(comparison) && (
-        <div className={`flex items-center text-[11px] font-bold px-2 py-1 rounded-full ${comparison >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-          {comparison >= 0 ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
-          {Math.abs(comparison).toFixed(1)}%
+        <div className="text-right">
+          <div className={`flex items-center text-[11px] font-bold px-2 py-1 rounded-full ${comparison >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+            {comparison >= 0 ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
+            {Math.abs(comparison).toFixed(1)}%
+          </div>
+          {absoluteChange !== undefined && (
+            <div className={`text-[9px] font-bold mt-1 ${absoluteChange >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+              {absoluteChange >= 0 ? '+' : ''}{prefix}{absoluteChange.toLocaleString()}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -89,6 +110,7 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [brandRegexStr, setBrandRegexStr] = useState('tienda|deportes|pro|brandname');
+  const [grouping, setGrouping] = useState<'daily' | 'weekly' | 'monthly'>('daily');
 
   const [activeTab, setActiveTab] = useState<DashboardTab>(DashboardTab.ORGANIC_VS_PAID);
   const [filters, setFilters] = useState<DashboardFilters>({
@@ -427,6 +449,11 @@ const App: React.FC = () => {
         sales: getChange(currSum.sales, prevSum.sales),
         revenue: getChange(currSum.revenue, prevSum.revenue),
         cr: getChange(currSum.sales / (currSum.sessions || 1), prevSum.sales / (prevSum.sessions || 1))
+      },
+      abs: {
+        sessions: currSum.sessions - prevSum.sessions,
+        sales: currSum.sales - prevSum.sales,
+        revenue: currSum.revenue - prevSum.revenue,
       }
     };
   };
@@ -742,7 +769,15 @@ const App: React.FC = () => {
         )}
 
         <div className="w-full overflow-x-hidden">
-          {activeTab === DashboardTab.ORGANIC_VS_PAID && <OrganicVsPaidView stats={channelStats} data={filteredDailyData} comparisonEnabled={filters.comparison.enabled} />}
+          {activeTab === DashboardTab.ORGANIC_VS_PAID && (
+            <OrganicVsPaidView 
+              stats={channelStats} 
+              data={filteredDailyData} 
+              comparisonEnabled={filters.comparison.enabled}
+              grouping={grouping}
+              setGrouping={setGrouping}
+            />
+          )}
           {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={filteredKeywordData} aggregate={aggregate} comparisonEnabled={filters.comparison.enabled} />}
           {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && <SeoDeepDiveView keywords={filteredKeywordData} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isLoading={isAnythingLoading} comparisonEnabled={filters.comparison.enabled} />}
         </div>
@@ -762,20 +797,39 @@ const App: React.FC = () => {
   );
 };
 
-const OrganicVsPaidView = ({ stats, data, comparisonEnabled }: any) => {
+const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGrouping }: any) => {
   const chartData = useMemo(() => {
     if (!data.length) return [];
+    
+    const currentData = data.filter((d: any) => d.dateRangeLabel === 'current');
     const map: any = {};
-    data.filter((d:any) => d.dateRangeLabel === 'current').forEach((d: any) => {
+
+    currentData.forEach((d: any) => {
       const isOrg = d.channel.toLowerCase().includes('organic');
       const isPaid = d.channel.toLowerCase().includes('paid') || d.channel.toLowerCase().includes('cpc');
       if (!isOrg && !isPaid) return;
-      if (!map[d.date]) map[d.date] = { date: d.date, organic: 0, paid: 0 };
-      if (isOrg) map[d.date].organic += d.sessions;
-      if (isPaid) map[d.date].paid += d.sessions;
+
+      let key = d.date;
+      if (grouping === 'weekly') {
+        const dObj = new Date(d.date);
+        key = formatDate(getStartOfWeek(dObj));
+      } else if (grouping === 'monthly') {
+        key = `${d.date.slice(0, 7)}-01`;
+      }
+
+      if (!map[key]) map[key] = { date: key, organic: 0, paid: 0, organicRevenue: 0, paidRevenue: 0 };
+      if (isOrg) {
+        map[key].organic += d.sessions;
+        map[key].organicRevenue += d.revenue;
+      }
+      if (isPaid) {
+        map[key].paid += d.sessions;
+        map[key].paidRevenue += d.revenue;
+      }
     });
+
     return Object.values(map).sort((a: any, b: any) => a.date.localeCompare(b.date));
-  }, [data]);
+  }, [data, grouping]);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
@@ -786,10 +840,37 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled }: any) => {
             <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Organic Search</h4>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <KpiCard title="Sesiones" value={stats.organic.current.sessions} comparison={comparisonEnabled ? stats.organic.changes.sessions : undefined} icon={<TrendingUp />} />
-            <KpiCard title="Conv. Rate" value={`${stats.organic.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? stats.organic.changes.cr : undefined} icon={<Percent />} isPercent />
-            <KpiCard title="Revenue" value={`€${stats.organic.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? stats.organic.changes.revenue : undefined} icon={<Tag />} color="emerald" />
-            <KpiCard title="Ventas" value={stats.organic.current.sales} comparison={comparisonEnabled ? stats.organic.changes.sales : undefined} icon={<ShoppingBag />} color="emerald" />
+            <KpiCard 
+              title="Sesiones" 
+              value={stats.organic.current.sessions} 
+              comparison={comparisonEnabled ? stats.organic.changes.sessions : undefined} 
+              absoluteChange={comparisonEnabled ? stats.organic.abs.sessions : undefined}
+              icon={<TrendingUp />} 
+            />
+            <KpiCard 
+              title="Conv. Rate" 
+              value={`${stats.organic.current.cr.toFixed(2)}%`} 
+              comparison={comparisonEnabled ? stats.organic.changes.cr : undefined} 
+              icon={<Percent />} 
+              isPercent 
+            />
+            <KpiCard 
+              title="Revenue" 
+              value={`€${stats.organic.current.revenue.toLocaleString()}`} 
+              comparison={comparisonEnabled ? stats.organic.changes.revenue : undefined} 
+              absoluteChange={comparisonEnabled ? stats.organic.abs.revenue : undefined}
+              icon={<Tag />} 
+              color="emerald" 
+              prefix="€"
+            />
+            <KpiCard 
+              title="Ventas" 
+              value={stats.organic.current.sales} 
+              comparison={comparisonEnabled ? stats.organic.changes.sales : undefined} 
+              absoluteChange={comparisonEnabled ? stats.organic.abs.sales : undefined}
+              icon={<ShoppingBag />} 
+              color="emerald" 
+            />
           </div>
         </div>
         <div className="space-y-4">
@@ -798,32 +879,96 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled }: any) => {
             <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Paid Search</h4>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <KpiCard title="Sesiones" value={stats.paid.current.sessions} comparison={comparisonEnabled ? stats.paid.changes.sessions : undefined} icon={<TrendingUp />} color="amber" />
-            <KpiCard title="Conv. Rate" value={`${stats.paid.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? stats.paid.changes.cr : undefined} icon={<Percent />} color="amber" isPercent />
-            <KpiCard title="Revenue" value={`€${stats.paid.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? stats.paid.changes.revenue : undefined} icon={<Tag />} color="rose" />
-            <KpiCard title="Ventas" value={stats.paid.current.sales} comparison={comparisonEnabled ? stats.paid.changes.sales : undefined} icon={<ShoppingBag />} color="rose" />
+            <KpiCard 
+              title="Sesiones" 
+              value={stats.paid.current.sessions} 
+              comparison={comparisonEnabled ? stats.paid.changes.sessions : undefined} 
+              absoluteChange={comparisonEnabled ? stats.paid.abs.sessions : undefined}
+              icon={<TrendingUp />} 
+              color="amber" 
+            />
+            <KpiCard 
+              title="Conv. Rate" 
+              value={`${stats.paid.current.cr.toFixed(2)}%`} 
+              comparison={comparisonEnabled ? stats.paid.changes.cr : undefined} 
+              icon={<Percent />} 
+              color="amber" 
+              isPercent 
+            />
+            <KpiCard 
+              title="Revenue" 
+              value={`€${stats.paid.current.revenue.toLocaleString()}`} 
+              comparison={comparisonEnabled ? stats.paid.changes.revenue : undefined} 
+              absoluteChange={comparisonEnabled ? stats.paid.abs.revenue : undefined}
+              icon={<Tag />} 
+              color="rose" 
+              prefix="€"
+            />
+            <KpiCard 
+              title="Ventas" 
+              value={stats.paid.current.sales} 
+              comparison={comparisonEnabled ? stats.paid.changes.sales : undefined} 
+              absoluteChange={comparisonEnabled ? stats.paid.abs.sales : undefined}
+              icon={<ShoppingBag />} 
+              color="rose" 
+            />
           </div>
         </div>
       </div>
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm h-[350px]">
-        <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-8">Evolución Sesiones (Organic vs Paid)</h4>
-        {chartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height="90%">
-            <AreaChart data={chartData}>
-              <defs>
-                <linearGradient id="colorOrg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/><stop offset="95%" stopColor="#6366f1" stopOpacity={0}/></linearGradient>
-                <linearGradient id="colorPaid" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f59e0b" stopOpacity={0.1}/><stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/></linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
-              <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
-              <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-              <Legend verticalAlign="top" align="center" iconType="circle" />
-              <Area name="Organic Search" type="monotone" dataKey="organic" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorOrg)" />
-              <Area name="Paid Search" type="monotone" dataKey="paid" stroke="#f59e0b" strokeWidth={3} fillOpacity={1} fill="url(#colorPaid)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        ) : <EmptyState text="Sincroniza GA4 para visualizar tendencias" /> }
+
+      <div className="flex flex-col gap-8">
+        <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Evolución Sesiones (Organic vs Paid)</h4>
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+              <button onClick={() => setGrouping('daily')} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === 'daily' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Día</button>
+              <button onClick={() => setGrouping('weekly')} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === 'weekly' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Semana</button>
+              <button onClick={() => setGrouping('monthly')} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === 'monthly' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Mes</button>
+            </div>
+          </div>
+          <div className="h-[300px]">
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="colorOrg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/><stop offset="95%" stopColor="#6366f1" stopOpacity={0}/></linearGradient>
+                    <linearGradient id="colorPaid" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f59e0b" stopOpacity={0.1}/><stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/></linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
+                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
+                  <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                  <Legend verticalAlign="top" align="center" iconType="circle" />
+                  <Area name="Organic Sessions" type="monotone" dataKey="organic" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorOrg)" />
+                  <Area name="Paid Sessions" type="monotone" dataKey="paid" stroke="#f59e0b" strokeWidth={3} fillOpacity={1} fill="url(#colorPaid)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : <EmptyState text="Sincroniza GA4 para visualizar tendencias" /> }
+          </div>
+        </div>
+
+        <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+          <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-8">Evolución Revenue (Organic vs Paid)</h4>
+          <div className="h-[300px]">
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="colorOrgRev" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient>
+                    <linearGradient id="colorPaidRev" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f43f5e" stopOpacity={0.1}/><stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/></linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
+                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
+                  <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                  <Legend verticalAlign="top" align="center" iconType="circle" />
+                  <Area name="Organic Revenue" type="monotone" dataKey="organicRevenue" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorOrgRev)" />
+                  <Area name="Paid Revenue" type="monotone" dataKey="paidRevenue" stroke="#f43f5e" strokeWidth={3} fillOpacity={1} fill="url(#colorPaidRev)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : <EmptyState text="Sincroniza GA4 para visualizar tendencias de ingresos" /> }
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -852,6 +997,10 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
         impressions: getChange(cSum.impressions, pSum.impressions),
         clicks: getChange(cSum.clicks, pSum.clicks),
         ctr: getChange(cSum.clicks/(cSum.impressions||1), pSum.clicks/(pSum.impressions||1))
+      },
+      abs: {
+        impressions: cSum.impressions - pSum.impressions,
+        clicks: cSum.clicks - pSum.clicks
       }
     };
   }, [keywordData]);
@@ -869,12 +1018,50 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <KpiCard title="Impresiones GSC" value={gscStats.current.impressions} comparison={comparisonEnabled ? gscStats.changes.impressions : undefined} icon={<Eye />} />
-        <KpiCard title="Clicks GSC" value={gscStats.current.clicks} comparison={comparisonEnabled ? gscStats.changes.clicks : undefined} icon={<MousePointer2 />} />
-        <KpiCard title="CTR GSC" value={`${(gscStats.current.impressions > 0 ? (gscStats.current.clicks / gscStats.current.impressions) * 100 : 0).toFixed(2)}%`} comparison={comparisonEnabled ? gscStats.changes.ctr : undefined} icon={<Percent />} />
-        <KpiCard title="CR GA4 (Organic)" value={`${organicGa4.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? organicGa4.changes.cr : undefined} icon={<TrendingUp />} color="emerald" />
-        <KpiCard title="Revenue GA4 (Organic)" value={`€${organicGa4.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} icon={<Tag />} color="emerald" />
-        <KpiCard title="Sales GA4 (Organic)" value={organicGa4.current.sales} comparison={comparisonEnabled ? organicGa4.changes.sales : undefined} icon={<ShoppingBag />} color="emerald" />
+        <KpiCard 
+          title="Impresiones GSC" 
+          value={gscStats.current.impressions} 
+          comparison={comparisonEnabled ? gscStats.changes.impressions : undefined} 
+          absoluteChange={comparisonEnabled ? gscStats.abs.impressions : undefined}
+          icon={<Eye />} 
+        />
+        <KpiCard 
+          title="Clicks GSC" 
+          value={gscStats.current.clicks} 
+          comparison={comparisonEnabled ? gscStats.changes.clicks : undefined} 
+          absoluteChange={comparisonEnabled ? gscStats.abs.clicks : undefined}
+          icon={<MousePointer2 />} 
+        />
+        <KpiCard 
+          title="CTR GSC" 
+          value={`${(gscStats.current.impressions > 0 ? (gscStats.current.clicks / gscStats.current.impressions) * 100 : 0).toFixed(2)}%`} 
+          comparison={comparisonEnabled ? gscStats.changes.ctr : undefined} 
+          icon={<Percent />} 
+        />
+        <KpiCard 
+          title="CR GA4 (Organic)" 
+          value={`${organicGa4.current.cr.toFixed(2)}%`} 
+          comparison={comparisonEnabled ? organicGa4.changes.cr : undefined} 
+          icon={<TrendingUp />} 
+          color="emerald" 
+        />
+        <KpiCard 
+          title="Revenue GA4 (Organic)" 
+          value={`€${organicGa4.current.revenue.toLocaleString()}`} 
+          comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} 
+          absoluteChange={comparisonEnabled ? organicGa4.abs.revenue : undefined}
+          icon={<Tag />} 
+          color="emerald" 
+          prefix="€"
+        />
+        <KpiCard 
+          title="Sales GA4 (Organic)" 
+          value={organicGa4.current.sales} 
+          comparison={comparisonEnabled ? organicGa4.changes.sales : undefined} 
+          absoluteChange={comparisonEnabled ? organicGa4.abs.sales : undefined}
+          icon={<ShoppingBag />} 
+          color="emerald" 
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
