@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock
@@ -69,8 +68,6 @@ const App: React.FC = () => {
   const [availableProperties, setAvailableProperties] = useState<Ga4Property[]>([]);
   const [availableSites, setAvailableSites] = useState<GscSite[]>([]);
   const [availableDimensions, setAvailableDimensions] = useState<{ label: string; value: string }[]>([]);
-  const [ga4Search, setGa4Search] = useState('');
-  const [gscSearch, setGscSearch] = useState('');
   
   const [realDailyData, setRealDailyData] = useState<DailyData[]>([]);
   const [realKeywordData, setRealKeywordData] = useState<KeywordData[]>([]);
@@ -352,6 +349,19 @@ const App: React.FC = () => {
     sessionStorage.removeItem('gsc_auth');
   };
 
+  // NUEVAS FUNCIONES PARA CONECTAR
+  const handleConnectGa4 = () => {
+    if (tokenClientGa4.current) {
+      tokenClientGa4.current.requestAccessToken();
+    }
+  };
+
+  const handleConnectGsc = () => {
+    if (tokenClientGsc.current) {
+      tokenClientGsc.current.requestAccessToken();
+    }
+  };
+
   useEffect(() => { 
     if (ga4Auth?.token && ga4Auth.property) {
       fetchGa4Data();
@@ -537,28 +547,51 @@ const App: React.FC = () => {
                    <p className="text-[9px] text-slate-500 truncate">{user.email}</p>
                 </div>
               </div>
+              
               <div className="space-y-4">
+                 {/* LÓGICA CORREGIDA PARA GA4 */}
                  <div className="space-y-2">
                     <label className="text-[8px] font-black uppercase text-slate-500 tracking-widest block">GA4 Property</label>
-                    <select className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 outline-none cursor-pointer" value={ga4Auth?.property?.id || ''} onChange={e => {
-                         const selected = availableProperties.find(p => p.id === e.target.value) || null;
-                         const updated = {...ga4Auth, property: selected};
-                         setGa4Auth(updated as any);
-                    }}>
-                         {availableProperties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
+                    {!ga4Auth?.token ? (
+                      <button 
+                        onClick={handleConnectGa4}
+                        className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold transition-colors flex items-center justify-center gap-2"
+                      >
+                        <ExternalLink className="w-3 h-3" /> Conectar GA4
+                      </button>
+                    ) : (
+                      <select className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 outline-none cursor-pointer" value={ga4Auth?.property?.id || ''} onChange={e => {
+                           const selected = availableProperties.find(p => p.id === e.target.value) || null;
+                           const updated = {...ga4Auth, property: selected};
+                           setGa4Auth(updated as any);
+                      }}>
+                           {availableProperties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    )}
                  </div>
+
+                 {/* LÓGICA CORREGIDA PARA GSC */}
                  <div className="space-y-2">
                     <label className="text-[8px] font-black uppercase text-slate-500 tracking-widest block">GSC Domain</label>
-                    <select className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 outline-none cursor-pointer" value={gscAuth?.site?.siteUrl || ''} onChange={e => {
-                         const selected = availableSites.find(s => s.siteUrl === e.target.value) || null;
-                         const updated = {...gscAuth, site: selected};
-                         setGscAuth(updated as any);
-                    }}>
-                         {availableSites.map(s => <option key={s.siteUrl} value={s.siteUrl}>{s.siteUrl}</option>)}
-                    </select>
+                    {!gscAuth?.token ? (
+                      <button 
+                        onClick={handleConnectGsc}
+                        className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold transition-colors flex items-center justify-center gap-2"
+                      >
+                        <ExternalLink className="w-3 h-3" /> Conectar GSC
+                      </button>
+                    ) : (
+                      <select className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 outline-none cursor-pointer" value={gscAuth?.site?.siteUrl || ''} onChange={e => {
+                           const selected = availableSites.find(s => s.siteUrl === e.target.value) || null;
+                           const updated = {...gscAuth, site: selected};
+                           setGscAuth(updated as any);
+                      }}>
+                           {availableSites.map(s => <option key={s.siteUrl} value={s.siteUrl}>{s.siteUrl}</option>)}
+                      </select>
+                    )}
                  </div>
               </div>
+
               <button onClick={handleLogout} className="w-full mt-6 py-2 text-[9px] font-black text-slate-500 hover:text-white transition-colors flex items-center justify-center gap-2">
                 <LogOut className="w-3 h-3" /> Cerrar Sesión
               </button>
