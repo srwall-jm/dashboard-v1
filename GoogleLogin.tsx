@@ -17,7 +17,7 @@ const GoogleLogin = ({ onLoginSuccess }: GoogleLoginProps) => {
       if (window.google && window.google.accounts) {
         
         window.google.accounts.id.initialize({
-          client_id: "TU_CLIENT_ID_AQUI", // <--- ¡PON TU ID REAL OTRA VEZ!
+          client_id: "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com", // <--- ¡PON TU ID REAL OTRA VEZ!
           callback: (response: any) => {
             console.log("Login OK. Token recibido.");
             // Aquí avisamos a App.tsx de que el usuario entró
@@ -45,3 +45,4 @@ const GoogleLogin = ({ onLoginSuccess }: GoogleLoginProps) => {
 };
 
 export default GoogleLogin;
+
