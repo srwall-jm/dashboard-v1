@@ -19,12 +19,11 @@ const countryMap: Record<string, string> = {
   'fra': 'France', 'deu': 'Germany', 'ita': 'Italy', 'prt': 'Portugal'
 };
 
-const GA4_DIMENSIONS = [
+const DEFAULT_GA4_DIMENSIONS = [
   { label: 'Default Channel Group', value: 'sessionDefaultChannelGroup' },
   { label: 'Session Source', value: 'sessionSource' },
   { label: 'Session Medium', value: 'sessionMedium' },
   { label: 'Source / Medium', value: 'sessionSourceMedium' },
-  { label: 'Primary Channel Group', value: 'sessionPrimaryChannelGroup' },
 ];
 
 const KpiCard: React.FC<{ 
@@ -67,6 +66,7 @@ const App: React.FC = () => {
   
   const [availableProperties, setAvailableProperties] = useState<Ga4Property[]>([]);
   const [availableSites, setAvailableSites] = useState<GscSite[]>([]);
+  const [availableDimensions, setAvailableDimensions] = useState<{ label: string; value: string }[]>(DEFAULT_GA4_DIMENSIONS);
   const [ga4Search, setGa4Search] = useState('');
   const [gscSearch, setGscSearch] = useState('');
   
@@ -124,6 +124,31 @@ const App: React.FC = () => {
     } catch (e) {
       console.error(e);
       setError("Error conectando con GA4 Admin API.");
+    }
+  };
+
+  const fetchGa4Metadata = async (token: string, propertyId: string) => {
+    try {
+      const resp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${propertyId}/metadata`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      
+      // We filter for some common dimensions to avoid cluttering too much, but allow them to be dynamic
+      // Usually users want traffic source, geography, or device info.
+      const dims = (data.dimensions || [])
+        .map((d: any) => ({
+          label: d.uiName || d.apiName,
+          value: d.apiName
+        }))
+        .sort((a: any, b: any) => a.label.localeCompare(b.label));
+
+      if (dims.length > 0) {
+        setAvailableDimensions(dims);
+      }
+    } catch (e) {
+      console.error("Error fetching metadata:", e);
     }
   };
 
@@ -282,7 +307,13 @@ const App: React.FC = () => {
     sessionStorage.removeItem('gsc_auth');
   };
 
-  useEffect(() => { if (ga4Auth?.token && ga4Auth.property) fetchGa4Data(); }, [ga4Auth?.property?.id, filters.dateRange, filters.ga4Dimension]);
+  useEffect(() => { 
+    if (ga4Auth?.token && ga4Auth.property) {
+      fetchGa4Data();
+      fetchGa4Metadata(ga4Auth.token, ga4Auth.property.id);
+    } 
+  }, [ga4Auth?.property?.id, filters.dateRange, filters.ga4Dimension]);
+
   useEffect(() => { if (gscAuth?.token && gscAuth.site) fetchGscData(); }, [gscAuth?.site?.siteUrl, filters.dateRange]);
 
   const filteredDailyData = useMemo((): DailyData[] => {
@@ -323,7 +354,6 @@ const App: React.FC = () => {
   };
 
   const channelStats = useMemo(() => {
-    // Definición estricta solicitada por el usuario
     const organic = aggregate(filteredDailyData.filter(d => d.channel.toLowerCase().includes('organic')));
     const paid = aggregate(filteredDailyData.filter(d => d.channel.toLowerCase().includes('paid') || d.channel.toLowerCase().includes('cpc')));
     return { organic, paid };
@@ -493,8 +523,8 @@ const App: React.FC = () => {
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5 border-b sm:border-b-0 sm:border-r border-slate-100">
                <HardDrive className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-               <select className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" value={filters.ga4Dimension} onChange={e => setFilters({...filters, ga4Dimension: e.target.value})}>
-                  {GA4_DIMENSIONS.map(dim => <option key={dim.value} value={dim.value}>{dim.label}</option>)}
+               <select className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer max-w-[150px] truncate" value={filters.ga4Dimension} onChange={e => setFilters({...filters, ga4Dimension: e.target.value})}>
+                  {availableDimensions.map(dim => <option key={dim.value} value={dim.value}>{dim.label}</option>)}
                </select>
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5">
