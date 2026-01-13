@@ -28,6 +28,14 @@ const PRIORITY_DIMENSIONS = [
   'sessionSourcePlatform'
 ];
 
+// Helper to format date to YYYY-MM-DD in local time
+const formatDate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const KpiCard: React.FC<{ 
   title: string; value: string | number; comparison?: number; icon: React.ReactNode; color?: string; isPercent?: boolean;
 }> = ({ title, value, comparison, icon, color = "indigo", isPercent = false }) => (
@@ -85,8 +93,8 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<DashboardTab>(DashboardTab.ORGANIC_VS_PAID);
   const [filters, setFilters] = useState<DashboardFilters>({
     dateRange: { 
-      start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], 
-      end: new Date().toISOString().split('T')[0] 
+      start: formatDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)), 
+      end: formatDate(new Date()) 
     },
     comparison: {
       enabled: false,
@@ -119,13 +127,13 @@ const App: React.FC = () => {
     if (filters.comparison.type === 'previous_period') {
       const compStart = new Date(start.getTime() - diff - 86400000);
       const compEnd = new Date(start.getTime() - 86400000);
-      return { start: compStart.toISOString().split('T')[0], end: compEnd.toISOString().split('T')[0] };
+      return { start: formatDate(compStart), end: formatDate(compEnd) };
     } else {
       const compStart = new Date(start);
       compStart.setFullYear(compStart.getFullYear() - 1);
       const compEnd = new Date(end);
       compEnd.setFullYear(compEnd.getFullYear() - 1);
-      return { start: compStart.toISOString().split('T')[0], end: compEnd.toISOString().split('T')[0] };
+      return { start: formatDate(compStart), end: formatDate(compEnd) };
     }
   };
 
@@ -435,9 +443,11 @@ const App: React.FC = () => {
     let end = new Date();
 
     if (type === 'this_month') {
+      // From 1st of current month to today
       start = new Date(now.getFullYear(), now.getMonth(), 1);
       end = now;
     } else if (type === 'last_month') {
+      // From 1st of previous month to last day of previous month
       start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       end = new Date(now.getFullYear(), now.getMonth(), 0);
     } else if (type === 'last_7') {
@@ -451,8 +461,8 @@ const App: React.FC = () => {
     setFilters({
       ...filters,
       dateRange: { 
-        start: start.toISOString().split('T')[0], 
-        end: end.toISOString().split('T')[0] 
+        start: formatDate(start), 
+        end: formatDate(end) 
       }
     });
   };
