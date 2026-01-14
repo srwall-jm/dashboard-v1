@@ -1,20 +1,19 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle
+  BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Legend, LineChart, Line, ScatterChart, Scatter, ZAxis, Cell
 } from 'recharts';
 import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, QueryType, ChannelType } from './types';
-import { getDashboardInsights } from './geminiService';
+import { getDashboardInsights, getOpenAiInsights } from './geminiService';
 import GoogleLogin from './GoogleLogin'; 
 
 const CLIENT_ID = "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com"; 
 const SCOPE_GA4 = "https://www.googleapis.com/auth/analytics.readonly";
 const SCOPE_GSC = "https://www.googleapis.com/auth/webmasters.readonly";
 
-// Comprehensive mapping for SEO global markets (ISO-3 to Full Name)
 const COUNTRY_CODE_TO_NAME: Record<string, string> = {
   'afg': 'Afghanistan', 'alb': 'Albania', 'dza': 'Algeria', 'and': 'Andorra', 'ago': 'Angola',
   'arg': 'Argentina', 'arm': 'Armenia', 'aus': 'Australia', 'aut': 'Austria', 'aze': 'Azerbaijan',
@@ -128,6 +127,13 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [brandRegexStr, setBrandRegexStr] = useState('tienda|deportes|pro|brandname');
   const [grouping, setGrouping] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+
+  // AI Configuration
+  const [aiProvider, setAiProvider] = useState<'gemini' | 'openai'>(() => {
+    const saved = localStorage.getItem('ai_provider');
+    return (saved as 'gemini' | 'openai') || 'gemini';
+  });
+  const [openaiKey, setOpenaiKey] = useState(() => localStorage.getItem('openai_api_key') || '');
 
   const [activeTab, setActiveTab] = useState<DashboardTab>(DashboardTab.ORGANIC_VS_PAID);
   const [filters, setFilters] = useState<DashboardFilters>({
@@ -474,12 +480,29 @@ const App: React.FC = () => {
 
   const handleGenerateInsights = async () => {
     setLoadingInsights(true);
+    setError(null);
     try {
       const dashboardName = activeTab === DashboardTab.ORGANIC_VS_PAID ? "Organic vs Paid" : (activeTab === DashboardTab.SEO_BY_COUNTRY ? "SEO por País" : "Keywords Deep Dive");
-      const summary = `GA4 Sessions: ${filteredDailyData.reduce((a,b)=>a+b.sessions,0)}. GSC Clicks: ${filteredKeywordData.reduce((a,b)=>a+b.clicks,0)}.`;
-      const insights = await getDashboardInsights(summary, dashboardName);
-      setAiInsights(insights);
-    } catch (err) { console.error(err); } finally { setLoadingInsights(false); }
+      const summary = `GA4 Sessions: ${filteredDailyData.reduce((a,b)=>a+b.sessions,0)}. GSC Clicks: ${filteredKeywordData.reduce((a,b)=>a+b.clicks,0)}. Revenue: €${filteredDailyData.reduce((a,b)=>a+b.revenue,0).toLocaleString()}.`;
+      
+      let insights: string | undefined;
+      
+      if (aiProvider === 'openai') {
+        if (!openaiKey) {
+          throw new Error("Por favor, introduce tu OpenAI API Key en la barra lateral.");
+        }
+        insights = await getOpenAiInsights(openaiKey, summary, dashboardName);
+      } else {
+        insights = await getDashboardInsights(summary, dashboardName);
+      }
+      
+      setAiInsights(insights || null);
+    } catch (err: any) { 
+      console.error(err); 
+      setError(err.message || "Error al generar insights.");
+    } finally { 
+      setLoadingInsights(false); 
+    }
   };
 
   const isAnythingLoading = isLoadingGa4 || isLoadingGsc;
@@ -491,6 +514,15 @@ const App: React.FC = () => {
     const set = new Set([...realDailyData.map(d => d.country), ...realKeywordData.map(k => k.country)]);
     return Array.from(set).filter(c => c && c !== 'Other' && c !== 'Unknown').sort();
   }, [realDailyData, realKeywordData]);
+
+  // Persist AI Config
+  useEffect(() => {
+    localStorage.setItem('ai_provider', aiProvider);
+  }, [aiProvider]);
+
+  useEffect(() => {
+    localStorage.setItem('openai_api_key', openaiKey);
+  }, [openaiKey]);
 
   if (!user) {
     return (
@@ -530,6 +562,55 @@ const App: React.FC = () => {
             <SidebarLink active={activeTab === DashboardTab.SEO_BY_COUNTRY} onClick={() => {setActiveTab(DashboardTab.SEO_BY_COUNTRY); setIsSidebarOpen(false);}} icon={<Globe />} label="Performance País" />
             <SidebarLink active={activeTab === DashboardTab.KEYWORD_DEEP_DIVE} onClick={() => {setActiveTab(DashboardTab.KEYWORD_DEEP_DIVE); setIsSidebarOpen(false);}} icon={<Target />} label="Análisis SEO Deep" />
           </nav>
+          
+          {/* AI Engines Configuration */}
+          <div className="bg-white/5 rounded-2xl p-4 border border-white/10 mb-6">
+            <div className="flex items-center gap-2 mb-4 text-emerald-400">
+              <Cpu className="w-3.5 h-3.5" />
+              <h4 className="text-[9px] font-black uppercase tracking-widest">Motores de IA</h4>
+            </div>
+            
+            <div className="flex bg-slate-900/50 rounded-xl p-1 mb-4">
+              <button 
+                onClick={() => setAiProvider('gemini')}
+                className={`flex-1 py-1.5 text-[8px] font-black uppercase rounded-lg transition-all ${aiProvider === 'gemini' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500'}`}
+              >
+                Gemini
+              </button>
+              <button 
+                onClick={() => setAiProvider('openai')}
+                className={`flex-1 py-1.5 text-[8px] font-black uppercase rounded-lg transition-all ${aiProvider === 'openai' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500'}`}
+              >
+                OpenAI
+              </button>
+            </div>
+
+            {aiProvider === 'openai' && (
+              <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[8px] font-black uppercase text-slate-500 tracking-widest">OpenAI API Key</label>
+                  <Key className="w-2.5 h-2.5 text-emerald-500" />
+                </div>
+                <input 
+                  type="password" 
+                  value={openaiKey} 
+                  onChange={e => setOpenaiKey(e.target.value)} 
+                  className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 focus:ring-1 ring-emerald-500 outline-none transition-all" 
+                  placeholder="sk-..." 
+                />
+                <p className="text-[7px] font-medium text-slate-500 leading-tight">
+                  Usando modelo gpt-4o-mini para el análisis de reportes.
+                </p>
+              </div>
+            )}
+            
+            {aiProvider === 'gemini' && (
+              <p className="text-[8px] font-black text-indigo-400/70 uppercase tracking-widest text-center py-2 border border-dashed border-indigo-500/20 rounded-xl">
+                Gemini 3 Flash Activo
+              </p>
+            )}
+          </div>
+
           <div className="bg-white/5 rounded-2xl p-4 border border-white/10 mb-6">
             <div className="flex items-center gap-2 mb-3 text-indigo-400"><Settings2 className="w-3.5 h-3.5" /><h4 className="text-[9px] font-black uppercase tracking-widest">Configuración SEO</h4></div>
             <label className="text-[8px] font-black uppercase text-slate-500 tracking-widest block mb-1">Branded Regex</label>
@@ -646,15 +727,29 @@ const App: React.FC = () => {
         </header>
 
         {error && (
-          <div className="mb-8 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-3 text-rose-700 shadow-sm">
+          <div className="mb-8 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-3 text-rose-700 shadow-sm animate-in fade-in slide-in-from-top-4">
             <AlertCircle className="w-5 h-5 flex-shrink-0" /><p className="font-bold text-xs">{error}</p>
           </div>
         )}
 
         {aiInsights && (
-          <div className="mb-10 bg-indigo-600 rounded-[32px] p-8 md:p-10 text-white shadow-2xl relative animate-in fade-in zoom-in-95 duration-500">
-            <div className="flex justify-between items-start mb-6"><div className="flex items-center gap-3"><Sparkles className="w-5 h-5" /><h3 className="text-xl font-black">Reporte Estratégico</h3></div><button onClick={() => setAiInsights(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X className="w-4 h-4" /></button></div>
-            <div className="prose prose-invert max-w-none font-medium text-sm md:text-base leading-relaxed" dangerouslySetInnerHTML={{ __html: aiInsights.replace(/\n/g, '<br/>') }} />
+          <div className="mb-10 bg-slate-900 rounded-[32px] p-8 md:p-10 text-white shadow-2xl relative animate-in fade-in zoom-in-95 duration-500 overflow-hidden">
+            <div className="absolute top-0 right-0 p-12 opacity-10 pointer-events-none">
+              {aiProvider === 'openai' ? <Cpu className="w-48 h-48 text-emerald-500" /> : <Sparkles className="w-48 h-48 text-indigo-500" />}
+            </div>
+            <div className="flex justify-between items-start mb-6 z-10 relative">
+              <div className="flex items-center gap-3">
+                {aiProvider === 'openai' ? <Cpu className="w-5 h-5 text-emerald-400" /> : <Sparkles className="w-5 h-5 text-indigo-400" />}
+                <div className="flex flex-col">
+                  <h3 className="text-xl font-black">Reporte Estratégico</h3>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+                    Generado por {aiProvider === 'openai' ? 'OpenAI GPT-4o-mini' : 'Google Gemini 3 Flash'}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setAiInsights(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="prose prose-invert max-w-none font-medium text-sm md:text-base leading-relaxed z-10 relative" dangerouslySetInnerHTML={{ __html: aiInsights.replace(/\n/g, '<br/>') }} />
           </div>
         )}
 
@@ -665,8 +760,13 @@ const App: React.FC = () => {
         </div>
 
         <div className="mt-12 flex justify-center pb-12">
-          <button onClick={handleGenerateInsights} disabled={loadingInsights || isAnythingLoading || (realDailyData.length === 0 && realKeywordData.length === 0)} className="flex items-center gap-3 px-10 py-4 bg-slate-950 text-white rounded-3xl text-xs font-black shadow-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50">
-            {loadingInsights ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Generar Reporte IA
+          <button 
+            onClick={handleGenerateInsights} 
+            disabled={loadingInsights || isAnythingLoading || (realDailyData.length === 0 && realKeywordData.length === 0)} 
+            className={`flex items-center gap-3 px-10 py-4 ${aiProvider === 'openai' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20' : 'bg-slate-950 hover:bg-slate-800 shadow-slate-900/20'} text-white rounded-3xl text-xs font-black shadow-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50`}
+          >
+            {loadingInsights ? <RefreshCw className="w-4 h-4 animate-spin" /> : (aiProvider === 'openai' ? <Cpu className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />)} 
+            Generar Reporte {aiProvider === 'openai' ? 'GPT-4o-mini' : 'IA Gemini'}
           </button>
         </div>
       </main>
@@ -882,10 +982,9 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
         ...item,
         ctr: item.impressions > 0 ? (item.clicks / item.impressions) * 100 : 0
       }))
-      // Filter for high demand, low capture
       .sort((a, b) => b.impressions - a.impressions)
       .slice(0, 15)
-      .sort((a, b) => a.ctr - b.ctr) // Top items are low CTR
+      .sort((a, b) => a.ctr - b.ctr)
       .slice(0, 10);
   }, [keywordData]);
 
@@ -1198,6 +1297,5 @@ const EmptyState = ({ text }: { text: string }) => (
     <Activity className="w-8 h-8 text-slate-200 mb-4" /><p className="text-slate-400 italic text-xs font-medium">{text}</p>
   </div>
 );
-
 
 export default App;
