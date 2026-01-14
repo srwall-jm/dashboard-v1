@@ -514,15 +514,15 @@ const App: React.FC = () => {
       if (activeTab === DashboardTab.ORGANIC_VS_PAID) {
         summary = `
           Context: Analysis of Organic vs Paid Search funnels.
-          Organic Stats: ${channelStats.organic.current.sessions} sessions, £${channelStats.organic.current.revenue.toLocaleString()} revenue, ${channelStats.organic.current.cr.toFixed(2)}% CR.
-          Paid Stats: ${channelStats.paid.current.sessions} sessions, £${channelStats.paid.current.revenue.toLocaleString()} revenue, ${channelStats.paid.current.cr.toFixed(2)}% CR.
+          Organic Stats: ${channelStats.organic.current.sessions} sessions, ${currencySymbol}${channelStats.organic.current.revenue.toLocaleString()} revenue, ${channelStats.organic.current.cr.toFixed(2)}% CR.
+          Paid Stats: ${channelStats.paid.current.sessions} sessions, ${currencySymbol}${channelStats.paid.current.revenue.toLocaleString()} revenue, ${channelStats.paid.current.cr.toFixed(2)}% CR.
           Funnel Highlights: Organic Add-to-basket: ${channelStats.organic.current.addToCarts}. Paid Add-to-basket: ${channelStats.paid.current.addToCarts}.
         `;
       } else if (activeTab === DashboardTab.SEO_BY_COUNTRY) {
         const topCountries = filteredDailyData
           .filter(d => d.dateRangeLabel === 'current' && d.channel.toLowerCase().includes('organic'))
           .slice(0, 5)
-          .map(d => `${d.country} (£${d.revenue.toLocaleString()})`)
+          .map(d => `${d.country} (${currencySymbol}${d.revenue.toLocaleString()})`)
           .join(", ");
         summary = `
           Context: Market-level SEO efficiency.
@@ -806,7 +806,7 @@ const App: React.FC = () => {
 
         <div className="w-full">
           {activeTab === DashboardTab.ORGANIC_VS_PAID && <OrganicVsPaidView stats={channelStats} data={filteredDailyData} comparisonEnabled={filters.comparison.enabled} grouping={grouping} setGrouping={setGrouping} currencySymbol={currencySymbol} />}
-          {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={filteredKeywordData} aggregate={aggregate} comparisonEnabled={filters.comparison.enabled} currencySymbol={currencySymbol} />}
+          {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={filteredKeywordData} aggregate={aggregate} comparisonEnabled={filters.comparison.enabled} currencySymbol={currencySymbol} grouping={grouping} />}
           {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && <SeoDeepDiveView keywords={filteredKeywordData} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isLoading={isAnythingLoading} comparisonEnabled={filters.comparison.enabled} />}
         </div>
 
@@ -990,10 +990,33 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
   );
 };
 
-const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, currencySymbol }: any) => {
+const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, currencySymbol, grouping }: any) => {
   const [selectedOpportunityCountry, setSelectedOpportunityCountry] = useState<string | null>(null);
   const organicGa4 = aggregate(data.filter((d: any) => d.channel?.toLowerCase().includes('organic')));
   
+  const brandedTrendData = useMemo(() => {
+    if (!keywordData.length) return [];
+    const currentData = keywordData.filter((k: any) => k.dateRangeLabel === 'current');
+    const map: any = {};
+    currentData.forEach((k: any) => {
+      let key = k.date;
+      if (grouping === 'weekly') key = formatDate(getStartOfWeek(new Date(k.date || '')));
+      else if (grouping === 'monthly') key = `${(k.date || '').slice(0, 7)}-01`;
+      
+      if (!map[key]) {
+        map[key] = { date: key, brandedClicks: 0, nonBrandedClicks: 0, brandedImpr: 0, nonBrandedImpr: 0 };
+      }
+      if (k.queryType === 'Branded') {
+        map[key].brandedClicks += k.clicks;
+        map[key].brandedImpr += k.impressions;
+      } else {
+        map[key].nonBrandedClicks += k.clicks;
+        map[key].nonBrandedImpr += k.impressions;
+      }
+    });
+    return Object.values(map).sort((a: any, b: any) => a.date.localeCompare(b.date));
+  }, [keywordData, grouping]);
+
   const scatterData = useMemo(() => {
     const map: Record<string, { country: string; sessions: number; sales: number; revenue: number }> = {};
     data.filter((d: any) => d.dateRangeLabel === 'current' && d.channel?.toLowerCase().includes('organic')).forEach((d: any) => { if (!map[d.country]) map[d.country] = { country: d.country, sessions: 0, sales: 0, revenue: 0 }; map[d.country].sessions += d.sessions; map[d.country].sales += d.sales; map[d.country].revenue += d.revenue; });
@@ -1059,6 +1082,37 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, c
           </div>
         ))}
       </div>
+
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Branded vs. Non-Branded (GSC Trend)</h4>
+            <p className="text-[11px] font-bold text-slate-600">Comparison of search volume capture by query type</p>
+          </div>
+          <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+             <TrendingUp className="w-4 h-4" />
+          </div>
+        </div>
+        <div className="h-[400px]">
+          {brandedTrendData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={brandedTrendData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
+                <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
+                <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700, fill: '#94a3b8'}} />
+                <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                <Legend verticalAlign="top" iconType="circle" />
+                <Line yAxisId="left" type="monotone" name="Branded Clicks" dataKey="brandedClicks" stroke="#6366f1" strokeWidth={3} dot={false} />
+                <Line yAxisId="left" type="monotone" name="Non-Branded Clicks" dataKey="nonBrandedClicks" stroke="#10b981" strokeWidth={3} dot={false} />
+                <Line yAxisId="right" type="monotone" name="Branded Impr." dataKey="brandedImpr" stroke="#a5b4fc" strokeWidth={1} strokeDasharray="5 5" dot={false} />
+                <Line yAxisId="right" type="monotone" name="Non-Branded Impr." dataKey="nonBrandedImpr" stroke="#6ee7b7" strokeWidth={1} strokeDasharray="5 5" dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : <EmptyState text="No keyword trend data available..." />}
+        </div>
+      </div>
+
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8"><div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Market Efficiency Analysis (Organic Search)</h4><p className="text-[11px] font-bold text-slate-600">Traffic (X) vs Revenue (Y) | Size = Revenue</p></div><div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><Activity className="w-4 h-4" /></div></div>
         <div className="h-[450px]">
