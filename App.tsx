@@ -14,7 +14,7 @@ const CLIENT_ID = "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleuser
 const SCOPE_GA4 = "https://www.googleapis.com/auth/analytics.readonly";
 const SCOPE_GSC = "https://www.googleapis.com/auth/webmasters.readonly";
 
-// Expanded normalization map for cleaner data representation
+// Comprehensive mapping for SEO global markets (ISO-3 to Full Name)
 const COUNTRY_CODE_TO_NAME: Record<string, string> = {
   'afg': 'Afghanistan', 'alb': 'Albania', 'dza': 'Algeria', 'and': 'Andorra', 'ago': 'Angola',
   'arg': 'Argentina', 'arm': 'Armenia', 'aus': 'Australia', 'aut': 'Austria', 'aze': 'Azerbaijan',
@@ -23,14 +23,20 @@ const COUNTRY_CODE_TO_NAME: Record<string, string> = {
   'fin': 'Finland', 'fra': 'France', 'gbr': 'United Kingdom', 'grc': 'Greece', 'hkg': 'Hong Kong',
   'irl': 'Ireland', 'ind': 'India', 'ita': 'Italy', 'jpn': 'Japan', 'mex': 'Mexico',
   'nld': 'Netherlands', 'nor': 'Norway', 'per': 'Peru', 'pol': 'Poland', 'prt': 'Portugal',
-  'rus': 'Russia', 'swe': 'Sweden', 'tur': 'Turkey', 'usa': 'United States', 'zaf': 'South Africa'
+  'rus': 'Russia', 'swe': 'Sweden', 'tur': 'Turkey', 'usa': 'United States', 'zaf': 'South Africa',
+  'kor': 'South Korea', 'tha': 'Thailand', 'vnm': 'Vietnam', 'idn': 'Indonesia', 'mys': 'Malaysia',
+  'phl': 'Philippines', 'sgp': 'Singapore', 'sau': 'Saudi Arabia', 'are': 'United Arab Emirates',
+  'egy': 'Egypt', 'mar': 'Morocco', 'isr': 'Israel', 'ukr': 'Ukraine', 'cze': 'Czech Republic',
+  'rou': 'Romania', 'hun': 'Hungary', 'nzl': 'New Zealand'
 };
 
 const normalizeCountry = (val: string): string => {
-  if (!val) return 'Unknown';
+  if (!val) return 'Other';
   const clean = val.toLowerCase().trim();
-  // Return mapped name or capitalized version of the input
-  return COUNTRY_CODE_TO_NAME[clean] || (val.charAt(0).toUpperCase() + val.slice(1).toLowerCase());
+  // If it's a 3-letter code we know, use the name. Otherwise, capitalize.
+  if (COUNTRY_CODE_TO_NAME[clean]) return COUNTRY_CODE_TO_NAME[clean];
+  // If GA4 sends a full name already, it won't match the map but we keep it.
+  return val.length <= 3 ? (COUNTRY_CODE_TO_NAME[clean] || val.toUpperCase()) : val;
 };
 
 const PRIORITY_DIMENSIONS = [
@@ -42,7 +48,6 @@ const PRIORITY_DIMENSIONS = [
   'sessionSourcePlatform'
 ];
 
-// Helper to format date to YYYY-MM-DD in local time
 const formatDate = (date: Date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -53,7 +58,7 @@ const formatDate = (date: Date) => {
 const getStartOfWeek = (date: Date) => {
   const d = new Date(date);
   const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Monday start
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   return new Date(d.setDate(diff));
 };
 
@@ -149,6 +154,7 @@ const App: React.FC = () => {
   const tokenClientGsc = useRef<any>(null);
 
   const isBranded = (text: string) => {
+    if (!text) return false;
     try {
       const regex = new RegExp(brandRegexStr, 'i');
       return regex.test(text);
@@ -203,29 +209,18 @@ const App: React.FC = () => {
       });
       if (!resp.ok) return;
       const data = await resp.json();
-      
       const filtered = (data.dimensions || []).filter((d: any) => {
         const apiName = d.apiName.toLowerCase();
-        const noise = ['year', 'week', 'month', 'day', 'hour', 'minute', 'isconversion', 'ordertoken', 'creativeid', 'adgroupid'];
-        if (noise.some(n => apiName.includes(n))) return false;
         const relevant = ['session', 'source', 'medium', 'channel', 'campaign', 'country', 'region', 'page', 'landing', 'device'];
         return relevant.some(r => apiName.includes(r));
       });
-
-      const mapped = filtered.map((d: any) => ({
-        label: d.uiName || d.apiName,
-        value: d.apiName
-      }));
-
+      const mapped = filtered.map((d: any) => ({ label: d.uiName || d.apiName, value: d.apiName }));
       const sorted = mapped.sort((a: any, b: any) => {
         const aIndex = PRIORITY_DIMENSIONS.indexOf(a.value);
         const bIndex = PRIORITY_DIMENSIONS.indexOf(b.value);
         if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
-        if (aIndex !== -1) return -1;
-        if (bIndex !== -1) return 1;
         return a.label.localeCompare(b.label);
       });
-
       if (sorted.length > 0) setAvailableDimensions(sorted);
     } catch (e) { console.error("Error fetching metadata:", e); }
   };
@@ -311,20 +306,18 @@ const App: React.FC = () => {
         });
         const data = await resp.json();
         if (data.error) throw new Error(data.error.message);
-        return (data.rows || []).map((row: any) => {
-          return {
-            keyword: row.keys[0],
-            landingPage: row.keys[1],
+        return (data.rows || []).map((row: any) => ({
+            keyword: row.keys[0] || '',
+            landingPage: row.keys[1] || '',
             country: normalizeCountry(row.keys[2]),
             queryType: 'Non-Branded' as QueryType,
-            date: row.keys[3],
+            date: row.keys[3] || '',
             dateRangeLabel: label,
-            clicks: row.clicks,
-            impressions: row.impressions,
-            ctr: row.ctr * 100,
+            clicks: row.clicks || 0,
+            impressions: row.impressions || 0,
+            ctr: (row.ctr || 0) * 100,
             sessions: 0, conversionRate: 0, revenue: 0, sales: 0
-          };
-        });
+        }));
       };
 
       let combined: KeywordData[] = await fetchOneRange(filters.dateRange.start, filters.dateRange.end, 'current');
@@ -396,17 +389,8 @@ const App: React.FC = () => {
     sessionStorage.removeItem('gsc_auth');
   };
 
-  const handleConnectGa4 = () => {
-    if (tokenClientGa4.current) {
-      tokenClientGa4.current.requestAccessToken();
-    }
-  };
-
-  const handleConnectGsc = () => {
-    if (tokenClientGsc.current) {
-      tokenClientGsc.current.requestAccessToken();
-    }
-  };
+  const handleConnectGa4 = () => { if (tokenClientGa4.current) tokenClientGa4.current.requestAccessToken(); };
+  const handleConnectGsc = () => { if (tokenClientGsc.current) tokenClientGsc.current.requestAccessToken(); };
 
   useEffect(() => { 
     if (ga4Auth?.token && ga4Auth.property) {
@@ -421,8 +405,7 @@ const App: React.FC = () => {
 
   const filteredDailyData = useMemo((): DailyData[] => {
     return realDailyData.filter(d => {
-      const isBrandedVal = isBranded(d.landingPage || '');
-      const queryTypeActual = isBrandedVal ? 'Branded' : 'Non-Branded';
+      const queryTypeActual = isBranded(d.landingPage || '') ? 'Branded' : 'Non-Branded';
       const countryMatch = filters.country === 'All' || d.country === filters.country;
       const queryMatch = filters.queryType === 'All' || queryTypeActual === filters.queryType;
       return countryMatch && queryMatch;
@@ -431,8 +414,7 @@ const App: React.FC = () => {
 
   const filteredKeywordData = useMemo((): KeywordData[] => {
     return realKeywordData.filter(k => {
-      const isBrandedVal = isBranded(k.keyword);
-      const queryTypeActual = isBrandedVal ? 'Branded' : 'Non-Branded';
+      const queryTypeActual = isBranded(k.keyword) ? 'Branded' : 'Non-Branded';
       const countryMatch = filters.country === 'All' || k.country === filters.country;
       const queryMatch = filters.queryType === 'All' || queryTypeActual === filters.queryType;
       return countryMatch && queryMatch;
@@ -442,18 +424,14 @@ const App: React.FC = () => {
   const aggregate = (data: DailyData[]) => {
     const currentData = data.filter(d => d.dateRangeLabel === 'current');
     const prevData = data.filter(d => d.dateRangeLabel === 'previous');
-
     const sum = (arr: DailyData[]) => arr.reduce((acc, curr) => ({
       sessions: acc.sessions + curr.sessions,
       sales: acc.sales + curr.sales,
       revenue: acc.revenue + curr.revenue,
     }), { sessions: 0, sales: 0, revenue: 0 });
-
     const currSum = sum(currentData);
     const prevSum = sum(prevData);
-
     const getChange = (curr: number, prev: number) => prev === 0 ? 0 : ((curr - prev) / prev) * 100;
-
     return { 
       current: { ...currSum, cr: currSum.sessions > 0 ? (currSum.sales / currSum.sessions) * 100 : 0 },
       previous: { ...prevSum, cr: prevSum.sessions > 0 ? (prevSum.sales / prevSum.sessions) * 100 : 0 },
@@ -463,11 +441,7 @@ const App: React.FC = () => {
         revenue: getChange(currSum.revenue, prevSum.revenue),
         cr: getChange(currSum.sales / (currSum.sessions || 1), prevSum.sales / (prevSum.sessions || 1))
       },
-      abs: {
-        sessions: currSum.sessions - prevSum.sessions,
-        sales: currSum.sales - prevSum.sales,
-        revenue: currSum.revenue - prevSum.revenue,
-      }
+      abs: { sessions: currSum.sessions - prevSum.sessions, sales: currSum.sales - prevSum.sales, revenue: currSum.revenue - prevSum.revenue }
     };
   };
 
@@ -481,28 +455,11 @@ const App: React.FC = () => {
     const now = new Date();
     let start = new Date();
     let end = new Date();
-
-    if (type === 'this_month') {
-      start = new Date(now.getFullYear(), now.getMonth(), 1);
-      end = now;
-    } else if (type === 'last_month') {
-      start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      end = new Date(now.getFullYear(), now.getMonth(), 0);
-    } else if (type === 'last_7') {
-      start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      end = now;
-    } else if (type === 'last_30') {
-      start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      end = now;
-    }
-
-    setFilters({
-      ...filters,
-      dateRange: { 
-        start: formatDate(start), 
-        end: formatDate(end) 
-      }
-    });
+    if (type === 'this_month') { start = new Date(now.getFullYear(), now.getMonth(), 1); end = now; }
+    else if (type === 'last_month') { start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0); }
+    else if (type === 'last_7') { start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); end = now; }
+    else if (type === 'last_30') { start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); end = now; }
+    setFilters({ ...filters, dateRange: { start: formatDate(start), end: formatDate(end) } });
   };
 
   const handleGenerateInsights = async () => {
@@ -517,17 +474,12 @@ const App: React.FC = () => {
 
   const isAnythingLoading = isLoadingGa4 || isLoadingGsc;
 
-  const filteredProperties = useMemo(() => {
-    return availableProperties.filter(p => p.name.toLowerCase().includes(ga4Search.toLowerCase()));
-  }, [availableProperties, ga4Search]);
-
-  const filteredSites = useMemo(() => {
-    return availableSites.filter(s => s.siteUrl.toLowerCase().includes(gscSearch.toLowerCase()));
-  }, [availableSites, gscSearch]);
+  const filteredProperties = useMemo(() => availableProperties.filter(p => p.name.toLowerCase().includes(ga4Search.toLowerCase())), [availableProperties, ga4Search]);
+  const filteredSites = useMemo(() => availableSites.filter(s => s.siteUrl.toLowerCase().includes(gscSearch.toLowerCase())), [availableSites, gscSearch]);
 
   const uniqueCountries = useMemo(() => {
     const set = new Set([...realDailyData.map(d => d.country), ...realKeywordData.map(k => k.country)]);
-    return Array.from(set).filter(Boolean).sort();
+    return Array.from(set).filter(c => c && c !== 'Other' && c !== 'Unknown').sort();
   }, [realDailyData, realKeywordData]);
 
   if (!user) {
@@ -543,9 +495,7 @@ const App: React.FC = () => {
           </div>
           <h1 className="text-3xl md:text-4xl font-black mb-4 tracking-tighter">SEO & SEM Reporting</h1>
           <p className="text-slate-400 font-medium mb-10 text-base md:text-lg">Inicia sesión con Google para acceder al dashboard.</p>
-          <div className="flex justify-center w-full">
-             <GoogleLogin onLoginSuccess={handleLoginSuccess} />
-          </div>
+          <div className="flex justify-center w-full"><GoogleLogin onLoginSuccess={handleLoginSuccess} /></div>
         </div>
       </div>
     );
@@ -562,32 +512,18 @@ const App: React.FC = () => {
       <aside className={`fixed inset-y-0 left-0 w-80 bg-slate-950 text-white flex flex-col z-50 shadow-2xl transition-transform duration-300 xl:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-8 overflow-y-auto flex-1 custom-scrollbar">
           <div className="flex items-center gap-4 mb-8">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-xl shadow-indigo-500/20">
-              <Activity className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-lg font-black tracking-tight">SEO Master</h1>
-              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Suite Pro</p>
-            </div>
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-xl shadow-indigo-500/20"><Activity className="w-6 h-6" /></div>
+            <div><h1 className="text-lg font-black tracking-tight">SEO Master</h1><p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Suite Pro</p></div>
           </div>
-
           <nav className="space-y-1 mb-8">
             <SidebarLink active={activeTab === DashboardTab.ORGANIC_VS_PAID} onClick={() => {setActiveTab(DashboardTab.ORGANIC_VS_PAID); setIsSidebarOpen(false);}} icon={<Layers />} label="Organic vs Paid" />
             <SidebarLink active={activeTab === DashboardTab.SEO_BY_COUNTRY} onClick={() => {setActiveTab(DashboardTab.SEO_BY_COUNTRY); setIsSidebarOpen(false);}} icon={<Globe />} label="Performance País" />
             <SidebarLink active={activeTab === DashboardTab.KEYWORD_DEEP_DIVE} onClick={() => {setActiveTab(DashboardTab.KEYWORD_DEEP_DIVE); setIsSidebarOpen(false);}} icon={<Target />} label="Análisis SEO Deep" />
           </nav>
-
-          <div className="space-y-6">
-            <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-              <div className="flex items-center gap-2 mb-3 text-indigo-400">
-                <Settings2 className="w-3.5 h-3.5" />
-                <h4 className="text-[9px] font-black uppercase tracking-widest">Configuración SEO</h4>
-              </div>
-              <div className="mb-4">
-                <label className="text-[8px] font-black uppercase text-slate-500 tracking-widest block mb-1">Branded Regex</label>
-                <input type="text" value={brandRegexStr} onChange={e => setBrandRegexStr(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 focus:ring-1 ring-indigo-500 outline-none" placeholder="brand|tienda" />
-              </div>
-            </div>
+          <div className="bg-white/5 rounded-2xl p-4 border border-white/10 mb-6">
+            <div className="flex items-center gap-2 mb-3 text-indigo-400"><Settings2 className="w-3.5 h-3.5" /><h4 className="text-[9px] font-black uppercase tracking-widest">Configuración SEO</h4></div>
+            <label className="text-[8px] font-black uppercase text-slate-500 tracking-widest block mb-1">Branded Regex</label>
+            <input type="text" value={brandRegexStr} onChange={e => setBrandRegexStr(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 focus:ring-1 ring-indigo-500 outline-none" placeholder="brand|tienda" />
           </div>
         </div>
 
@@ -595,81 +531,37 @@ const App: React.FC = () => {
            <div className="bg-white/5 rounded-2xl p-4">
               <div className="flex items-center gap-3 mb-6">
                 <img src={user.picture} className="w-9 h-9 rounded-full border-2 border-indigo-500" alt="user" />
-                <div className="truncate">
-                   <p className="text-[11px] font-black truncate">{user.name}</p>
-                   <p className="text-[9px] text-slate-500 truncate">{user.email}</p>
-                </div>
+                <div className="truncate"><p className="text-[11px] font-black truncate">{user.name}</p><p className="text-[9px] text-slate-500 truncate">{user.email}</p></div>
               </div>
-              
               <div className="space-y-4">
                  <div className="space-y-2">
                     <label className="text-[8px] font-black uppercase text-slate-500 tracking-widest block">GA4 Property</label>
                     {!ga4Auth?.token ? (
-                      <button 
-                        onClick={handleConnectGa4}
-                        className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold transition-colors flex items-center justify-center gap-2"
-                      >
-                        <ExternalLink className="w-3 h-3" /> Conectar GA4
-                      </button>
+                      <button onClick={handleConnectGa4} className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Conectar GA4</button>
                     ) : (
                       <div className="space-y-1.5">
-                        <div className="relative">
-                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500" />
-                          <input 
-                            type="text" 
-                            placeholder="Buscar propiedad..." 
-                            value={ga4Search} 
-                            onChange={e => setGa4Search(e.target.value)} 
-                            className="w-full bg-slate-900 border border-white/10 rounded-lg text-[9px] pl-8 pr-2 py-1.5 outline-none focus:ring-1 ring-indigo-500"
-                          />
-                        </div>
-                        <select className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 outline-none cursor-pointer" value={ga4Auth?.property?.id || ''} onChange={e => {
-                             const selected = availableProperties.find(p => p.id === e.target.value) || null;
-                             const updated = {...ga4Auth, property: selected};
-                             setGa4Auth(updated as any);
-                        }}>
-                             {filteredProperties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        <input type="text" placeholder="Buscar..." value={ga4Search} onChange={e => setGa4Search(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-lg text-[9px] px-2 py-1.5 outline-none focus:ring-1 ring-indigo-500" />
+                        <select className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 outline-none" value={ga4Auth?.property?.id || ''} onChange={e => setGa4Auth({...ga4Auth, property: availableProperties.find(p => p.id === e.target.value) || null})}>
+                          {filteredProperties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
                       </div>
                     )}
                  </div>
-
                  <div className="space-y-2">
                     <label className="text-[8px] font-black uppercase text-slate-500 tracking-widest block">GSC Domain</label>
                     {!gscAuth?.token ? (
-                      <button 
-                        onClick={handleConnectGsc}
-                        className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold transition-colors flex items-center justify-center gap-2"
-                      >
-                        <ExternalLink className="w-3 h-3" /> Conectar GSC
-                      </button>
+                      <button onClick={handleConnectGsc} className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Conectar GSC</button>
                     ) : (
                       <div className="space-y-1.5">
-                        <div className="relative">
-                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500" />
-                          <input 
-                            type="text" 
-                            placeholder="Buscar sitio..." 
-                            value={gscSearch} 
-                            onChange={e => setGscSearch(e.target.value)} 
-                            className="w-full bg-slate-900 border border-white/10 rounded-lg text-[9px] pl-8 pr-2 py-1.5 outline-none focus:ring-1 ring-indigo-500"
-                          />
-                        </div>
-                        <select className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 outline-none cursor-pointer" value={gscAuth?.site?.siteUrl || ''} onChange={e => {
-                             const selected = availableSites.find(s => s.siteUrl === e.target.value) || null;
-                             const updated = {...gscAuth, site: selected};
-                             setGscAuth(updated as any);
-                        }}>
-                             {filteredSites.map(s => <option key={s.siteUrl} value={s.siteUrl}>{s.siteUrl}</option>)}
+                        <input type="text" placeholder="Buscar..." value={gscSearch} onChange={e => setGscSearch(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-lg text-[9px] px-2 py-1.5 outline-none focus:ring-1 ring-indigo-500" />
+                        <select className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 outline-none" value={gscAuth?.site?.siteUrl || ''} onChange={e => setGscAuth({...gscAuth, site: availableSites.find(s => s.siteUrl === e.target.value) || null})}>
+                          {filteredSites.map(s => <option key={s.siteUrl} value={s.siteUrl}>{s.siteUrl}</option>)}
                         </select>
                       </div>
                     )}
                  </div>
               </div>
-
-              <button onClick={handleLogout} className="w-full mt-6 py-2 text-[9px] font-black text-slate-500 hover:text-white transition-colors flex items-center justify-center gap-2">
-                <LogOut className="w-3 h-3" /> Cerrar Sesión
-              </button>
+              <button onClick={handleLogout} className="w-full mt-6 py-2 text-[9px] font-black text-slate-500 hover:text-white transition-colors flex items-center justify-center gap-2"><LogOut className="w-3 h-3" /> Cerrar Sesión</button>
            </div>
         </div>
       </aside>
@@ -680,47 +572,31 @@ const App: React.FC = () => {
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <span className={`w-2 h-2 rounded-full ${isAnythingLoading ? 'bg-amber-500 animate-ping' : 'bg-emerald-500'}`} />
-                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                  {isLoadingGa4 ? 'Cargando GA4...' : isLoadingGsc ? 'Cargando GSC...' : 'Dashboard Activo'}
-                </span>
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{isLoadingGa4 ? 'Sincronizando GA4...' : isLoadingGsc ? 'Sincronizando GSC...' : 'Dashboard Activo'}</span>
               </div>
-              <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter break-words">
+              <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">
                 {activeTab === DashboardTab.ORGANIC_VS_PAID && "Organic vs Paid Performance"}
                 {activeTab === DashboardTab.SEO_BY_COUNTRY && "SEO Performance por País"}
                 {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && "Análisis por URL & Keywords"}
               </h2>
             </div>
-            
             <div className="flex flex-col items-end gap-3">
               <div className="flex flex-wrap items-center gap-2">
-                <button onClick={() => setShortcut('this_month')} className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[9px] font-black uppercase hover:bg-slate-50 transition-colors shadow-sm">Este Mes</button>
-                <button onClick={() => setShortcut('last_month')} className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[9px] font-black uppercase hover:bg-slate-50 transition-colors shadow-sm">Mes Pasado</button>
-                <button onClick={() => setShortcut('last_7')} className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[9px] font-black uppercase hover:bg-slate-50 transition-colors shadow-sm">7 Días</button>
-                <button onClick={() => setShortcut('last_30')} className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[9px] font-black uppercase hover:bg-slate-50 transition-colors shadow-sm">30 Días</button>
+                {['this_month', 'last_month', 'last_7', 'last_30'].map(type => (
+                  <button key={type} onClick={() => setShortcut(type)} className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[9px] font-black uppercase hover:bg-slate-50 transition-colors shadow-sm">
+                    {type.replace('_', ' ')}
+                  </button>
+                ))}
               </div>
-              
-              <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-2xl border border-slate-200 shadow-sm animate-in fade-in duration-500">
+              <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-2xl border border-slate-200 shadow-sm">
                 <div className="flex items-center gap-2">
-                  <input 
-                    type="checkbox" 
-                    id="comp_enabled_header" 
-                    checked={filters.comparison.enabled} 
-                    onChange={e => setFilters({...filters, comparison: {...filters.comparison, enabled: e.target.checked}})} 
-                    className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                  />
-                  <label htmlFor="comp_enabled_header" className="text-[10px] font-black uppercase text-slate-600 tracking-tight cursor-pointer">Comparar</label>
+                  <input type="checkbox" id="comp_enabled" checked={filters.comparison.enabled} onChange={e => setFilters({...filters, comparison: {...filters.comparison, enabled: e.target.checked}})} className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600" />
+                  <label htmlFor="comp_enabled" className="text-[10px] font-black uppercase text-slate-600 tracking-tight cursor-pointer">Comparar</label>
                 </div>
                 {filters.comparison.enabled && (
-                  <div className="h-4 w-px bg-slate-200 mx-1"></div>
-                )}
-                {filters.comparison.enabled && (
-                  <select 
-                    className="bg-transparent text-[10px] font-bold text-indigo-600 outline-none cursor-pointer" 
-                    value={filters.comparison.type} 
-                    onChange={e => setFilters({...filters, comparison: {...filters.comparison, type: e.target.value as any}})}
-                  >
-                    <option value="previous_period">vs Periodo Anterior</option>
-                    <option value="previous_year">vs Año Anterior (YoY)</option>
+                  <select className="bg-transparent text-[10px] font-bold text-indigo-600 outline-none cursor-pointer" value={filters.comparison.type} onChange={e => setFilters({...filters, comparison: {...filters.comparison, type: e.target.value as any}})}>
+                    <option value="previous_period">vs Anterior</option>
+                    <option value="previous_year">vs YoY</option>
                   </select>
                 )}
               </div>
@@ -730,7 +606,7 @@ const App: React.FC = () => {
           <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 bg-white p-1.5 rounded-3xl border border-slate-200 shadow-sm w-full xl:w-max">
             <div className="flex items-center gap-2 px-3 py-1.5 border-b sm:border-b-0 sm:border-r border-slate-100 min-w-0">
                <Calendar className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-               <div className="flex items-center gap-1.5 text-[10px] font-bold overflow-hidden">
+               <div className="flex items-center gap-1.5 text-[10px] font-bold">
                   <input type="date" value={filters.dateRange.start} onChange={e => setFilters({...filters, dateRange: {...filters.dateRange, start: e.target.value}})} className="outline-none bg-transparent" />
                   <span className="text-slate-300">/</span>
                   <input type="date" value={filters.dateRange.end} onChange={e => setFilters({...filters, dateRange: {...filters.dateRange, end: e.target.value}})} className="outline-none bg-transparent" />
@@ -743,16 +619,6 @@ const App: React.FC = () => {
                   {uniqueCountries.map(c => <option key={c} value={c}>{c}</option>)}
                </select>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 border-b sm:border-b-0 sm:border-r border-slate-100">
-               <HardDrive className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-               <select className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer max-w-[150px] truncate" value={filters.ga4Dimension} onChange={e => setFilters({...filters, ga4Dimension: e.target.value})}>
-                  {availableDimensions.length > 0 ? (
-                    availableDimensions.map(dim => <option key={dim.value} value={dim.value}>{dim.label}</option>)
-                  ) : (
-                    <option value="sessionDefaultChannelGroup">Session Default Channel Group</option>
-                  )}
-               </select>
-            </div>
             <div className="flex items-center gap-2 px-3 py-1.5">
                <Tag className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                <select className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" value={filters.queryType} onChange={e => setFilters({...filters, queryType: e.target.value as any})}>
@@ -762,50 +628,35 @@ const App: React.FC = () => {
                </select>
             </div>
           </div>
+          {realKeywordData.length === 0 && !isLoadingGsc && (
+            <div className="text-[10px] font-bold text-amber-600 bg-amber-50 px-4 py-2 rounded-xl flex items-center gap-2 border border-amber-100">
+               <Info className="w-3 h-3" /> Search Console tiene un desfase de 2-3 días. Ajusta el rango si no ves datos de Keywords.
+            </div>
+          )}
         </header>
 
         {error && (
           <div className="mb-8 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-3 text-rose-700 shadow-sm">
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-            <p className="font-bold text-xs">{error}</p>
+            <AlertCircle className="w-5 h-5 flex-shrink-0" /><p className="font-bold text-xs">{error}</p>
           </div>
         )}
 
         {aiInsights && (
-          <div className="mb-10 bg-indigo-600 rounded-[32px] p-8 md:p-10 text-white shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-500">
-            <div className="flex justify-between items-start mb-6 relative z-10">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-white/20 backdrop-blur-md rounded-xl"><Sparkles className="w-5 h-5" /></div>
-                <h3 className="text-xl font-black">Análisis Estratégico</h3>
-              </div>
-              <button onClick={() => setAiInsights(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X className="w-4 h-4" /></button>
-            </div>
-            <div className="prose prose-invert max-w-none relative z-10 font-medium text-sm md:text-base leading-relaxed" dangerouslySetInnerHTML={{ __html: aiInsights.replace(/\n/g, '<br/>') }} />
+          <div className="mb-10 bg-indigo-600 rounded-[32px] p-8 md:p-10 text-white shadow-2xl relative animate-in fade-in zoom-in-95 duration-500">
+            <div className="flex justify-between items-start mb-6"><div className="flex items-center gap-3"><Sparkles className="w-5 h-5" /><h3 className="text-xl font-black">Reporte Estratégico</h3></div><button onClick={() => setAiInsights(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X className="w-4 h-4" /></button></div>
+            <div className="prose prose-invert max-w-none font-medium text-sm md:text-base leading-relaxed" dangerouslySetInnerHTML={{ __html: aiInsights.replace(/\n/g, '<br/>') }} />
           </div>
         )}
 
-        <div className="w-full overflow-x-hidden">
-          {activeTab === DashboardTab.ORGANIC_VS_PAID && (
-            <OrganicVsPaidView 
-              stats={channelStats} 
-              data={filteredDailyData} 
-              comparisonEnabled={filters.comparison.enabled}
-              grouping={grouping}
-              setGrouping={setGrouping}
-            />
-          )}
+        <div className="w-full">
+          {activeTab === DashboardTab.ORGANIC_VS_PAID && <OrganicVsPaidView stats={channelStats} data={filteredDailyData} comparisonEnabled={filters.comparison.enabled} grouping={grouping} setGrouping={setGrouping} />}
           {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={filteredKeywordData} aggregate={aggregate} comparisonEnabled={filters.comparison.enabled} />}
           {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && <SeoDeepDiveView keywords={filteredKeywordData} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isLoading={isAnythingLoading} comparisonEnabled={filters.comparison.enabled} />}
         </div>
 
         <div className="mt-12 flex justify-center pb-12">
-          <button 
-            onClick={handleGenerateInsights}
-            disabled={loadingInsights || isAnythingLoading || (realDailyData.length === 0 && realKeywordData.length === 0)}
-            className="flex items-center gap-3 px-10 py-4 bg-slate-950 text-white rounded-3xl text-xs font-black shadow-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
-          >
-            {loadingInsights ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            Generar Reporte IA
+          <button onClick={handleGenerateInsights} disabled={loadingInsights || isAnythingLoading || (realDailyData.length === 0 && realKeywordData.length === 0)} className="flex items-center gap-3 px-10 py-4 bg-slate-950 text-white rounded-3xl text-xs font-black shadow-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50">
+            {loadingInsights ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Generar Reporte IA
           </button>
         </div>
       </main>
@@ -816,174 +667,53 @@ const App: React.FC = () => {
 const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGrouping }: any) => {
   const chartData = useMemo(() => {
     if (!data.length) return [];
-    
     const currentData = data.filter((d: any) => d.dateRangeLabel === 'current');
     const map: any = {};
-
     currentData.forEach((d: any) => {
-      const isOrg = d.channel.toLowerCase().includes('organic');
-      const isPaid = d.channel.toLowerCase().includes('paid') || d.channel.toLowerCase().includes('cpc');
+      const isOrg = d.channel?.toLowerCase().includes('organic');
+      const isPaid = d.channel?.toLowerCase().includes('paid') || d.channel?.toLowerCase().includes('cpc');
       if (!isOrg && !isPaid) return;
-
       let key = d.date;
-      if (grouping === 'weekly') {
-        const dObj = new Date(d.date);
-        key = formatDate(getStartOfWeek(dObj));
-      } else if (grouping === 'monthly') {
-        key = `${d.date.slice(0, 7)}-01`;
-      }
-
+      if (grouping === 'weekly') key = formatDate(getStartOfWeek(new Date(d.date)));
+      else if (grouping === 'monthly') key = `${d.date.slice(0, 7)}-01`;
       if (!map[key]) map[key] = { date: key, organic: 0, paid: 0, organicRevenue: 0, paidRevenue: 0 };
-      if (isOrg) {
-        map[key].organic += d.sessions;
-        map[key].organicRevenue += d.revenue;
-      }
-      if (isPaid) {
-        map[key].paid += d.sessions;
-        map[key].paidRevenue += d.revenue;
-      }
+      if (isOrg) { map[key].organic += d.sessions; map[key].organicRevenue += d.revenue; }
+      if (isPaid) { map[key].paid += d.sessions; map[key].paidRevenue += d.revenue; }
     });
-
     return Object.values(map).sort((a: any, b: any) => a.date.localeCompare(b.date));
   }, [data, grouping]);
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 px-2">
-            <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px]">ORG</div>
-            <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Organic Search</h4>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <KpiCard 
-              title="Sesiones" 
-              value={stats.organic.current.sessions} 
-              comparison={comparisonEnabled ? stats.organic.changes.sessions : undefined} 
-              absoluteChange={comparisonEnabled ? stats.organic.abs.sessions : undefined}
-              icon={<TrendingUp />} 
-            />
-            <KpiCard 
-              title="Conv. Rate" 
-              value={`${stats.organic.current.cr.toFixed(2)}%`} 
-              comparison={comparisonEnabled ? stats.organic.changes.cr : undefined} 
-              icon={<Percent />} 
-              isPercent 
-            />
-            <KpiCard 
-              title="Revenue" 
-              value={`€${stats.organic.current.revenue.toLocaleString()}`} 
-              comparison={comparisonEnabled ? stats.organic.changes.revenue : undefined} 
-              absoluteChange={comparisonEnabled ? stats.organic.abs.revenue : undefined}
-              icon={<Tag />} 
-              color="emerald" 
-              prefix="€"
-            />
-            <KpiCard 
-              title="Ventas" 
-              value={stats.organic.current.sales} 
-              comparison={comparisonEnabled ? stats.organic.changes.sales : undefined} 
-              absoluteChange={comparisonEnabled ? stats.organic.abs.sales : undefined}
-              icon={<ShoppingBag />} 
-              color="emerald" 
-            />
-          </div>
-        </div>
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 px-2">
-            <div className="w-7 h-7 bg-amber-500 rounded-lg flex items-center justify-center text-white font-bold text-[9px]">PAID</div>
-            <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Paid Search</h4>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <KpiCard 
-              title="Sesiones" 
-              value={stats.paid.current.sessions} 
-              comparison={comparisonEnabled ? stats.paid.changes.sessions : undefined} 
-              absoluteChange={comparisonEnabled ? stats.paid.abs.sessions : undefined}
-              icon={<TrendingUp />} 
-              color="amber" 
-            />
-            <KpiCard 
-              title="Conv. Rate" 
-              value={`${stats.paid.current.cr.toFixed(2)}%`} 
-              comparison={comparisonEnabled ? stats.paid.changes.cr : undefined} 
-              icon={<Percent />} 
-              color="amber" 
-              isPercent 
-            />
-            <KpiCard 
-              title="Revenue" 
-              value={`€${stats.paid.current.revenue.toLocaleString()}`} 
-              comparison={comparisonEnabled ? stats.paid.changes.revenue : undefined} 
-              absoluteChange={comparisonEnabled ? stats.paid.abs.revenue : undefined}
-              icon={<Tag />} 
-              color="rose" 
-              prefix="€"
-            />
-            <KpiCard 
-              title="Ventas" 
-              value={stats.paid.current.sales} 
-              comparison={comparisonEnabled ? stats.paid.changes.sales : undefined} 
-              absoluteChange={comparisonEnabled ? stats.paid.abs.sales : undefined}
-              icon={<ShoppingBag />} 
-              color="rose" 
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-8">
-        <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Evolución Sesiones (Organic vs Paid)</h4>
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
-              <button onClick={() => setGrouping('daily')} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === 'daily' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Día</button>
-              <button onClick={() => setGrouping('weekly')} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === 'weekly' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Semana</button>
-              <button onClick={() => setGrouping('monthly')} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === 'monthly' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Mes</button>
+        {[ {type: 'ORG', color: 'indigo', label: 'Organic', s: stats.organic}, {type: 'PAID', color: 'amber', label: 'Paid', s: stats.paid} ].map(ch => (
+          <div key={ch.type} className="space-y-4">
+            <div className="flex items-center gap-3 px-2"><div className={`w-7 h-7 bg-${ch.color}-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px]`}>{ch.type}</div><h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{ch.label} Performance</h4></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <KpiCard title="Sesiones" value={ch.s.current.sessions} comparison={comparisonEnabled ? ch.s.changes.sessions : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sessions : undefined} icon={<TrendingUp />} color={ch.color} />
+              <KpiCard title="Conv. Rate" value={`${ch.s.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? ch.s.changes.cr : undefined} icon={<Percent />} isPercent color={ch.color} />
+              <KpiCard title="Revenue" value={`€${ch.s.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? ch.s.changes.revenue : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<Tag />} prefix="€" color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
+              <KpiCard title="Ventas" value={ch.s.current.sales} comparison={comparisonEnabled ? ch.s.changes.sales : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sales : undefined} icon={<ShoppingBag />} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
             </div>
           </div>
-          <div className="h-[300px]">
-            {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData}>
-                  <defs>
-                    <linearGradient id="colorOrg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/><stop offset="95%" stopColor="#6366f1" stopOpacity={0}/></linearGradient>
-                    <linearGradient id="colorPaid" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f59e0b" stopOpacity={0.1}/><stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/></linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
-                  <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                  <Legend verticalAlign="top" align="center" iconType="circle" />
-                  <Area name="Organic Sessions" type="monotone" dataKey="organic" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorOrg)" />
-                  <Area name="Paid Sessions" type="monotone" dataKey="paid" stroke="#f59e0b" strokeWidth={3} fillOpacity={1} fill="url(#colorPaid)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : <EmptyState text="Sincroniza GA4 para visualizar tendencias" /> }
-          </div>
-        </div>
-
-        <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
-          <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-8">Evolución Revenue (Organic vs Paid)</h4>
-          <div className="h-[300px]">
-            {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData}>
-                  <defs>
-                    <linearGradient id="colorOrgRev" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient>
-                    <linearGradient id="colorPaidRev" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f43f5e" stopOpacity={0.1}/><stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/></linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
-                  <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                  <Legend verticalAlign="top" align="center" iconType="circle" />
-                  <Area name="Organic Revenue" type="monotone" dataKey="organicRevenue" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorOrgRev)" />
-                  <Area name="Paid Revenue" type="monotone" dataKey="paidRevenue" stroke="#f43f5e" strokeWidth={3} fillOpacity={1} fill="url(#colorPaidRev)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : <EmptyState text="Sincroniza GA4 para visualizar tendencias de ingresos" /> }
-          </div>
+        ))}
+      </div>
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+        <div className="flex justify-between items-center mb-8"><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Tendencia de Sesiones</h4><div className="flex gap-1 bg-slate-100 p-1 rounded-xl">{['daily', 'weekly', 'monthly'].map(g => <button key={g} onClick={() => setGrouping(g)} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === g ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>{g === 'daily' ? 'Día' : g === 'weekly' ? 'Sem' : 'Mes'}</button>)}</div></div>
+        <div className="h-[300px]">
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
+                <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                <Legend verticalAlign="top" align="center" iconType="circle" />
+                <Area name="Organic" type="monotone" dataKey="organic" stroke="#6366f1" strokeWidth={3} fillOpacity={0.1} fill="#6366f1" />
+                <Area name="Paid" type="monotone" dataKey="paid" stroke="#f59e0b" strokeWidth={3} fillOpacity={0.1} fill="#f59e0b" />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : <EmptyState text="Sin datos para graficar" />}
         </div>
       </div>
     </div>
@@ -991,124 +721,46 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
 };
 
 const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }: any) => {
-  const organicGa4 = aggregate(data.filter((d: any) => d.channel.toLowerCase().includes('organic')));
-  
+  const organicGa4 = aggregate(data.filter((d: any) => d.channel?.toLowerCase().includes('organic')));
   const gscStats = useMemo(() => {
     const current = keywordData.filter((k:any) => k.dateRangeLabel === 'current');
     const previous = keywordData.filter((k:any) => k.dateRangeLabel === 'previous');
-    
-    const sum = (arr: any[]) => arr.reduce((acc, curr) => ({
-      impressions: acc.impressions + curr.impressions,
-      clicks: acc.clicks + curr.clicks
-    }), { impressions: 0, clicks: 0 });
-
-    const cSum = sum(current);
-    const pSum = sum(previous);
-    
+    const sum = (arr: any[]) => arr.reduce((acc, curr) => ({ impressions: acc.impressions + curr.impressions, clicks: acc.clicks + curr.clicks }), { impressions: 0, clicks: 0 });
+    const cSum = sum(current); const pSum = sum(previous);
     const getChange = (c: number, p: number) => p === 0 ? 0 : ((c - p) / p) * 100;
-
-    return {
-      current: cSum,
-      changes: {
-        impressions: getChange(cSum.impressions, pSum.impressions),
-        clicks: getChange(cSum.clicks, pSum.clicks),
-        ctr: getChange(cSum.clicks/(cSum.impressions||1), pSum.clicks/(pSum.impressions||1))
-      },
-      abs: {
-        impressions: cSum.impressions - pSum.impressions,
-        clicks: cSum.clicks - pSum.clicks
-      }
-    };
+    return { current: cSum, changes: { impressions: getChange(cSum.impressions, pSum.impressions), clicks: getChange(cSum.clicks, pSum.clicks), ctr: getChange(cSum.clicks/(cSum.impressions||1), pSum.clicks/(pSum.impressions||1)) }, abs: { impressions: cSum.impressions - pSum.impressions, clicks: cSum.clicks - pSum.clicks } };
   }, [keywordData]);
 
   const countryStats = useMemo(() => {
     const map: any = {};
     keywordData.filter((k:any) => k.dateRangeLabel === 'current').forEach((k: any) => {
       if (!map[k.country]) map[k.country] = { country: k.country, clicks: 0, impressions: 0 };
-      map[k.country].clicks += k.clicks;
-      map[k.country].impressions += k.impressions;
+      map[k.country].clicks += k.clicks; map[k.country].impressions += k.impressions;
     });
     return Object.values(map).sort((a: any, b: any) => b.clicks - a.clicks).slice(0, 10);
   }, [keywordData]);
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <KpiCard 
-          title="Impresiones GSC" 
-          value={gscStats.current.impressions} 
-          comparison={comparisonEnabled ? gscStats.changes.impressions : undefined} 
-          absoluteChange={comparisonEnabled ? gscStats.abs.impressions : undefined}
-          icon={<Eye />} 
-        />
-        <KpiCard 
-          title="Clicks GSC" 
-          value={gscStats.current.clicks} 
-          comparison={comparisonEnabled ? gscStats.changes.clicks : undefined} 
-          absoluteChange={comparisonEnabled ? gscStats.abs.clicks : undefined}
-          icon={<MousePointer2 />} 
-        />
-        <KpiCard 
-          title="CTR GSC" 
-          value={`${(gscStats.current.impressions > 0 ? (gscStats.current.clicks / gscStats.current.impressions) * 100 : 0).toFixed(2)}%`} 
-          comparison={comparisonEnabled ? gscStats.changes.ctr : undefined} 
-          icon={<Percent />} 
-        />
-        <KpiCard 
-          title="CR GA4 (Organic)" 
-          value={`${organicGa4.current.cr.toFixed(2)}%`} 
-          comparison={comparisonEnabled ? organicGa4.changes.cr : undefined} 
-          icon={<TrendingUp />} 
-          color="emerald" 
-        />
-        <KpiCard 
-          title="Revenue GA4 (Organic)" 
-          value={`€${organicGa4.current.revenue.toLocaleString()}`} 
-          comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} 
-          absoluteChange={comparisonEnabled ? organicGa4.abs.revenue : undefined}
-          icon={<Tag />} 
-          color="emerald" 
-          prefix="€"
-        />
-        <KpiCard 
-          title="Sales GA4 (Organic)" 
-          value={organicGa4.current.sales} 
-          comparison={comparisonEnabled ? organicGa4.changes.sales : undefined} 
-          absoluteChange={comparisonEnabled ? organicGa4.abs.sales : undefined}
-          icon={<ShoppingBag />} 
-          color="emerald" 
-        />
+        <KpiCard title="Impresiones GSC" value={gscStats.current.impressions} comparison={comparisonEnabled ? gscStats.changes.impressions : undefined} absoluteChange={comparisonEnabled ? gscStats.abs.impressions : undefined} icon={<Eye />} />
+        <KpiCard title="Clicks GSC" value={gscStats.current.clicks} comparison={comparisonEnabled ? gscStats.changes.clicks : undefined} absoluteChange={comparisonEnabled ? gscStats.abs.clicks : undefined} icon={<MousePointer2 />} />
+        <KpiCard title="CTR GSC" value={`${(gscStats.current.impressions > 0 ? (gscStats.current.clicks/gscStats.current.impressions)*100 : 0).toFixed(2)}%`} comparison={comparisonEnabled ? gscStats.changes.ctr : undefined} icon={<Percent />} />
+        <KpiCard title="CR GA4 Organic" value={`${organicGa4.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? organicGa4.changes.cr : undefined} icon={<TrendingUp />} color="emerald" />
+        <KpiCard title="Revenue GA4" value={`€${organicGa4.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.revenue : undefined} icon={<Tag />} color="emerald" prefix="€" />
+        <KpiCard title="Ventas GA4" value={organicGa4.current.sales} comparison={comparisonEnabled ? organicGa4.changes.sales : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.sales : undefined} icon={<ShoppingBag />} color="emerald" />
       </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm h-[400px]">
-           <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-8">Clicks por Mercado</h4>
-           {countryStats.length > 0 ? (
-             <ResponsiveContainer width="100%" height="85%">
-                <BarChart data={countryStats}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="country" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9}} />
-                  <Tooltip cursor={{fill: '#f8fafc'}} />
-                  <Bar dataKey="clicks" name="Clicks" fill="#6366f1" radius={[6, 6, 0, 0]} />
-                </BarChart>
-             </ResponsiveContainer>
-           ) : <EmptyState text="Sin datos geográficos" />}
-        </div>
-        <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm h-[400px]">
-           <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-8">Visibilidad Total</h4>
-           {countryStats.length > 0 ? (
-             <ResponsiveContainer width="100%" height="85%">
-                <BarChart data={countryStats}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="country" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9}} />
-                  <Tooltip cursor={{fill: '#f8fafc'}} />
-                  <Bar dataKey="impressions" name="Impresiones" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
-                </BarChart>
-             </ResponsiveContainer>
-           ) : <EmptyState text="Sin datos de visibilidad" />}
-        </div>
+        {[ {title: 'Clicks por Mercado', key: 'clicks', color: '#6366f1'}, {title: 'Visibilidad por Mercado', key: 'impressions', color: '#0ea5e9'} ].map(chart => (
+          <div key={chart.key} className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm h-[400px]">
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-8">{chart.title}</h4>
+            {countryStats.length > 0 ? (
+              <ResponsiveContainer width="100%" height="85%">
+                <BarChart data={countryStats}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="country" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} /><YAxis axisLine={false} tickLine={false} tick={{fontSize: 9}} /><Tooltip cursor={{fill: '#f8fafc'}} /><Bar dataKey={chart.key} fill={chart.color} radius={[6, 6, 0, 0]} /></BarChart>
+              </ResponsiveContainer>
+            ) : <EmptyState text="Sincronizando mercados..." />}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -1116,132 +768,75 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
 
 const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, comparisonEnabled }: any) => {
   const [expandedUrls, setExpandedUrls] = useState<Set<string>>(new Set());
-  const toggleUrl = (url: string) => {
-    const next = new Set(expandedUrls);
-    if (next.has(url)) next.delete(url); else next.add(url);
-    setExpandedUrls(next);
-  };
-
+  const toggleUrl = (url: string) => { const next = new Set(expandedUrls); if (next.has(url)) next.delete(url); else next.add(url); setExpandedUrls(next); };
   const aggregatedByUrl = useMemo(() => {
-    const map: Record<string, { url: string; clicks: number; impressions: number; prevClicks: number; prevImpressions: number; children: Record<string, any>; }> = {};
+    const map: any = {};
     keywords.forEach((k: any) => {
-      const url = k.landingPage;
-      if (!map[url]) map[url] = { url, clicks: 0, impressions: 0, prevClicks: 0, prevImpressions: 0, children: {} };
-      if (k.dateRangeLabel === 'current') {
-        map[url].clicks += k.clicks;
-        map[url].impressions += k.impressions;
-      } else {
-        map[url].prevClicks += k.clicks;
-        map[url].prevImpressions += k.impressions;
-      }
-      if (!map[url].children[k.keyword]) map[url].children[k.keyword] = { keyword: k.keyword, queryType: k.queryType, clicks: 0, impressions: 0, prevClicks: 0, prevImpressions: 0 };
-      if (k.dateRangeLabel === 'current') {
-        map[url].children[k.keyword].clicks += k.clicks;
-        map[url].children[k.keyword].impressions += k.impressions;
-      } else {
-        map[url].children[k.keyword].prevClicks += k.clicks;
-        map[url].children[k.keyword].prevImpressions += k.impressions;
-      }
+      const url = k.landingPage || 'Unknown URL';
+      if (!map[url]) map[url] = { url, clicks: 0, impressions: 0, prevClicks: 0, children: {} };
+      if (k.dateRangeLabel === 'current') { map[url].clicks += k.clicks; map[url].impressions += k.impressions; }
+      else { map[url].prevClicks += k.clicks; }
+      const kw = k.keyword || 'Not provided';
+      if (!map[url].children[kw]) map[url].children[kw] = { keyword: kw, queryType: k.queryType, clicks: 0, impressions: 0, prevClicks: 0 };
+      if (k.dateRangeLabel === 'current') { map[url].children[kw].clicks += k.clicks; map[url].children[kw].impressions += k.impressions; }
+      else { map[url].children[kw].prevClicks += k.clicks; }
     });
-
-    return Object.values(map).map(page => ({
+    return Object.values(map).map((page: any) => ({
       ...page,
       ctr: page.impressions > 0 ? (page.clicks / page.impressions) * 100 : 0,
       clickChange: page.prevClicks === 0 ? 0 : ((page.clicks - page.prevClicks) / page.prevClicks) * 100,
-      children: Object.values(page.children).sort((a,b) => b.clicks - a.clicks)
+      children: Object.values(page.children).sort((a: any, b: any) => b.clicks - a.clicks)
     }))
-    .filter(p => p.url.toLowerCase().includes(searchTerm.toLowerCase()) || p.children.some(c => c.keyword.toLowerCase().includes(searchTerm.toLowerCase())))
-    .sort((a, b) => b.clicks - a.clicks);
+    .filter((p: any) => p.url.toLowerCase().includes(searchTerm.toLowerCase()) || p.children.some((c: any) => c.keyword.toLowerCase().includes(searchTerm.toLowerCase())))
+    .sort((a: any, b: any) => b.clicks - a.clicks);
   }, [keywords, searchTerm]);
 
   return (
-    <div className="bg-white rounded-[32px] border border-slate-200 overflow-hidden shadow-sm animate-in fade-in slide-in-from-bottom-6 duration-700">
-      <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-50/50">
-        <div className="w-full">
-           <h3 className="text-xl font-black mb-1">Deep Dive SEO</h3>
-           <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Desglose completo de URLs y Palabras Clave</p>
-        </div>
-        <div className="relative w-full md:w-80">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-          <input type="text" placeholder="Buscar URL o Palabra Clave..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-medium focus:ring-2 ring-indigo-500/10 outline-none shadow-sm" />
-        </div>
+    <div className="bg-white rounded-[32px] border border-slate-200 overflow-hidden shadow-sm">
+      <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-50/50">
+        <div><h3 className="text-xl font-black mb-1">Deep Dive SEO</h3><p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">URLs y Palabras Clave</p></div>
+        <div className="relative w-full md:w-80"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" /><input type="text" placeholder="Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-medium focus:ring-2 ring-indigo-500/10 outline-none" /></div>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs table-fixed min-w-[1200px]">
+        <table className="w-full text-left text-xs table-fixed min-w-[1000px]">
           <thead className="bg-slate-50 text-slate-400 font-black uppercase text-[9px] tracking-widest border-b border-slate-100">
-            <tr>
-              <th className="px-6 py-4 w-16"></th>
-              <th className="px-4 py-4 w-[50%]">Página de Destino (Full URL)</th>
-              <th className="px-6 py-4 text-center w-32">Impr.</th>
-              <th className="px-6 py-4 text-center w-32">Clicks</th>
-              {comparisonEnabled && <th className="px-6 py-4 text-center w-28">Var. Clicks</th>}
-              <th className="px-6 py-4 text-center w-28">CTR</th>
-            </tr>
+            <tr><th className="px-6 py-4 w-16"></th><th className="px-4 py-4 w-[50%]">Página</th><th className="px-6 py-4 text-center w-32">Impr.</th><th className="px-6 py-4 text-center w-32">Clicks</th><th className="px-6 py-4 text-center w-28">CTR</th></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {aggregatedByUrl.slice(0, 100).map((row, i) => {
-              const isExpanded = expandedUrls.has(row.url);
-              return (
-                <React.Fragment key={row.url}>
-                  <tr onClick={() => toggleUrl(row.url)} className={`group cursor-pointer transition-all ${isExpanded ? 'bg-indigo-50/30' : 'hover:bg-slate-50/50'}`}>
-                    <td className="pl-6 py-5"><div className="flex justify-center">{isExpanded ? <ChevronDown className="w-4 h-4 text-indigo-600" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}</div></td>
-                    <td className="px-4 py-5"><div className="flex items-center gap-3"><FileText className="w-4 h-4 text-indigo-500 flex-shrink-0" /><span className="font-bold text-slate-900 break-all leading-relaxed whitespace-normal pr-4">{row.url}</span></div></td>
-                    <td className="px-6 py-5 text-center text-slate-600 font-medium">{row.impressions.toLocaleString()}</td>
-                    <td className="px-6 py-5 text-center font-black text-slate-900">{row.clicks.toLocaleString()}</td>
-                    {comparisonEnabled && (
-                      <td className="px-6 py-5 text-center">
-                        <span className={`flex items-center justify-center font-bold ${row.clickChange >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          {row.clickChange >= 0 ? '+' : ''}{row.clickChange.toFixed(1)}%
-                        </span>
-                      </td>
-                    )}
-                    <td className="px-6 py-5 text-center"><span className={`px-2 py-1 rounded-lg font-black ${row.ctr > 3 ? 'text-emerald-700 bg-emerald-100/50' : 'text-slate-600 bg-slate-100'}`}>{row.ctr.toFixed(1)}%</span></td>
+            {aggregatedByUrl.slice(0, 100).map((row: any) => (
+              <React.Fragment key={row.url}>
+                <tr onClick={() => toggleUrl(row.url)} className="group cursor-pointer hover:bg-slate-50/50 transition-all">
+                  <td className="pl-6 py-5 flex justify-center">{expandedUrls.has(row.url) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</td>
+                  <td className="px-4 py-5 font-bold text-slate-900 break-all">{row.url}</td>
+                  <td className="px-6 py-5 text-center text-slate-500">{row.impressions.toLocaleString()}</td>
+                  <td className="px-6 py-5 text-center font-black text-slate-900">{row.clicks.toLocaleString()}</td>
+                  <td className="px-6 py-5 text-center"><span className="px-2 py-1 rounded-lg bg-slate-100 font-bold">{row.ctr.toFixed(1)}%</span></td>
+                </tr>
+                {expandedUrls.has(row.url) && row.children.map((child: any, ci: number) => (
+                  <tr key={ci} className="bg-slate-50/30 border-l-4 border-indigo-500">
+                    <td className="py-3"></td><td className="px-4 py-3 pl-14"><div className="flex items-center gap-3"><span className="text-slate-700 font-semibold">{child.keyword}</span><span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase ${child.queryType === 'Branded' ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-500'}`}>{child.queryType}</span></div></td>
+                    <td className="px-6 py-3 text-center text-slate-400">{child.impressions.toLocaleString()}</td><td className="px-6 py-3 text-center text-slate-600 font-bold">{child.clicks.toLocaleString()}</td><td className="px-6 py-3 text-center text-slate-400 font-bold">{(child.impressions > 0 ? child.clicks/child.impressions*100 : 0).toFixed(1)}%</td>
                   </tr>
-                  {isExpanded && row.children.map((child, ci) => (
-                    <tr key={ci} className="bg-slate-50/30 border-l-4 border-indigo-500 animate-in slide-in-from-left-1">
-                      <td className="py-3"></td>
-                      <td className="px-4 py-3 pl-14"><div className="flex items-center gap-3"><span className="text-slate-700 font-semibold">{child.keyword}</span><span className={`px-1.5 py-0.5 rounded-[4px] text-[7px] font-black uppercase ${child.queryType === 'Branded' ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-500'}`}>{child.queryType}</span></div></td>
-                      <td className="px-6 py-3 text-center text-slate-400 font-medium">{child.impressions.toLocaleString()}</td>
-                      <td className="px-6 py-3 text-center text-slate-600 font-bold">{child.clicks.toLocaleString()}</td>
-                      {comparisonEnabled && (
-                        <td className="px-6 py-3 text-center">
-                          <span className={`text-[10px] font-bold ${child.prevClicks === 0 ? 'text-slate-300' : (child.clicks - child.prevClicks >= 0 ? 'text-emerald-500' : 'text-rose-500')}`}>
-                            {child.prevClicks === 0 ? '--' : `${child.clicks - child.prevClicks >= 0 ? '+' : ''}${( (child.clicks - child.prevClicks) / (child.prevClicks || 1) * 100).toFixed(1)}%`}
-                          </span>
-                        </td>
-                      )}
-                      <td className="px-6 py-3 text-center text-slate-400 font-bold">{child.impressions > 0 ? (child.clicks/child.impressions*100).toFixed(1) : 0}%</td>
-                    </tr>
-                  ))}
-                </React.Fragment>
-              );
-            })}
-            {aggregatedByUrl.length === 0 && (
-              <tr><td colSpan={comparisonEnabled ? 6 : 5} className="px-6 py-20 text-center text-slate-400 italic font-medium">{isLoading ? "Sincronizando con Google APIs..." : "No se han encontrado datos para los filtros seleccionados"}</td></tr>
-            )}
+                ))}
+              </React.Fragment>
+            ))}
           </tbody>
         </table>
+        {aggregatedByUrl.length === 0 && <div className="px-6 py-20 text-center text-slate-400 italic font-medium">No se han encontrado datos. Prueba a ampliar el rango de fechas.</div>}
       </div>
     </div>
   );
 };
 
 const SidebarLink = ({ active, onClick, icon, label }: any) => (
-  <button 
-    onClick={onClick}
-    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black transition-all ${active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 translate-x-1' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
-  >
-    {React.cloneElement(icon as React.ReactElement<any>, { className: 'w-4 h-4' })}
-    {label}
+  <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black transition-all ${active ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>
+    {React.cloneElement(icon as React.ReactElement<any>, { className: 'w-4 h-4' })} {label}
   </button>
 );
 
 const EmptyState = ({ text }: { text: string }) => (
-  <div className="h-full flex items-center justify-center py-10">
-    <div className="text-center p-8 bg-slate-50 border border-dashed border-slate-200 rounded-3xl">
-      <Activity className="w-8 h-8 text-slate-200 mx-auto mb-4" />
-      <p className="text-slate-400 italic text-xs font-medium max-w-[200px]">{text}</p>
-    </div>
+  <div className="h-full flex flex-col items-center justify-center py-10 opacity-50">
+    <Activity className="w-8 h-8 text-slate-200 mb-4" /><p className="text-slate-400 italic text-xs font-medium">{text}</p>
   </div>
 );
 
