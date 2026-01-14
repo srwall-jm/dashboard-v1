@@ -20,6 +20,8 @@ export interface BaseMetrics {
   conversionRate: number;
   revenue: number;
   sales: number;
+  addToCarts: number;
+  checkouts: number;
 }
 
 export interface DailyData extends BaseMetrics {

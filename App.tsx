@@ -259,7 +259,14 @@ const App: React.FC = () => {
         body: JSON.stringify({
           dateRanges,
           dimensions: [{ name: 'date' }, { name: filters.ga4Dimension }, { name: 'country' }, { name: 'landingPage' }],
-          metrics: [{ name: 'sessions' }, { name: 'totalRevenue' }, { name: 'transactions' }, { name: 'sessionConversionRate' }]
+          metrics: [
+            { name: 'sessions' }, 
+            { name: 'totalRevenue' }, 
+            { name: 'transactions' }, 
+            { name: 'sessionConversionRate' },
+            { name: 'addToCarts' },
+            { name: 'checkouts' }
+          ]
         })
       });
       const ga4Data = await ga4ReportResp.json();
@@ -276,6 +283,8 @@ const App: React.FC = () => {
         revenue: parseFloat(row.metricValues[1].value) || 0,
         sales: parseInt(row.metricValues[2].value) || 0,
         conversionRate: (parseFloat(row.metricValues[3].value) || 0) * 100,
+        addToCarts: parseInt(row.metricValues[4].value) || 0,
+        checkouts: parseInt(row.metricValues[5].value) || 0,
         clicks: 0, impressions: 0, ctr: 0
       }));
       setRealDailyData(dailyMapped);
@@ -316,7 +325,7 @@ const App: React.FC = () => {
             clicks: row.clicks || 0,
             impressions: row.impressions || 0,
             ctr: (row.ctr || 0) * 100,
-            sessions: 0, conversionRate: 0, revenue: 0, sales: 0
+            sessions: 0, conversionRate: 0, revenue: 0, sales: 0, addToCarts: 0, checkouts: 0
         }));
       };
 
@@ -428,7 +437,9 @@ const App: React.FC = () => {
       sessions: acc.sessions + curr.sessions,
       sales: acc.sales + curr.sales,
       revenue: acc.revenue + curr.revenue,
-    }), { sessions: 0, sales: 0, revenue: 0 });
+      addToCarts: acc.addToCarts + curr.addToCarts,
+      checkouts: acc.checkouts + curr.checkouts,
+    }), { sessions: 0, sales: 0, revenue: 0, addToCarts: 0, checkouts: 0 });
     const currSum = sum(currentData);
     const prevSum = sum(prevData);
     const getChange = (curr: number, prev: number) => prev === 0 ? 0 : ((curr - prev) / prev) * 100;
@@ -439,9 +450,11 @@ const App: React.FC = () => {
         sessions: getChange(currSum.sessions, prevSum.sessions),
         sales: getChange(currSum.sales, prevSum.sales),
         revenue: getChange(currSum.revenue, prevSum.revenue),
+        addToCarts: getChange(currSum.addToCarts, prevSum.addToCarts),
+        checkouts: getChange(currSum.checkouts, prevSum.checkouts),
         cr: getChange(currSum.sales / (currSum.sessions || 1), prevSum.sales / (prevSum.sessions || 1))
       },
-      abs: { sessions: currSum.sessions - prevSum.sessions, sales: currSum.sales - prevSum.sales, revenue: currSum.revenue - prevSum.revenue }
+      abs: { sessions: currSum.sessions - prevSum.sessions, sales: currSum.sales - prevSum.sales, revenue: currSum.revenue - prevSum.revenue, addToCarts: currSum.addToCarts - prevSum.addToCarts, checkouts: currSum.checkouts - prevSum.checkouts }
     };
   };
 
@@ -683,6 +696,20 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
     return Object.values(map).sort((a: any, b: any) => a.date.localeCompare(b.date));
   }, [data, grouping]);
 
+  const organicFunnelData = useMemo(() => [
+    { stage: 'Sesiones', value: stats.organic.current.sessions },
+    { stage: 'Añadir al Carrito', value: stats.organic.current.addToCarts },
+    { stage: 'Checkout', value: stats.organic.current.checkouts },
+    { stage: 'Venta', value: stats.organic.current.sales },
+  ], [stats.organic]);
+
+  const paidFunnelData = useMemo(() => [
+    { stage: 'Sesiones', value: stats.paid.current.sessions },
+    { stage: 'Añadir al Carrito', value: stats.paid.current.addToCarts },
+    { stage: 'Checkout', value: stats.paid.current.checkouts },
+    { stage: 'Venta', value: stats.paid.current.sales },
+  ], [stats.paid]);
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
@@ -748,6 +775,47 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
             </ResponsiveContainer>
           ) : <EmptyState text="Sin datos de ingresos para graficar" />}
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <EcommerceFunnel title="Funnel Organic Search" data={organicFunnelData} color="indigo" />
+        <EcommerceFunnel title="Funnel Paid Search" data={paidFunnelData} color="amber" />
+      </div>
+    </div>
+  );
+};
+
+const EcommerceFunnel = ({ title, data, color }: any) => {
+  const max = data[0].value || 1;
+  return (
+    <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+      <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-8">{title}</h4>
+      <div className="space-y-6">
+        {data.map((stage: any, i: number) => {
+          const width = (stage.value / max) * 100;
+          return (
+            <div key={stage.stage} className="relative">
+              <div className="flex justify-between items-center mb-1.5">
+                <span className="text-[10px] font-black text-slate-800 uppercase tracking-tight">{stage.stage}</span>
+                <span className="text-[10px] font-bold text-slate-500">{stage.value.toLocaleString()}</span>
+              </div>
+              <div className="h-9 bg-slate-50 rounded-xl overflow-hidden border border-slate-100 p-1">
+                <div 
+                  className={`h-full bg-${color}-600 rounded-lg transition-all duration-1000 ease-out flex items-center justify-end px-3 min-w-[5%]`}
+                  style={{ width: `${width}%` }}
+                >
+                  <span className="text-[8px] font-black text-white">{width.toFixed(1)}%</span>
+                </div>
+              </div>
+              {i < data.length - 1 && (
+                <div className="absolute left-1/2 -bottom-4.5 -translate-x-1/2 z-10 flex flex-col items-center">
+                   <div className="w-[1px] h-3 bg-slate-200"></div>
+                   <ChevronDown className="w-3 h-3 text-slate-300 -mt-1" />
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

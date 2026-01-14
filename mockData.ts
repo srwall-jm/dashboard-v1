@@ -27,7 +27,12 @@ export const generateMockDailyData = (): DailyData[] => {
           const sessions = Math.floor((Math.random() * baseSessions + 100) * multiplier);
           const clicks = Math.floor(sessions * (0.6 + Math.random() * 0.3));
           const impressions = clicks * (Math.floor(Math.random() * 30) + 10);
-          const sales = Math.floor(sessions * (0.02 + Math.random() * 0.04));
+          
+          // Funnel Logic
+          const addToCarts = Math.floor(sessions * (0.08 + Math.random() * 0.05));
+          const checkouts = Math.floor(addToCarts * (0.4 + Math.random() * 0.2));
+          const sales = Math.floor(checkouts * (0.6 + Math.random() * 0.2));
+          
           const revenue = sales * (40 + Math.random() * 20);
           
           data.push({
@@ -41,7 +46,9 @@ export const generateMockDailyData = (): DailyData[] => {
             ctr: (clicks / impressions) * 100,
             conversionRate: (sales / sessions) * 100,
             revenue,
-            sales
+            sales,
+            addToCarts,
+            checkouts
           });
         });
       });
@@ -80,7 +87,9 @@ export const generateMockKeywordData = (): KeywordData[] => {
       sessions,
       conversionRate: (sales / sessions) * 100,
       revenue: sales * 55,
-      sales
+      sales,
+      addToCarts: Math.floor(sessions * 0.1),
+      checkouts: Math.floor(sessions * 0.05)
     };
   });
 };
