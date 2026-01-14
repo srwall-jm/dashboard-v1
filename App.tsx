@@ -703,6 +703,22 @@ const App: React.FC = () => {
                   <input type="date" value={filters.dateRange.end} onChange={e => setFilters({...filters, dateRange: {...filters.dateRange, end: e.target.value}})} className="outline-none bg-transparent" />
                </div>
             </div>
+            
+            {/* GA4 Dimension Select (Channel Grouping Filter) */}
+            <div className="flex items-center gap-2 px-3 py-1.5 border-b sm:border-b-0 sm:border-r border-slate-100">
+               <Filter className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+               <select 
+                 className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" 
+                 value={filters.ga4Dimension} 
+                 onChange={e => setFilters({...filters, ga4Dimension: e.target.value})}
+               >
+                  {availableDimensions.map(d => (
+                    <option key={d.value} value={d.value}>{d.label}</option>
+                  ))}
+                  {availableDimensions.length === 0 && <option value="sessionDefaultChannelGroup">Channel Grouping</option>}
+               </select>
+            </div>
+
             <div className="flex items-center gap-2 px-3 py-1.5 border-b sm:border-b-0 sm:border-r border-slate-100">
                <Globe className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                <select className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" value={filters.country} onChange={e => setFilters({...filters, country: e.target.value})}>
