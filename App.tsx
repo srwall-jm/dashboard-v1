@@ -4,7 +4,7 @@ import {
   BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock
 } from 'lucide-react';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Legend, LineChart, Line
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Legend, LineChart, Line, ScatterChart, Scatter, ZAxis, Cell
 } from 'recharts';
 import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, QueryType, ChannelType } from './types';
 import { getDashboardInsights } from './geminiService';
@@ -125,7 +125,7 @@ const App: React.FC = () => {
   const [realKeywordData, setRealKeywordData] = useState<KeywordData[]>([]);
   
   const [isLoadingGa4, setIsLoadingGa4] = useState(false);
-  const [isLoadingGsc, setIsLoadingGsc] = useState(false);
+  const [isLoadingGsc, setIsLoadingGsc(false);
   const [error, setError] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [brandRegexStr, setBrandRegexStr] = useState('tienda|deportes|pro|brandname');
@@ -823,6 +823,27 @@ const EcommerceFunnel = ({ title, data, color }: any) => {
 
 const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }: any) => {
   const organicGa4 = aggregate(data.filter((d: any) => d.channel?.toLowerCase().includes('organic')));
+  
+  const scatterData = useMemo(() => {
+    const map: Record<string, { country: string; sessions: number; sales: number; revenue: number }> = {};
+    // Usamos GA4 data para correlacionar Tráfico vs Calidad (CR) y Valor (Revenue)
+    data.filter((d: any) => d.dateRangeLabel === 'current').forEach((d: any) => {
+      if (!map[d.country]) map[d.country] = { country: d.country, sessions: 0, sales: 0, revenue: 0 };
+      map[d.country].sessions += d.sessions;
+      map[d.country].sales += d.sales;
+      map[d.country].revenue += d.revenue;
+    });
+
+    return Object.values(map)
+      .map(item => ({
+        country: item.country,
+        traffic: item.sessions,
+        cr: item.sessions > 0 ? (item.sales / item.sessions) * 100 : 0,
+        revenue: item.revenue
+      }))
+      .filter(item => item.traffic > 0);
+  }, [data]);
+
   const gscStats = useMemo(() => {
     const current = keywordData.filter((k:any) => k.dateRangeLabel === 'current');
     const previous = keywordData.filter((k:any) => k.dateRangeLabel === 'previous');
@@ -851,6 +872,7 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
         <KpiCard title="Revenue GA4" value={`€${organicGa4.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.revenue : undefined} icon={<Tag />} color="emerald" prefix="€" />
         <KpiCard title="Ventas GA4" value={organicGa4.current.sales} comparison={comparisonEnabled ? organicGa4.changes.sales : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.sales : undefined} icon={<ShoppingBag />} color="emerald" />
       </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {[ {title: 'Clicks por Mercado', key: 'clicks', color: '#6366f1'}, {title: 'Visibilidad por Mercado', key: 'impressions', color: '#0ea5e9'} ].map(chart => (
           <div key={chart.key} className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm h-[400px]">
@@ -862,6 +884,54 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
             ) : <EmptyState text="Sincronizando mercados..." />}
           </div>
         ))}
+      </div>
+
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Análisis de Eficiencia por Mercado</h4>
+            <p className="text-[11px] font-bold text-slate-600">Tráfico (X) vs Conversión (Y) | Tamaño = Revenue</p>
+          </div>
+          <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+             <Activity className="w-4 h-4" />
+          </div>
+        </div>
+        <div className="h-[450px]">
+          {scatterData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis type="number" dataKey="traffic" name="Tráfico" unit=" ses." axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
+                <YAxis type="number" dataKey="cr" name="Conversion Rate" unit="%" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
+                <ZAxis type="number" dataKey="revenue" range={[100, 2000]} name="Revenue" unit="€" />
+                <Tooltip 
+                  cursor={{ strokeDasharray: '3 3' }} 
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      return (
+                        <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10">
+                          <p className="text-[10px] font-black uppercase tracking-widest mb-2 border-b border-white/10 pb-2">{data.country}</p>
+                          <div className="space-y-1">
+                            <p className="text-[9px] flex justify-between gap-4"><span>Tráfico:</span> <span className="font-bold">{data.traffic.toLocaleString()} ses.</span></p>
+                            <p className="text-[9px] flex justify-between gap-4"><span>Conv. Rate:</span> <span className="font-bold text-emerald-400">{data.cr.toFixed(2)}%</span></p>
+                            <p className="text-[9px] flex justify-between gap-4"><span>Revenue:</span> <span className="font-bold text-indigo-400">€{data.revenue.toLocaleString()}</span></p>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Scatter name="Mercados" data={scatterData}>
+                  {scatterData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.cr > 2 ? '#10b981' : entry.cr > 1 ? '#6366f1' : '#f59e0b'} fillOpacity={0.6} strokeWidth={2} stroke={entry.cr > 2 ? '#059669' : entry.cr > 1 ? '#4f46e5' : '#d97706'} />
+                  ))}
+                </Scatter>
+              </ScatterChart>
+            </ResponsiveContainer>
+          ) : <EmptyState text="No hay suficientes datos para el Scatter Plot..." />}
+        </div>
       </div>
     </div>
   );
