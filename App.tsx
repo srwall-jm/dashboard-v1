@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock
+  BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Legend, LineChart, Line, ScatterChart, Scatter, ZAxis, Cell
@@ -674,6 +674,43 @@ const App: React.FC = () => {
   );
 };
 
+// EcommerceFunnel helper component for funnel visualizations
+const EcommerceFunnel = ({ title, data, color }: any) => {
+  const max = data[0].value || 1;
+  return (
+    <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+      <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-8">{title}</h4>
+      <div className="space-y-6">
+        {data.map((stage: any, i: number) => {
+          const width = (stage.value / max) * 100;
+          return (
+            <div key={stage.stage} className="relative">
+              <div className="flex justify-between items-center mb-1.5">
+                <span className="text-[10px] font-black text-slate-800 uppercase tracking-tight">{stage.stage}</span>
+                <span className="text-[10px] font-bold text-slate-500">{stage.value.toLocaleString()}</span>
+              </div>
+              <div className="h-9 bg-slate-50 rounded-xl overflow-hidden border border-slate-100 p-1">
+                <div 
+                  className={`h-full bg-${color}-600 rounded-lg transition-all duration-1000 ease-out flex items-center justify-end px-3 min-w-[5%]`}
+                  style={{ width: `${width}%` }}
+                >
+                  <span className="text-[8px] font-black text-white">{width.toFixed(1)}%</span>
+                </div>
+              </div>
+              {i < data.length - 1 && (
+                <div className="absolute left-1/2 -bottom-4.5 -translate-x-1/2 z-10 flex flex-col items-center">
+                   <div className="w-[1px] h-3 bg-slate-200"></div>
+                   <ChevronDown className="w-3 h-3 text-slate-300 -mt-1" />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGrouping }: any) => {
   const chartData = useMemo(() => {
     if (!data.length) return [];
@@ -774,43 +811,8 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
   );
 };
 
-const EcommerceFunnel = ({ title, data, color }: any) => {
-  const max = data[0].value || 1;
-  return (
-    <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
-      <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-8">{title}</h4>
-      <div className="space-y-6">
-        {data.map((stage: any, i: number) => {
-          const width = (stage.value / max) * 100;
-          return (
-            <div key={stage.stage} className="relative">
-              <div className="flex justify-between items-center mb-1.5">
-                <span className="text-[10px] font-black text-slate-800 uppercase tracking-tight">{stage.stage}</span>
-                <span className="text-[10px] font-bold text-slate-500">{stage.value.toLocaleString()}</span>
-              </div>
-              <div className="h-9 bg-slate-50 rounded-xl overflow-hidden border border-slate-100 p-1">
-                <div 
-                  className={`h-full bg-${color}-600 rounded-lg transition-all duration-1000 ease-out flex items-center justify-end px-3 min-w-[5%]`}
-                  style={{ width: `${width}%` }}
-                >
-                  <span className="text-[8px] font-black text-white">{width.toFixed(1)}%</span>
-                </div>
-              </div>
-              {i < data.length - 1 && (
-                <div className="absolute left-1/2 -bottom-4.5 -translate-x-1/2 z-10 flex flex-col items-center">
-                   <div className="w-[1px] h-3 bg-slate-200"></div>
-                   <ChevronDown className="w-3 h-3 text-slate-300 -mt-1" />
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
 const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }: any) => {
+  const [selectedOpportunityCountry, setSelectedOpportunityCountry] = useState<string | null>(null);
   const organicGa4 = aggregate(data.filter((d: any) => d.channel?.toLowerCase().includes('organic')));
   
   const scatterData = useMemo(() => {
@@ -864,6 +866,48 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
       .sort((a, b) => b.sov - a.sov)
       .slice(0, 10);
   }, [keywordData, data]);
+
+  const opportunityData = useMemo(() => {
+    const currentKeywords = keywordData.filter(k => k.dateRangeLabel === 'current');
+    const map: Record<string, { country: string; impressions: number; clicks: number }> = {};
+    
+    currentKeywords.forEach(k => {
+      if (!map[k.country]) map[k.country] = { country: k.country, impressions: 0, clicks: 0 };
+      map[k.country].impressions += k.impressions;
+      map[k.country].clicks += k.clicks;
+    });
+
+    return Object.values(map)
+      .map(item => ({
+        ...item,
+        ctr: item.impressions > 0 ? (item.clicks / item.impressions) * 100 : 0
+      }))
+      // Filter for high demand, low capture
+      .sort((a, b) => b.impressions - a.impressions)
+      .slice(0, 15)
+      .sort((a, b) => a.ctr - b.ctr) // Top items are low CTR
+      .slice(0, 10);
+  }, [keywordData]);
+
+  const opportunityDrillDown = useMemo(() => {
+    if (!selectedOpportunityCountry) return [];
+    const currentKeywords = keywordData.filter(k => k.dateRangeLabel === 'current' && k.country === selectedOpportunityCountry);
+    
+    const pageMap: Record<string, { url: string; impressions: number; clicks: number }> = {};
+    currentKeywords.forEach(k => {
+      if (!pageMap[k.landingPage]) pageMap[k.landingPage] = { url: k.landingPage, impressions: 0, clicks: 0 };
+      pageMap[k.landingPage].impressions += k.impressions;
+      pageMap[k.landingPage].clicks += k.clicks;
+    });
+
+    return Object.values(pageMap)
+      .map(item => ({
+        ...item,
+        ctr: item.impressions > 0 ? (item.clicks / item.impressions) * 100 : 0
+      }))
+      .sort((a, b) => b.impressions - a.impressions)
+      .slice(0, 5);
+  }, [selectedOpportunityCountry, keywordData]);
 
   const gscStats = useMemo(() => {
     const current = keywordData.filter((k:any) => k.dateRangeLabel === 'current');
@@ -981,6 +1025,100 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
               </BarChart>
             </ResponsiveContainer>
           ) : <EmptyState text="Datos insuficientes para la comparativa de Shares..." />}
+        </div>
+      </div>
+
+      {/* Mapa de Oportunidades (GSC Puro) */}
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Mapa de Oportunidades (GSC Puro)</h4>
+            <p className="text-[11px] font-bold text-slate-600">Demanda Insatisfecha: Mercados con alta Visibilidad pero baja captura de clicks</p>
+          </div>
+          <div className="p-2 bg-rose-50 text-rose-600 rounded-xl">
+             <Map className="w-4 h-4" />
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
+          <div className="space-y-4">
+            <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <Zap className="w-3 h-3 text-amber-500" /> Top 10 Mercados Oportunidad
+            </h5>
+            <div className="bg-slate-50 rounded-2xl border border-slate-100 overflow-hidden">
+              <table className="w-full text-left text-[11px]">
+                <thead className="bg-slate-100 text-slate-500 font-black uppercase text-[8px] tracking-widest">
+                  <tr>
+                    <th className="px-4 py-3">País</th>
+                    <th className="px-4 py-3 text-right">Impresiones</th>
+                    <th className="px-4 py-3 text-right">CTR</th>
+                    <th className="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {opportunityData.map((item) => (
+                    <tr 
+                      key={item.country} 
+                      onClick={() => setSelectedOpportunityCountry(item.country)}
+                      className={`cursor-pointer transition-all hover:bg-white ${selectedOpportunityCountry === item.country ? 'bg-white border-l-4 border-rose-500' : ''}`}
+                    >
+                      <td className="px-4 py-4 font-black text-slate-800">{item.country}</td>
+                      <td className="px-4 py-4 text-right font-medium text-slate-500">{item.impressions.toLocaleString()}</td>
+                      <td className="px-4 py-4 text-right">
+                        <span className={`px-2 py-1 rounded-lg font-bold ${item.ctr < 1.5 ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
+                          {item.ctr.toFixed(2)}%
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-right"><ChevronRight className="w-4 h-4 text-slate-300" /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="flex flex-col">
+            <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <Target className="w-3 h-3 text-indigo-500" /> Drill-down de Oportunidad {selectedOpportunityCountry && `: ${selectedOpportunityCountry}`}
+            </h5>
+            {selectedOpportunityCountry ? (
+              <div className="space-y-4 flex-1">
+                {opportunityDrillDown.map((item, idx) => (
+                  <div key={idx} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors">
+                    <div className="flex justify-between items-start mb-3">
+                      <p className="text-[10px] font-bold text-slate-900 break-all max-w-[80%]">{item.url}</p>
+                      <span className="bg-slate-100 px-2 py-1 rounded-lg text-[9px] font-black text-slate-500">GSC DATA</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="bg-slate-50 p-2 rounded-xl border border-slate-100">
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Impresiones</p>
+                        <p className="text-[11px] font-black text-slate-800">{item.impressions.toLocaleString()}</p>
+                      </div>
+                      <div className="bg-slate-50 p-2 rounded-xl border border-slate-100">
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Clicks</p>
+                        <p className="text-[11px] font-black text-slate-800">{item.clicks.toLocaleString()}</p>
+                      </div>
+                      <div className="bg-rose-50 p-2 rounded-xl border border-rose-100">
+                        <p className="text-[8px] font-black text-rose-400 uppercase tracking-tighter">CTR Local</p>
+                        <p className="text-[11px] font-black text-rose-600">{item.ctr.toFixed(2)}%</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div className="mt-4 p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-3">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-[10px] font-medium text-amber-700 leading-relaxed">
+                    Estas URLs tienen alta visibilidad en <strong>{selectedOpportunityCountry}</strong> pero atraen pocos clicks. Considera optimizar el <strong>Snippet SEO (Metatitle/Description)</strong> o revisar la relevancia del contenido para el idioma/jerga local.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-[32px] p-10 text-center opacity-40">
+                <MousePointer2 className="w-10 h-10 mb-4" />
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400">Selecciona un país de la lista para ver sus páginas de oportunidad</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
