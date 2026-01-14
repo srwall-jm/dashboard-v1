@@ -14,6 +14,10 @@ const CLIENT_ID = "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleuser
 const SCOPE_GA4 = "https://www.googleapis.com/auth/analytics.readonly";
 const SCOPE_GSC = "https://www.googleapis.com/auth/webmasters.readonly";
 
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  'USD': '$', 'EUR': '€', 'GBP': '£', 'JPY': '¥', 'CAD': 'C$', 'AUD': 'A$', 'CHF': 'CHF', 'CNY': '¥', 'INR': '₹', 'MXN': '$', 'BRL': 'R$', 'PLN': 'zł'
+};
+
 const COUNTRY_CODE_TO_NAME: Record<string, string> = {
   'afg': 'Afghanistan', 'alb': 'Albania', 'dza': 'Algeria', 'and': 'Andorra', 'ago': 'Angola',
   'arg': 'Argentina', 'arm': 'Armenia', 'aus': 'Australia', 'aut': 'Austria', 'aze': 'Azerbaijan',
@@ -114,6 +118,7 @@ const App: React.FC = () => {
   const [availableProperties, setAvailableProperties] = useState<Ga4Property[]>([]);
   const [availableSites, setAvailableSites] = useState<GscSite[]>([]);
   const [availableDimensions, setAvailableDimensions] = useState<{ label: string; value: string }[]>([]);
+  const [currencySymbol, setCurrencySymbol] = useState('£');
   
   const [ga4Search, setGa4Search] = useState('');
   const [gscSearch, setGscSearch] = useState('');
@@ -128,7 +133,6 @@ const App: React.FC = () => {
   const [brandRegexStr, setBrandRegexStr] = useState('shop|brand|pro|sports');
   const [grouping, setGrouping] = useState<'daily' | 'weekly' | 'monthly'>('daily');
 
-  // AI Configuration
   const [aiProvider, setAiProvider] = useState<'gemini' | 'openai'>(() => {
     const saved = localStorage.getItem('ai_provider');
     return (saved as 'gemini' | 'openai') || 'gemini';
@@ -203,6 +207,21 @@ const App: React.FC = () => {
     } catch (e) {
       console.error(e);
       setError("Error connecting to GA4 Admin API.");
+    }
+  };
+
+  const fetchGa4PropertyDetails = async (token: string, propertyId: string) => {
+    try {
+      const resp = await fetch(`https://analyticsadmin.googleapis.com/v1beta/${propertyId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (data.currencyCode) {
+        setCurrencySymbol(CURRENCY_SYMBOLS[data.currencyCode] || data.currencyCode);
+      }
+    } catch (e) {
+      console.error("Error fetching property details:", e);
     }
   };
 
@@ -408,6 +427,7 @@ const App: React.FC = () => {
     if (ga4Auth?.token && ga4Auth.property) {
       fetchGa4Data();
       fetchGa4Metadata(ga4Auth.token, ga4Auth.property.id);
+      fetchGa4PropertyDetails(ga4Auth.token, ga4Auth.property.id);
     } 
   }, [ga4Auth?.property?.id, filters.dateRange, filters.ga4Dimension, filters.comparison.enabled, filters.comparison.type]);
 
@@ -483,7 +503,7 @@ const App: React.FC = () => {
     setError(null);
     try {
       const dashboardName = activeTab === DashboardTab.ORGANIC_VS_PAID ? "Organic vs Paid" : (activeTab === DashboardTab.SEO_BY_COUNTRY ? "SEO by Country" : "Deep Keyword Dive");
-      const summary = `GA4 Sessions: ${filteredDailyData.reduce((a,b)=>a+b.sessions,0)}. GSC Clicks: ${filteredKeywordData.reduce((a,b)=>a+b.clicks,0)}. Revenue: £${filteredDailyData.reduce((a,b)=>a+b.revenue,0).toLocaleString()}.`;
+      const summary = `GA4 Sessions: ${filteredDailyData.reduce((a,b)=>a+b.sessions,0)}. GSC Clicks: ${filteredKeywordData.reduce((a,b)=>a+b.clicks,0)}. Revenue: ${currencySymbol}${filteredDailyData.reduce((a,b)=>a+b.revenue,0).toLocaleString()}.`;
       
       let insights: string | undefined;
       
@@ -563,7 +583,6 @@ const App: React.FC = () => {
             <SidebarLink active={activeTab === DashboardTab.KEYWORD_DEEP_DIVE} onClick={() => {setActiveTab(DashboardTab.KEYWORD_DEEP_DIVE); setIsSidebarOpen(false);}} icon={<Target />} label="Deep SEO Analysis" />
           </nav>
           
-          {/* AI Engines Configuration */}
           <div className="bg-white/5 rounded-2xl p-4 border border-white/10 mb-6">
             <div className="flex items-center gap-2 mb-4 text-emerald-400">
               <Cpu className="w-3.5 h-3.5" />
@@ -775,8 +794,8 @@ const App: React.FC = () => {
         )}
 
         <div className="w-full">
-          {activeTab === DashboardTab.ORGANIC_VS_PAID && <OrganicVsPaidView stats={channelStats} data={filteredDailyData} comparisonEnabled={filters.comparison.enabled} grouping={grouping} setGrouping={setGrouping} />}
-          {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={filteredKeywordData} aggregate={aggregate} comparisonEnabled={filters.comparison.enabled} />}
+          {activeTab === DashboardTab.ORGANIC_VS_PAID && <OrganicVsPaidView stats={channelStats} data={filteredDailyData} comparisonEnabled={filters.comparison.enabled} grouping={grouping} setGrouping={setGrouping} currencySymbol={currencySymbol} />}
+          {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={filteredKeywordData} aggregate={aggregate} comparisonEnabled={filters.comparison.enabled} currencySymbol={currencySymbol} />}
           {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && <SeoDeepDiveView keywords={filteredKeywordData} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isLoading={isAnythingLoading} comparisonEnabled={filters.comparison.enabled} />}
         </div>
 
@@ -831,7 +850,7 @@ const EcommerceFunnel = ({ title, data, color }: any) => {
   );
 };
 
-const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGrouping }: any) => {
+const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGrouping, currencySymbol }: any) => {
   const [weightMetric, setWeightMetric] = useState<'sessions' | 'revenue'>('sessions');
 
   const chartData = useMemo(() => {
@@ -906,7 +925,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <KpiCard title="Sessions" value={ch.s.current.sessions} comparison={comparisonEnabled ? ch.s.changes.sessions : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sessions : undefined} icon={<TrendingUp />} color={ch.color} />
               <KpiCard title="Conv. Rate" value={`${ch.s.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? ch.s.changes.cr : undefined} icon={<Percent />} isPercent color={ch.color} />
-              <KpiCard title="Revenue" value={`£${ch.s.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? ch.s.changes.revenue : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<Tag />} prefix="£" color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
+              <KpiCard title="Revenue" value={`${currencySymbol}${ch.s.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? ch.s.changes.revenue : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<Tag />} prefix={currencySymbol} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
               <KpiCard title="Sales" value={ch.s.current.sales} comparison={comparisonEnabled ? ch.s.changes.sales : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sales : undefined} icon={<ShoppingBag />} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
             </div>
           </div>
@@ -936,7 +955,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
           <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Revenue Trend</h4>
           <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl">
             <Tag className="w-3 h-3" />
-            <span className="text-[9px] font-black uppercase tracking-widest">Total Revenue (£)</span>
+            <span className="text-[9px] font-black uppercase tracking-widest">Total Revenue ({currencySymbol})</span>
           </div>
         </div>
         <div className="h-[300px]">
@@ -945,8 +964,8 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
               <AreaChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `£${val.toLocaleString()}`} />
-                <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} formatter={(val: number) => [`£${val.toLocaleString()}`, '']} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} />
+                <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} formatter={(val: number) => [`${currencySymbol}${val.toLocaleString()}`, '']} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
                 <Area name="Organic Revenue" type="monotone" dataKey="organicRevenue" stroke="#6366f1" strokeWidth={3} fillOpacity={0.1} fill="#6366f1" />
                 <Area name="Paid Revenue" type="monotone" dataKey="paidRevenue" stroke="#f59e0b" strokeWidth={3} fillOpacity={0.1} fill="#f59e0b" />
@@ -961,7 +980,6 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
         <EcommerceFunnel title="Paid Search Funnel" data={paidFunnelData} color="amber" />
       </div>
 
-      {/* REPLACED SECTION: Weight Evolution Analysis */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
@@ -1004,11 +1022,11 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
                   axisLine={false} 
                   tickLine={false} 
                   tick={{fontSize: 9, fontWeight: 700}} 
-                  tickFormatter={(val) => weightMetric === 'revenue' ? `£${val.toLocaleString()}` : val.toLocaleString()}
+                  tickFormatter={(val) => weightMetric === 'revenue' ? `${currencySymbol}${val.toLocaleString()}` : val.toLocaleString()}
                 />
                 <Tooltip 
                   contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                  formatter={(val: number) => [weightMetric === 'revenue' ? `£${val.toLocaleString()}` : val.toLocaleString(), '']}
+                  formatter={(val: number) => [weightMetric === 'revenue' ? `${currencySymbol}${val.toLocaleString()}` : val.toLocaleString(), '']}
                 />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
                 <Area 
@@ -1039,7 +1057,6 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
               <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Avg Search Share (Sessions)</p>
               <p className="text-xl font-black text-indigo-600">
                 {(() => {
-                  /* Added explicit types and default values to fix TS unknown errors in reduce calculation */
                   const total = (chartData as any[]).reduce((acc: number, d: any) => acc + (d.searchCombined || 0) + (d.othersCombined || 0), 0);
                   const search = (chartData as any[]).reduce((acc: number, d: any) => acc + (d.searchCombined || 0), 0);
                   return total > 0 ? ((search / total) * 100).toFixed(1) : "0.0";
@@ -1050,7 +1067,6 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
               <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Avg Search Share (Revenue)</p>
               <p className="text-xl font-black text-emerald-600">
                 {(() => {
-                  /* Added explicit types and default values to fix TS unknown errors in reduce calculation */
                   const total = (chartData as any[]).reduce((acc: number, d: any) => acc + (d.searchRevenueCombined || 0) + (d.othersRevenueCombined || 0), 0);
                   const search = (chartData as any[]).reduce((acc: number, d: any) => acc + (d.searchRevenueCombined || 0), 0);
                   return total > 0 ? ((search / total) * 100).toFixed(1) : "0.0";
@@ -1063,7 +1079,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
   );
 };
 
-const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }: any) => {
+const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, currencySymbol }: any) => {
   const [selectedOpportunityCountry, setSelectedOpportunityCountry] = useState<string | null>(null);
   const organicGa4 = aggregate(data.filter((d: any) => d.channel?.toLowerCase().includes('organic')));
   
@@ -1185,7 +1201,7 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
         <KpiCard title="GSC Clicks" value={gscStats.current.clicks} comparison={comparisonEnabled ? gscStats.changes.clicks : undefined} absoluteChange={comparisonEnabled ? gscStats.abs.clicks : undefined} icon={<MousePointer2 />} />
         <KpiCard title="GSC CTR" value={`${(gscStats.current.impressions > 0 ? (gscStats.current.clicks/gscStats.current.impressions)*100 : 0).toFixed(2)}%`} comparison={comparisonEnabled ? gscStats.changes.ctr : undefined} icon={<Percent />} />
         <KpiCard title="GA4 Organic CR" value={`${organicGa4.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? organicGa4.changes.cr : undefined} icon={<TrendingUp />} color="emerald" />
-        <KpiCard title="GA4 Revenue" value={`£${organicGa4.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.revenue : undefined} icon={<Tag />} color="emerald" prefix="£" />
+        <KpiCard title="GA4 Revenue" value={`${currencySymbol}${organicGa4.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.revenue : undefined} icon={<Tag />} color="emerald" prefix={currencySymbol} />
         <KpiCard title="GA4 Sales" value={organicGa4.current.sales} comparison={comparisonEnabled ? organicGa4.changes.sales : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.revenue : undefined} icon={<ShoppingBag />} color="emerald" />
       </div>
 
@@ -1218,8 +1234,8 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
               <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis type="number" dataKey="traffic" name="Traffic" unit=" sess." axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
-                <YAxis type="number" dataKey="revenue" name="Revenue" unit=" £" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `£${val.toLocaleString()}`} />
-                <ZAxis type="number" dataKey="revenue" range={[100, 2000]} name="Market Value" unit=" £" />
+                <YAxis type="number" dataKey="revenue" name="Revenue" unit={` ${currencySymbol}`} axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} />
+                <ZAxis type="number" dataKey="revenue" range={[100, 2000]} name="Market Value" unit={` ${currencySymbol}`} />
                 <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }) => {
                   if (active && payload && payload.length) {
                     const d = payload[0].payload;
@@ -1228,8 +1244,8 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
                         <p className="text-[10px] font-black uppercase tracking-widest mb-2 border-b border-white/10 pb-2">{d.country}</p>
                         <div className="space-y-1">
                           <p className="text-[9px] flex justify-between gap-4"><span>Traffic:</span> <span className="font-bold">{d.traffic.toLocaleString()} sess.</span></p>
-                          <p className="text-[9px] flex justify-between gap-4"><span>Revenue:</span> <span className="font-bold text-emerald-400">£{d.revenue.toLocaleString()}</span></p>
-                          <p className="text-[9px] flex justify-between gap-4"><span>Efficiency:</span> <span className="font-bold text-indigo-400">£{(d.revenue / d.traffic).toFixed(2)}/sess.</span></p>
+                          <p className="text-[9px] flex justify-between gap-4"><span>Revenue:</span> <span className="font-bold text-emerald-400">{currencySymbol}{d.revenue.toLocaleString()}</span></p>
+                          <p className="text-[9px] flex justify-between gap-4"><span>Efficiency:</span> <span className="font-bold text-indigo-400">{currencySymbol}{(d.revenue / d.traffic).toFixed(2)}/sess.</span></p>
                         </div>
                       </div>
                     );

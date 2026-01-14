@@ -5,6 +5,7 @@ export type QueryType = 'Branded' | 'Non-Branded';
 export interface Ga4Property {
   id: string;
   name: string;
+  currencyCode?: string;
 }
 
 export interface GscSite {
