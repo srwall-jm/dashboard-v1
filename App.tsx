@@ -125,7 +125,7 @@ const App: React.FC = () => {
   const [isLoadingGsc, setIsLoadingGsc] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [brandRegexStr, setBrandRegexStr] = useState('tienda|deportes|pro|brandname');
+  const [brandRegexStr, setBrandRegexStr] = useState('shop|brand|pro|sports');
   const [grouping, setGrouping] = useState<'daily' | 'weekly' | 'monthly'>('daily');
 
   // AI Configuration
@@ -188,7 +188,7 @@ const App: React.FC = () => {
       const resp = await fetch('https://analyticsadmin.googleapis.com/v1beta/accountSummaries', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (!resp.ok) throw new Error(`Status GA4 Admin: ${resp.status}`);
+      if (!resp.ok) throw new Error(`GA4 Admin Status: ${resp.status}`);
       const data = await resp.json();
       const props: Ga4Property[] = [];
       data.accountSummaries?.forEach((acc: any) => {
@@ -202,7 +202,7 @@ const App: React.FC = () => {
       }
     } catch (e) {
       console.error(e);
-      setError("Error conectando con GA4 Admin API.");
+      setError("Error connecting to GA4 Admin API.");
     }
   };
 
@@ -234,7 +234,7 @@ const App: React.FC = () => {
       const resp = await fetch('https://www.googleapis.com/webmasters/v3/sites', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (!resp.ok) throw new Error(`Status GSC Sites: ${resp.status}`);
+      if (!resp.ok) throw new Error(`GSC Sites Status: ${resp.status}`);
       const data = await resp.json();
       const sites = data.siteEntry || [];
       setAvailableSites(sites);
@@ -243,7 +243,7 @@ const App: React.FC = () => {
       }
     } catch (e) {
       console.error(e);
-      setError("Error conectando con Search Console API.");
+      setError("Error connecting to Search Console API.");
     }
   };
 
@@ -294,7 +294,7 @@ const App: React.FC = () => {
       setRealDailyData(dailyMapped);
     } catch (err: any) {
       console.error(err);
-      setError(`Error GA4: ${err.message}`);
+      setError(`GA4 Error: ${err.message}`);
     } finally {
       setIsLoadingGa4(false);
     }
@@ -341,7 +341,7 @@ const App: React.FC = () => {
       setRealKeywordData(combined);
     } catch (err: any) {
       console.error(err);
-      setError(`Error GSC: ${err.message}`);
+      setError(`GSC Error: ${err.message}`);
     } finally {
       setIsLoadingGsc(false);
     }
@@ -482,14 +482,14 @@ const App: React.FC = () => {
     setLoadingInsights(true);
     setError(null);
     try {
-      const dashboardName = activeTab === DashboardTab.ORGANIC_VS_PAID ? "Organic vs Paid" : (activeTab === DashboardTab.SEO_BY_COUNTRY ? "SEO por País" : "Keywords Deep Dive");
-      const summary = `GA4 Sessions: ${filteredDailyData.reduce((a,b)=>a+b.sessions,0)}. GSC Clicks: ${filteredKeywordData.reduce((a,b)=>a+b.clicks,0)}. Revenue: €${filteredDailyData.reduce((a,b)=>a+b.revenue,0).toLocaleString()}.`;
+      const dashboardName = activeTab === DashboardTab.ORGANIC_VS_PAID ? "Organic vs Paid" : (activeTab === DashboardTab.SEO_BY_COUNTRY ? "SEO by Country" : "Deep Keyword Dive");
+      const summary = `GA4 Sessions: ${filteredDailyData.reduce((a,b)=>a+b.sessions,0)}. GSC Clicks: ${filteredKeywordData.reduce((a,b)=>a+b.clicks,0)}. Revenue: £${filteredDailyData.reduce((a,b)=>a+b.revenue,0).toLocaleString()}.`;
       
       let insights: string | undefined;
       
       if (aiProvider === 'openai') {
         if (!openaiKey) {
-          throw new Error("Por favor, introduce tu OpenAI API Key en la barra lateral.");
+          throw new Error("Please enter your OpenAI API Key in the sidebar.");
         }
         insights = await getOpenAiInsights(openaiKey, summary, dashboardName);
       } else {
@@ -499,7 +499,7 @@ const App: React.FC = () => {
       setAiInsights(insights || null);
     } catch (err: any) { 
       console.error(err); 
-      setError(err.message || "Error al generar insights.");
+      setError(err.message || "Failed to generate insights.");
     } finally { 
       setLoadingInsights(false); 
     }
@@ -535,8 +535,8 @@ const App: React.FC = () => {
           <div className="w-16 h-16 md:w-20 md:h-20 bg-indigo-600 rounded-[24px] md:rounded-[28px] flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-indigo-500/20 transform -rotate-6">
             <Activity className="w-8 h-8 md:w-10 md:h-10 text-white" />
           </div>
-          <h1 className="text-3xl md:text-4xl font-black mb-4 tracking-tighter">SEO & SEM Reporting</h1>
-          <p className="text-slate-400 font-medium mb-10 text-base md:text-lg">Inicia sesión con Google para acceder al dashboard.</p>
+          <h1 className="text-3xl md:text-4xl font-black mb-4 tracking-tighter">SEO & Paid Reporting</h1>
+          <p className="text-slate-400 font-medium mb-10 text-base md:text-lg">Sign in with Google to access your dashboard.</p>
           <div className="flex justify-center w-full"><GoogleLogin onLoginSuccess={handleLoginSuccess} /></div>
         </div>
       </div>
@@ -559,15 +559,15 @@ const App: React.FC = () => {
           </div>
           <nav className="space-y-1 mb-8">
             <SidebarLink active={activeTab === DashboardTab.ORGANIC_VS_PAID} onClick={() => {setActiveTab(DashboardTab.ORGANIC_VS_PAID); setIsSidebarOpen(false);}} icon={<Layers />} label="Organic vs Paid" />
-            <SidebarLink active={activeTab === DashboardTab.SEO_BY_COUNTRY} onClick={() => {setActiveTab(DashboardTab.SEO_BY_COUNTRY); setIsSidebarOpen(false);}} icon={<Globe />} label="Performance País" />
-            <SidebarLink active={activeTab === DashboardTab.KEYWORD_DEEP_DIVE} onClick={() => {setActiveTab(DashboardTab.KEYWORD_DEEP_DIVE); setIsSidebarOpen(false);}} icon={<Target />} label="Análisis SEO Deep" />
+            <SidebarLink active={activeTab === DashboardTab.SEO_BY_COUNTRY} onClick={() => {setActiveTab(DashboardTab.SEO_BY_COUNTRY); setIsSidebarOpen(false);}} icon={<Globe />} label="Performance by Country" />
+            <SidebarLink active={activeTab === DashboardTab.KEYWORD_DEEP_DIVE} onClick={() => {setActiveTab(DashboardTab.KEYWORD_DEEP_DIVE); setIsSidebarOpen(false);}} icon={<Target />} label="Deep SEO Analysis" />
           </nav>
           
           {/* AI Engines Configuration */}
           <div className="bg-white/5 rounded-2xl p-4 border border-white/10 mb-6">
             <div className="flex items-center gap-2 mb-4 text-emerald-400">
               <Cpu className="w-3.5 h-3.5" />
-              <h4 className="text-[9px] font-black uppercase tracking-widest">Motores de IA</h4>
+              <h4 className="text-[9px] font-black uppercase tracking-widest">AI Analysis Engines</h4>
             </div>
             
             <div className="flex bg-slate-900/50 rounded-xl p-1 mb-4">
@@ -599,22 +599,22 @@ const App: React.FC = () => {
                   placeholder="sk-..." 
                 />
                 <p className="text-[7px] font-medium text-slate-500 leading-tight">
-                  Usando modelo gpt-4o-mini para el análisis de reportes.
+                  Using gpt-4o-mini for strategic report analysis.
                 </p>
               </div>
             )}
             
             {aiProvider === 'gemini' && (
               <p className="text-[8px] font-black text-indigo-400/70 uppercase tracking-widest text-center py-2 border border-dashed border-indigo-500/20 rounded-xl">
-                Gemini 3 Flash Activo
+                Gemini 3 Flash Active
               </p>
             )}
           </div>
 
           <div className="bg-white/5 rounded-2xl p-4 border border-white/10 mb-6">
-            <div className="flex items-center gap-2 mb-3 text-indigo-400"><Settings2 className="w-3.5 h-3.5" /><h4 className="text-[9px] font-black uppercase tracking-widest">Configuración SEO</h4></div>
+            <div className="flex items-center gap-2 mb-3 text-indigo-400"><Settings2 className="w-3.5 h-3.5" /><h4 className="text-[9px] font-black uppercase tracking-widest">SEO Settings</h4></div>
             <label className="text-[8px] font-black uppercase text-slate-500 tracking-widest block mb-1">Branded Regex</label>
-            <input type="text" value={brandRegexStr} onChange={e => setBrandRegexStr(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 focus:ring-1 ring-indigo-500 outline-none" placeholder="brand|tienda" />
+            <input type="text" value={brandRegexStr} onChange={e => setBrandRegexStr(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 focus:ring-1 ring-indigo-500 outline-none" placeholder="brand|shop" />
           </div>
         </div>
 
@@ -628,10 +628,10 @@ const App: React.FC = () => {
                  <div className="space-y-2">
                     <label className="text-[8px] font-black uppercase text-slate-500 tracking-widest block">GA4 Property</label>
                     {!ga4Auth?.token ? (
-                      <button onClick={handleConnectGa4} className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Conectar GA4</button>
+                      <button onClick={handleConnectGa4} className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Connect GA4</button>
                     ) : (
                       <div className="space-y-1.5">
-                        <input type="text" placeholder="Buscar..." value={ga4Search} onChange={e => setGa4Search(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-lg text-[9px] px-2 py-1.5 outline-none focus:ring-1 ring-indigo-500" />
+                        <input type="text" placeholder="Search..." value={ga4Search} onChange={e => setGa4Search(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-lg text-[9px] px-2 py-1.5 outline-none focus:ring-1 ring-indigo-500" />
                         <select className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 outline-none" value={ga4Auth?.property?.id || ''} onChange={e => setGa4Auth({...ga4Auth, property: availableProperties.find(p => p.id === e.target.value) || null})}>
                           {filteredProperties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
@@ -641,10 +641,10 @@ const App: React.FC = () => {
                  <div className="space-y-2">
                     <label className="text-[8px] font-black uppercase text-slate-500 tracking-widest block">GSC Domain</label>
                     {!gscAuth?.token ? (
-                      <button onClick={handleConnectGsc} className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Conectar GSC</button>
+                      <button onClick={handleConnectGsc} className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Connect GSC</button>
                     ) : (
                       <div className="space-y-1.5">
-                        <input type="text" placeholder="Buscar..." value={gscSearch} onChange={e => setGscSearch(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-lg text-[9px] px-2 py-1.5 outline-none focus:ring-1 ring-indigo-500" />
+                        <input type="text" placeholder="Search..." value={gscSearch} onChange={e => setGscSearch(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-lg text-[9px] px-2 py-1.5 outline-none focus:ring-1 ring-indigo-500" />
                         <select className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 outline-none" value={gscAuth?.site?.siteUrl || ''} onChange={e => setGscAuth({...gscAuth, site: availableSites.find(s => s.siteUrl === e.target.value) || null})}>
                           {filteredSites.map(s => <option key={s.siteUrl} value={s.siteUrl}>{s.siteUrl}</option>)}
                         </select>
@@ -652,7 +652,7 @@ const App: React.FC = () => {
                     )}
                  </div>
               </div>
-              <button onClick={handleLogout} className="w-full mt-6 py-2 text-[9px] font-black text-slate-500 hover:text-white transition-colors flex items-center justify-center gap-2"><LogOut className="w-3 h-3" /> Cerrar Sesión</button>
+              <button onClick={handleLogout} className="w-full mt-6 py-2 text-[9px] font-black text-slate-500 hover:text-white transition-colors flex items-center justify-center gap-2"><LogOut className="w-3 h-3" /> Sign Out</button>
            </div>
         </div>
       </aside>
@@ -663,12 +663,12 @@ const App: React.FC = () => {
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <span className={`w-2 h-2 rounded-full ${isAnythingLoading ? 'bg-amber-500 animate-ping' : 'bg-emerald-500'}`} />
-                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{isLoadingGa4 ? 'Sincronizando GA4...' : isLoadingGsc ? 'Sincronizando GSC...' : 'Dashboard Activo'}</span>
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{isLoadingGa4 ? 'Syncing GA4...' : isLoadingGsc ? 'Syncing GSC...' : 'Dashboard Active'}</span>
               </div>
               <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">
                 {activeTab === DashboardTab.ORGANIC_VS_PAID && "Organic vs Paid Performance"}
-                {activeTab === DashboardTab.SEO_BY_COUNTRY && "SEO Performance por País"}
-                {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && "Análisis por URL & Keywords"}
+                {activeTab === DashboardTab.SEO_BY_COUNTRY && "SEO Performance by Country"}
+                {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && "URL & Keyword Analysis"}
               </h2>
             </div>
             <div className="flex flex-col items-end gap-3">
@@ -682,11 +682,11 @@ const App: React.FC = () => {
               <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-2xl border border-slate-200 shadow-sm">
                 <div className="flex items-center gap-2">
                   <input type="checkbox" id="comp_enabled" checked={filters.comparison.enabled} onChange={e => setFilters({...filters, comparison: {...filters.comparison, enabled: e.target.checked}})} className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600" />
-                  <label htmlFor="comp_enabled" className="text-[10px] font-black uppercase text-slate-600 tracking-tight cursor-pointer">Comparar</label>
+                  <label htmlFor="comp_enabled" className="text-[10px] font-black uppercase text-slate-600 tracking-tight cursor-pointer">Compare</label>
                 </div>
                 {filters.comparison.enabled && (
                   <select className="bg-transparent text-[10px] font-bold text-indigo-600 outline-none cursor-pointer" value={filters.comparison.type} onChange={e => setFilters({...filters, comparison: {...filters.comparison, type: e.target.value as any}})}>
-                    <option value="previous_period">vs Anterior</option>
+                    <option value="previous_period">vs Previous</option>
                     <option value="previous_year">vs YoY</option>
                   </select>
                 )}
@@ -704,7 +704,6 @@ const App: React.FC = () => {
                </div>
             </div>
             
-            {/* GA4 Dimension Select (Channel Grouping Filter) */}
             <div className="flex items-center gap-2 px-3 py-1.5 border-b sm:border-b-0 sm:border-r border-slate-100">
                <Filter className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                <select 
@@ -722,14 +721,14 @@ const App: React.FC = () => {
             <div className="flex items-center gap-2 px-3 py-1.5 border-b sm:border-b-0 sm:border-r border-slate-100">
                <Globe className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                <select className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" value={filters.country} onChange={e => setFilters({...filters, country: e.target.value})}>
-                  <option value="All">Todos Países</option>
+                  <option value="All">All Countries</option>
                   {uniqueCountries.map(c => <option key={c} value={c}>{c}</option>)}
                </select>
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5">
                <Tag className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                <select className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" value={filters.queryType} onChange={e => setFilters({...filters, queryType: e.target.value as any})}>
-                  <option value="All">Tipo Query</option>
+                  <option value="All">Query Type</option>
                   <option value="Branded">Branded</option>
                   <option value="Non-Branded">Non-Branded</option>
                </select>
@@ -737,14 +736,20 @@ const App: React.FC = () => {
           </div>
           {realKeywordData.length === 0 && !isLoadingGsc && (
             <div className="text-[10px] font-bold text-amber-600 bg-amber-50 px-4 py-2 rounded-xl flex items-center gap-2 border border-amber-100">
-               <Info className="w-3 h-3" /> Search Console tiene un desfase de 2-3 días. Ajusta el rango si no ves datos de Keywords.
+               <Info className="w-3 h-3" /> Search Console has a 2-3 day lag. Adjust the range if you don't see Keyword data yet.
             </div>
           )}
         </header>
 
         {error && (
-          <div className="mb-8 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-3 text-rose-700 shadow-sm animate-in fade-in slide-in-from-top-4">
-            <AlertCircle className="w-5 h-5 flex-shrink-0" /><p className="font-bold text-xs">{error}</p>
+          <div className="mb-8 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-3 text-rose-700 shadow-sm animate-in fade-in slide-in-from-top-4">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+              <p className="font-bold text-xs">{error}</p>
+            </div>
+            <button onClick={() => setError(null)} className="p-1.5 hover:bg-rose-100 rounded-full transition-colors">
+              <X className="w-4 h-4" />
+            </button>
           </div>
         )}
 
@@ -757,9 +762,9 @@ const App: React.FC = () => {
               <div className="flex items-center gap-3">
                 {aiProvider === 'openai' ? <Cpu className="w-5 h-5 text-emerald-400" /> : <Sparkles className="w-5 h-5 text-indigo-400" />}
                 <div className="flex flex-col">
-                  <h3 className="text-xl font-black">Reporte Estratégico</h3>
+                  <h3 className="text-xl font-black">Strategic Analysis Report</h3>
                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
-                    Generado por {aiProvider === 'openai' ? 'OpenAI GPT-4o-mini' : 'Google Gemini 3 Flash'}
+                    Generated by {aiProvider === 'openai' ? 'OpenAI GPT-4o-mini' : 'Google Gemini 3 Flash'}
                   </p>
                 </div>
               </div>
@@ -782,7 +787,7 @@ const App: React.FC = () => {
             className={`flex items-center gap-3 px-10 py-4 ${aiProvider === 'openai' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20' : 'bg-slate-950 hover:bg-slate-800 shadow-slate-900/20'} text-white rounded-3xl text-xs font-black shadow-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50`}
           >
             {loadingInsights ? <RefreshCw className="w-4 h-4 animate-spin" /> : (aiProvider === 'openai' ? <Cpu className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />)} 
-            Generar Reporte {aiProvider === 'openai' ? 'GPT-4o-mini' : 'IA Gemini'}
+            Generate {aiProvider === 'openai' ? 'GPT-4o-mini' : 'Gemini AI'} Report
           </button>
         </div>
       </main>
@@ -790,7 +795,6 @@ const App: React.FC = () => {
   );
 };
 
-// EcommerceFunnel helper component for funnel visualizations
 const EcommerceFunnel = ({ title, data, color }: any) => {
   const max = data[0].value || 1;
   return (
@@ -847,17 +851,17 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
   }, [data, grouping]);
 
   const organicFunnelData = useMemo(() => [
-    { stage: 'Sesiones', value: stats.organic.current.sessions },
-    { stage: 'Añadir al Carrito', value: stats.organic.current.addToCarts },
+    { stage: 'Sessions', value: stats.organic.current.sessions },
+    { stage: 'Add to Basket', value: stats.organic.current.addToCarts },
     { stage: 'Checkout', value: stats.organic.current.checkouts },
-    { stage: 'Venta', value: stats.organic.current.sales },
+    { stage: 'Sale', value: stats.organic.current.sales },
   ], [stats.organic]);
 
   const paidFunnelData = useMemo(() => [
-    { stage: 'Sesiones', value: stats.paid.current.sessions },
-    { stage: 'Añadir al Carrito', value: stats.paid.current.addToCarts },
+    { stage: 'Sessions', value: stats.paid.current.sessions },
+    { stage: 'Add to Basket', value: stats.paid.current.addToCarts },
     { stage: 'Checkout', value: stats.paid.current.checkouts },
-    { stage: 'Venta', value: stats.paid.current.sales },
+    { stage: 'Sale', value: stats.paid.current.sales },
   ], [stats.paid]);
 
   return (
@@ -867,16 +871,16 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
           <div key={ch.type} className="space-y-4">
             <div className="flex items-center gap-3 px-2"><div className={`w-7 h-7 bg-${ch.color}-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px]`}>{ch.type}</div><h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{ch.label} Performance</h4></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <KpiCard title="Sesiones" value={ch.s.current.sessions} comparison={comparisonEnabled ? ch.s.changes.sessions : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sessions : undefined} icon={<TrendingUp />} color={ch.color} />
+              <KpiCard title="Sessions" value={ch.s.current.sessions} comparison={comparisonEnabled ? ch.s.changes.sessions : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sessions : undefined} icon={<TrendingUp />} color={ch.color} />
               <KpiCard title="Conv. Rate" value={`${ch.s.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? ch.s.changes.cr : undefined} icon={<Percent />} isPercent color={ch.color} />
-              <KpiCard title="Revenue" value={`€${ch.s.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? ch.s.changes.revenue : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<Tag />} prefix="€" color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
-              <KpiCard title="Ventas" value={ch.s.current.sales} comparison={comparisonEnabled ? ch.s.changes.sales : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sales : undefined} icon={<ShoppingBag />} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
+              <KpiCard title="Revenue" value={`£${ch.s.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? ch.s.changes.revenue : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<Tag />} prefix="£" color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
+              <KpiCard title="Sales" value={ch.s.current.sales} comparison={comparisonEnabled ? ch.s.changes.sales : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sales : undefined} icon={<ShoppingBag />} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
             </div>
           </div>
         ))}
       </div>
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
-        <div className="flex justify-between items-center mb-8"><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Tendencia de Sesiones</h4><div className="flex gap-1 bg-slate-100 p-1 rounded-xl">{['daily', 'weekly', 'monthly'].map(g => <button key={g} onClick={() => setGrouping(g)} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === g ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>{g === 'daily' ? 'Día' : g === 'weekly' ? 'Sem' : 'Mes'}</button>)}</div></div>
+        <div className="flex justify-between items-center mb-8"><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Session Trend</h4><div className="flex gap-1 bg-slate-100 p-1 rounded-xl">{['daily', 'weekly', 'monthly'].map(g => <button key={g} onClick={() => setGrouping(g)} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === g ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>{g === 'daily' ? 'Day' : g === 'weekly' ? 'Week' : 'Month'}</button>)}</div></div>
         <div className="h-[300px]">
           {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
@@ -890,16 +894,16 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
                 <Area name="Paid" type="monotone" dataKey="paid" stroke="#f59e0b" strokeWidth={3} fillOpacity={0.1} fill="#f59e0b" />
               </AreaChart>
             </ResponsiveContainer>
-          ) : <EmptyState text="Sin datos para graficar" />}
+          ) : <EmptyState text="No data available to chart" />}
         </div>
       </div>
 
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
-          <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Tendencia de Revenue</h4>
+          <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Revenue Trend</h4>
           <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl">
             <Tag className="w-3 h-3" />
-            <span className="text-[9px] font-black uppercase tracking-widest">Revenue Total (€)</span>
+            <span className="text-[9px] font-black uppercase tracking-widest">Total Revenue (£)</span>
           </div>
         </div>
         <div className="h-[300px]">
@@ -908,20 +912,20 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
               <AreaChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `€${val.toLocaleString()}`} />
-                <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} formatter={(val: number) => [`€${val.toLocaleString()}`, '']} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `£${val.toLocaleString()}`} />
+                <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} formatter={(val: number) => [`£${val.toLocaleString()}`, '']} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
                 <Area name="Organic Revenue" type="monotone" dataKey="organicRevenue" stroke="#6366f1" strokeWidth={3} fillOpacity={0.1} fill="#6366f1" />
                 <Area name="Paid Revenue" type="monotone" dataKey="paidRevenue" stroke="#f59e0b" strokeWidth={3} fillOpacity={0.1} fill="#f59e0b" />
               </AreaChart>
             </ResponsiveContainer>
-          ) : <EmptyState text="Sin datos de ingresos para graficar" />}
+          ) : <EmptyState text="No revenue data available to chart" />}
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <EcommerceFunnel title="Funnel Organic Search" data={organicFunnelData} color="indigo" />
-        <EcommerceFunnel title="Funnel Paid Search" data={paidFunnelData} color="amber" />
+        <EcommerceFunnel title="Organic Search Funnel" data={organicFunnelData} color="indigo" />
+        <EcommerceFunnel title="Paid Search Funnel" data={paidFunnelData} color="amber" />
       </div>
     </div>
   );
@@ -1045,23 +1049,23 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <KpiCard title="Impresiones GSC" value={gscStats.current.impressions} comparison={comparisonEnabled ? gscStats.changes.impressions : undefined} absoluteChange={comparisonEnabled ? gscStats.abs.impressions : undefined} icon={<Eye />} />
-        <KpiCard title="Clicks GSC" value={gscStats.current.clicks} comparison={comparisonEnabled ? gscStats.changes.clicks : undefined} absoluteChange={comparisonEnabled ? gscStats.abs.clicks : undefined} icon={<MousePointer2 />} />
-        <KpiCard title="CTR GSC" value={`${(gscStats.current.impressions > 0 ? (gscStats.current.clicks/gscStats.current.impressions)*100 : 0).toFixed(2)}%`} comparison={comparisonEnabled ? gscStats.changes.ctr : undefined} icon={<Percent />} />
-        <KpiCard title="CR GA4 Organic" value={`${organicGa4.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? organicGa4.changes.cr : undefined} icon={<TrendingUp />} color="emerald" />
-        <KpiCard title="Revenue GA4" value={`€${organicGa4.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.revenue : undefined} icon={<Tag />} color="emerald" prefix="€" />
-        <KpiCard title="Ventas GA4" value={organicGa4.current.sales} comparison={comparisonEnabled ? organicGa4.changes.sales : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.revenue : undefined} icon={<ShoppingBag />} color="emerald" />
+        <KpiCard title="GSC Impressions" value={gscStats.current.impressions} comparison={comparisonEnabled ? gscStats.changes.impressions : undefined} absoluteChange={comparisonEnabled ? gscStats.abs.impressions : undefined} icon={<Eye />} />
+        <KpiCard title="GSC Clicks" value={gscStats.current.clicks} comparison={comparisonEnabled ? gscStats.changes.clicks : undefined} absoluteChange={comparisonEnabled ? gscStats.abs.clicks : undefined} icon={<MousePointer2 />} />
+        <KpiCard title="GSC CTR" value={`${(gscStats.current.impressions > 0 ? (gscStats.current.clicks/gscStats.current.impressions)*100 : 0).toFixed(2)}%`} comparison={comparisonEnabled ? gscStats.changes.ctr : undefined} icon={<Percent />} />
+        <KpiCard title="GA4 Organic CR" value={`${organicGa4.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? organicGa4.changes.cr : undefined} icon={<TrendingUp />} color="emerald" />
+        <KpiCard title="GA4 Revenue" value={`£${organicGa4.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.revenue : undefined} icon={<Tag />} color="emerald" prefix="£" />
+        <KpiCard title="GA4 Sales" value={organicGa4.current.sales} comparison={comparisonEnabled ? organicGa4.changes.sales : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.revenue : undefined} icon={<ShoppingBag />} color="emerald" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {[ {title: 'Clicks por Mercado', key: 'clicks', color: '#6366f1'}, {title: 'Visibilidad por Mercado', key: 'impressions', color: '#0ea5e9'} ].map(chart => (
+        {[ {title: 'Clicks by Market', key: 'clicks', color: '#6366f1'}, {title: 'Visibility by Market', key: 'impressions', color: '#0ea5e9'} ].map(chart => (
           <div key={chart.key} className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm h-[400px]">
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-8">{chart.title}</h4>
             {countryStats.length > 0 ? (
               <ResponsiveContainer width="100%" height="85%">
                 <BarChart data={countryStats}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="country" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} /><YAxis axisLine={false} tickLine={false} tick={{fontSize: 9}} /><Tooltip cursor={{fill: '#f8fafc'}} /><Bar dataKey={chart.key} fill={chart.color} radius={[6, 6, 0, 0]} /></BarChart>
               </ResponsiveContainer>
-            ) : <EmptyState text="Sincronizando mercados..." />}
+            ) : <EmptyState text="Syncing markets..." />}
           </div>
         ))}
       </div>
@@ -1069,8 +1073,8 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Análisis de Eficiencia por Mercado (Organic Search)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Tráfico (X) vs Revenue (Y) | Tamaño = Revenue</p>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Market Efficiency Analysis (Organic Search)</h4>
+            <p className="text-[11px] font-bold text-slate-600">Traffic (X) vs Revenue (Y) | Size = Revenue</p>
           </div>
           <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
              <Activity className="w-4 h-4" />
@@ -1081,9 +1085,9 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
             <ResponsiveContainer width="100%" height="100%">
               <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis type="number" dataKey="traffic" name="Tráfico" unit=" ses." axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
-                <YAxis type="number" dataKey="revenue" name="Revenue" unit=" €" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `€${val.toLocaleString()}`} />
-                <ZAxis type="number" dataKey="revenue" range={[100, 2000]} name="Valor de Mercado" unit=" €" />
+                <XAxis type="number" dataKey="traffic" name="Traffic" unit=" sess." axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
+                <YAxis type="number" dataKey="revenue" name="Revenue" unit=" £" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `£${val.toLocaleString()}`} />
+                <ZAxis type="number" dataKey="revenue" range={[100, 2000]} name="Market Value" unit=" £" />
                 <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }) => {
                   if (active && payload && payload.length) {
                     const d = payload[0].payload;
@@ -1091,23 +1095,23 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
                       <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10">
                         <p className="text-[10px] font-black uppercase tracking-widest mb-2 border-b border-white/10 pb-2">{d.country}</p>
                         <div className="space-y-1">
-                          <p className="text-[9px] flex justify-between gap-4"><span>Tráfico:</span> <span className="font-bold">{d.traffic.toLocaleString()} ses.</span></p>
-                          <p className="text-[9px] flex justify-between gap-4"><span>Revenue:</span> <span className="font-bold text-emerald-400">€{d.revenue.toLocaleString()}</span></p>
-                          <p className="text-[9px] flex justify-between gap-4"><span>Eficiencia:</span> <span className="font-bold text-indigo-400">€{(d.revenue / d.traffic).toFixed(2)}/ses.</span></p>
+                          <p className="text-[9px] flex justify-between gap-4"><span>Traffic:</span> <span className="font-bold">{d.traffic.toLocaleString()} sess.</span></p>
+                          <p className="text-[9px] flex justify-between gap-4"><span>Revenue:</span> <span className="font-bold text-emerald-400">£{d.revenue.toLocaleString()}</span></p>
+                          <p className="text-[9px] flex justify-between gap-4"><span>Efficiency:</span> <span className="font-bold text-indigo-400">£{(d.revenue / d.traffic).toFixed(2)}/sess.</span></p>
                         </div>
                       </div>
                     );
                   }
                   return null;
                 }} />
-                <Scatter name="Mercados Orgánicos" data={scatterData}>
+                <Scatter name="Organic Markets" data={scatterData}>
                   {scatterData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.revenue > 10000 ? '#10b981' : entry.revenue > 5000 ? '#6366f1' : '#f59e0b'} fillOpacity={0.6} strokeWidth={2} stroke={entry.revenue > 10000 ? '#059669' : entry.revenue > 5000 ? '#4f46e5' : '#d97706'} />
                   ))}
                 </Scatter>
               </ScatterChart>
             </ResponsiveContainer>
-          ) : <EmptyState text="No hay suficientes datos orgánicos para el Scatter Plot..." />}
+          ) : <EmptyState text="Not enough organic data for the Scatter Plot..." />}
         </div>
       </div>
 
@@ -1116,7 +1120,7 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
         <div className="flex justify-between items-center mb-8">
           <div>
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Share of Voice vs. Share of Wallet</h4>
-            <p className="text-[11px] font-bold text-slate-600">Comparativa: Visibilidad (% Impr GSC) vs Rentabilidad Orgánica (% Rev GA4)</p>
+            <p className="text-[11px] font-bold text-slate-600">Comparison: Visibility (% GSC Impr) vs Organic Profitability (% GA4 Rev)</p>
           </div>
           <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
              <BarChart3 className="w-4 h-4" />
@@ -1139,16 +1143,16 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
                 <Bar name="Share of Wallet (Revenue %)" dataKey="sow" fill="#10b981" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          ) : <EmptyState text="Datos insuficientes para la comparativa de Shares..." />}
+          ) : <EmptyState text="Insufficient data for Share comparison..." />}
         </div>
       </div>
 
-      {/* Mapa de Oportunidades (GSC Puro) */}
+      {/* Opportunity Map (Pure GSC) */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Mapa de Oportunidades (GSC Puro)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Demanda Insatisfecha: Mercados con alta Visibilidad pero baja captura de clicks</p>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Opportunity Map (Pure GSC)</h4>
+            <p className="text-[11px] font-bold text-slate-600">Unmet Demand: Markets with high Visibility but low click capture</p>
           </div>
           <div className="p-2 bg-rose-50 text-rose-600 rounded-xl">
              <Map className="w-4 h-4" />
@@ -1158,14 +1162,14 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
           <div className="space-y-4">
             <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Zap className="w-3 h-3 text-amber-500" /> Top 10 Mercados Oportunidad
+              <Zap className="w-3 h-3 text-amber-500" /> Top 10 Opportunity Markets
             </h5>
             <div className="bg-slate-50 rounded-2xl border border-slate-100 overflow-hidden">
               <table className="w-full text-left text-[11px]">
                 <thead className="bg-slate-100 text-slate-500 font-black uppercase text-[8px] tracking-widest">
                   <tr>
-                    <th className="px-4 py-3">País</th>
-                    <th className="px-4 py-3 text-right">Impresiones</th>
+                    <th className="px-4 py-3">Country</th>
+                    <th className="px-4 py-3 text-right">Impressions</th>
                     <th className="px-4 py-3 text-right">CTR</th>
                     <th className="px-4 py-3"></th>
                   </tr>
@@ -1194,7 +1198,7 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
 
           <div className="flex flex-col">
             <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Target className="w-3 h-3 text-indigo-500" /> Drill-down de Oportunidad {selectedOpportunityCountry && `: ${selectedOpportunityCountry}`}
+              <Target className="w-3 h-3 text-indigo-500" /> Opportunity Drill-down {selectedOpportunityCountry && `: ${selectedOpportunityCountry}`}
             </h5>
             {selectedOpportunityCountry ? (
               <div className="space-y-4 flex-1">
@@ -1206,7 +1210,7 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       <div className="bg-slate-50 p-2 rounded-xl border border-slate-100">
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Impresiones</p>
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Impressions</p>
                         <p className="text-[11px] font-black text-slate-800">{item.impressions.toLocaleString()}</p>
                       </div>
                       <div className="bg-slate-50 p-2 rounded-xl border border-slate-100">
@@ -1214,7 +1218,7 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
                         <p className="text-[11px] font-black text-slate-800">{item.clicks.toLocaleString()}</p>
                       </div>
                       <div className="bg-rose-50 p-2 rounded-xl border border-rose-100">
-                        <p className="text-[8px] font-black text-rose-400 uppercase tracking-tighter">CTR Local</p>
+                        <p className="text-[8px] font-black text-rose-400 uppercase tracking-tighter">Local CTR</p>
                         <p className="text-[11px] font-black text-rose-600">{item.ctr.toFixed(2)}%</p>
                       </div>
                     </div>
@@ -1223,14 +1227,14 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
                 <div className="mt-4 p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-3">
                   <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                   <p className="text-[10px] font-medium text-amber-700 leading-relaxed">
-                    Estas URLs tienen alta visibilidad en <strong>{selectedOpportunityCountry}</strong> pero atraen pocos clicks. Considera optimizar el <strong>Snippet SEO (Metatitle/Description)</strong> o revisar la relevancia del contenido para el idioma/jerga local.
+                    These URLs have high visibility in <strong>{selectedOpportunityCountry}</strong> but attract few clicks. Consider optimising the <strong>SEO Snippet (Metatitle/Description)</strong> or reviewing content relevance for the local language/dialect.
                   </p>
                 </div>
               </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-[32px] p-10 text-center opacity-40">
                 <MousePointer2 className="w-10 h-10 mb-4" />
-                <p className="text-xs font-black uppercase tracking-widest text-slate-400">Selecciona un país de la lista para ver sus páginas de oportunidad</p>
+                <p className="text-xs font-black uppercase tracking-widest text-slate-400">Select a country from the list to see its opportunity pages</p>
               </div>
             )}
           </div>
@@ -1268,13 +1272,13 @@ const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, compa
   return (
     <div className="bg-white rounded-[32px] border border-slate-200 overflow-hidden shadow-sm">
       <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-50/50">
-        <div><h3 className="text-xl font-black mb-1">Deep Dive SEO</h3><p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">URLs y Palabras Clave</p></div>
-        <div className="relative w-full md:w-80"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" /><input type="text" placeholder="Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-medium focus:ring-2 ring-indigo-500/10 outline-none" /></div>
+        <div><h3 className="text-xl font-black mb-1">Deep SEO Drill-down</h3><p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">URLs & Keywords</p></div>
+        <div className="relative w-full md:w-80"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" /><input type="text" placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-medium focus:ring-2 ring-indigo-500/10 outline-none" /></div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs table-fixed min-w-[1000px]">
           <thead className="bg-slate-50 text-slate-400 font-black uppercase text-[9px] tracking-widest border-b border-slate-100">
-            <tr><th className="px-6 py-4 w-16"></th><th className="px-4 py-4 w-[50%]">Página</th><th className="px-6 py-4 text-center w-32">Impr.</th><th className="px-6 py-4 text-center w-32">Clicks</th><th className="px-6 py-4 text-center w-28">CTR</th></tr>
+            <tr><th className="px-6 py-4 w-16"></th><th className="px-4 py-4 w-[50%]">Page</th><th className="px-6 py-4 text-center w-32">Impr.</th><th className="px-6 py-4 text-center w-32">Clicks</th><th className="px-6 py-4 text-center w-28">CTR</th></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {aggregatedByUrl.slice(0, 100).map((row: any) => (
@@ -1296,7 +1300,7 @@ const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, compa
             ))}
           </tbody>
         </table>
-        {aggregatedByUrl.length === 0 && <div className="px-6 py-20 text-center text-slate-400 italic font-medium">No se han encontrado datos. Prueba a ampliar el rango de fechas.</div>}
+        {aggregatedByUrl.length === 0 && <div className="px-6 py-20 text-center text-slate-400 italic font-medium">No results found. Try broadening the date range.</div>}
       </div>
     </div>
   );

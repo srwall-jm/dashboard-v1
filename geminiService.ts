@@ -12,13 +12,13 @@ export const getDashboardInsights = async (dataSummary: string, dashboardName: s
       Data Summary:
       ${dataSummary}
       
-      Focus on growth opportunities, efficiency between channels, and anomalies. Keep it concise and professional. Respond in Spanish.`,
+      Focus on growth opportunities, efficiency between channels, and anomalies. Keep it concise, professional, and respond in British English.`,
     });
     
     return response.text;
   } catch (error) {
     console.error("Error fetching Gemini insights:", error);
-    return "No se han podido generar insights con Gemini en este momento.";
+    return "Unable to generate insights with Gemini at this time.";
   }
 };
 
@@ -35,11 +35,11 @@ export const getOpenAiInsights = async (apiKey: string, dataSummary: string, das
         messages: [
           { 
             role: 'system', 
-            content: `Eres un Analista de Datos y SEO de clase mundial. Analiza el siguiente resumen de ${dashboardName} y proporciona 3-4 puntos clave con insights accionables y observaciones. Enfócate en oportunidades de crecimiento, eficiencia entre canales y anomalías. Mantén la respuesta concisa, profesional y en español.`
+            content: `You are a world-class SEO and Data Analyst. Analyze the following summary of ${dashboardName} and provide 3-4 key points with actionable insights and observations. Focus on growth opportunities, channel efficiency, and anomalies. Keep the response concise, professional, and in British English.`
           },
           { 
             role: 'user', 
-            content: `Resumen de Datos:\n${dataSummary}` 
+            content: `Data Summary:\n${dataSummary}` 
           }
         ],
         temperature: 0.7
@@ -48,7 +48,7 @@ export const getOpenAiInsights = async (apiKey: string, dataSummary: string, das
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error?.message || 'Error en la API de OpenAI');
+      throw new Error(errorData.error?.message || 'Error from OpenAI API');
     }
 
     const data = await response.json();
