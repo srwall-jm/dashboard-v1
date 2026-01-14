@@ -815,7 +815,6 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
   
   const scatterData = useMemo(() => {
     const map: Record<string, { country: string; sessions: number; sales: number; revenue: number }> = {};
-    // Only Organic Search
     data.filter((d: any) => 
       d.dateRangeLabel === 'current' && 
       d.channel?.toLowerCase().includes('organic')
@@ -835,6 +834,36 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
       }))
       .filter(item => item.traffic > 0);
   }, [data]);
+
+  const shareOfVoiceWalletData = useMemo(() => {
+    const currentKeywords = keywordData.filter(k => k.dateRangeLabel === 'current');
+    const currentOrganicDaily = data.filter(d => d.dateRangeLabel === 'current' && d.channel?.toLowerCase().includes('organic'));
+    
+    const totalImpressions = currentKeywords.reduce((acc, k) => acc + k.impressions, 0);
+    const totalOrganicRevenue = currentOrganicDaily.reduce((acc, d) => acc + d.revenue, 0);
+
+    const map: Record<string, { country: string; impressions: number; revenue: number }> = {};
+    
+    currentKeywords.forEach(k => {
+      if (!map[k.country]) map[k.country] = { country: k.country, impressions: 0, revenue: 0 };
+      map[k.country].impressions += k.impressions;
+    });
+
+    currentOrganicDaily.forEach(d => {
+      if (!map[d.country]) map[d.country] = { country: d.country, impressions: 0, revenue: 0 };
+      map[d.country].revenue += d.revenue;
+    });
+
+    return Object.values(map)
+      .map(item => ({
+        country: item.country,
+        sov: totalImpressions > 0 ? (item.impressions / totalImpressions) * 100 : 0,
+        sow: totalOrganicRevenue > 0 ? (item.revenue / totalOrganicRevenue) * 100 : 0
+      }))
+      .filter(item => item.sov > 0 || item.sow > 0)
+      .sort((a, b) => b.sov - a.sov)
+      .slice(0, 10);
+  }, [keywordData, data]);
 
   const gscStats = useMemo(() => {
     const current = keywordData.filter((k:any) => k.dateRangeLabel === 'current');
@@ -920,6 +949,38 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
               </ScatterChart>
             </ResponsiveContainer>
           ) : <EmptyState text="No hay suficientes datos orgánicos para el Scatter Plot..." />}
+        </div>
+      </div>
+
+      {/* Share of Voice vs. Share of Wallet */}
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Share of Voice vs. Share of Wallet</h4>
+            <p className="text-[11px] font-bold text-slate-600">Comparativa: Visibilidad (% Impr GSC) vs Rentabilidad Orgánica (% Rev GA4)</p>
+          </div>
+          <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+             <BarChart3 className="w-4 h-4" />
+          </div>
+        </div>
+        <div className="h-[400px]">
+          {shareOfVoiceWalletData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={shareOfVoiceWalletData} barGap={8}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="country" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} unit="%" />
+                <Tooltip 
+                  cursor={{fill: '#f8fafc'}}
+                  contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                  formatter={(val: number) => [`${val.toFixed(1)}%`, '']}
+                />
+                <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{fontSize: 9, fontWeight: 800, textTransform: 'uppercase', paddingBottom: 20}} />
+                <Bar name="Share of Voice (Impr %)" dataKey="sov" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                <Bar name="Share of Wallet (Revenue %)" dataKey="sow" fill="#10b981" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : <EmptyState text="Datos insuficientes para la comparativa de Shares..." />}
         </div>
       </div>
     </div>
