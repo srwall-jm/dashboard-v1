@@ -17,8 +17,6 @@ export interface BaseMetrics {
   clicks: number;
   ctr: number;
   sessions: number;
-  addToCarts: number; // Nuevo
-  checkouts: number;  // Nuevo
   conversionRate: number;
   revenue: number;
   sales: number;
