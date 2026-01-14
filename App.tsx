@@ -716,6 +716,39 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
           ) : <EmptyState text="Sin datos para graficar" />}
         </div>
       </div>
+
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+        <div className="flex justify-between items-center mb-8">
+          <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Tendencia de Revenue</h4>
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl">
+            <Tag className="w-3 h-3" />
+            <span className="text-[9px] font-black uppercase tracking-widest">Revenue Total (€)</span>
+          </div>
+        </div>
+        <div className="h-[300px]">
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{fontSize: 9, fontWeight: 700}} 
+                  tickFormatter={(val) => `€${val.toLocaleString()}`}
+                />
+                <Tooltip 
+                  contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} 
+                  formatter={(val: number) => [`€${val.toLocaleString()}`, '']}
+                />
+                <Legend verticalAlign="top" align="center" iconType="circle" />
+                <Area name="Organic Revenue" type="monotone" dataKey="organicRevenue" stroke="#6366f1" strokeWidth={3} fillOpacity={0.1} fill="#6366f1" />
+                <Area name="Paid Revenue" type="monotone" dataKey="paidRevenue" stroke="#f59e0b" strokeWidth={3} fillOpacity={0.1} fill="#f59e0b" />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : <EmptyState text="Sin datos de ingresos para graficar" />}
+        </div>
+      </div>
     </div>
   );
 };
