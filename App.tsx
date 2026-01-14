@@ -992,6 +992,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
 
 const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, currencySymbol, grouping }: any) => {
   const [selectedOpportunityCountry, setSelectedOpportunityCountry] = useState<string | null>(null);
+  const [brandedMetric, setBrandedMetric] = useState<'clicks' | 'impressions'>('clicks');
   const organicGa4 = aggregate(data.filter((d: any) => d.channel?.toLowerCase().includes('organic')));
   
   const brandedTrendData = useMemo(() => {
@@ -1084,13 +1085,24 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, c
       </div>
 
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Branded vs. Non-Branded (GSC Trend)</h4>
             <p className="text-[11px] font-bold text-slate-600">Comparison of search volume capture by query type</p>
           </div>
-          <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
-             <TrendingUp className="w-4 h-4" />
+          <div className="flex bg-slate-100 p-1 rounded-xl">
+            <button 
+              onClick={() => setBrandedMetric('clicks')} 
+              className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'clicks' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+            >
+              Clicks
+            </button>
+            <button 
+              onClick={() => setBrandedMetric('impressions')} 
+              className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'impressions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+            >
+              Impressions
+            </button>
           </div>
         </div>
         <div className="h-[400px]">
@@ -1099,14 +1111,25 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, c
               <LineChart data={brandedTrendData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
-                <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
-                <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700, fill: '#94a3b8'}} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
                 <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
                 <Legend verticalAlign="top" iconType="circle" />
-                <Line yAxisId="left" type="monotone" name="Branded Clicks" dataKey="brandedClicks" stroke="#6366f1" strokeWidth={3} dot={false} />
-                <Line yAxisId="left" type="monotone" name="Non-Branded Clicks" dataKey="nonBrandedClicks" stroke="#10b981" strokeWidth={3} dot={false} />
-                <Line yAxisId="right" type="monotone" name="Branded Impr." dataKey="brandedImpr" stroke="#a5b4fc" strokeWidth={1} strokeDasharray="5 5" dot={false} />
-                <Line yAxisId="right" type="monotone" name="Non-Branded Impr." dataKey="nonBrandedImpr" stroke="#6ee7b7" strokeWidth={1} strokeDasharray="5 5" dot={false} />
+                <Line 
+                  type="monotone" 
+                  name={`Branded ${brandedMetric.charAt(0).toUpperCase() + brandedMetric.slice(1)}`} 
+                  dataKey={brandedMetric === 'clicks' ? 'brandedClicks' : 'brandedImpr'} 
+                  stroke="#6366f1" 
+                  strokeWidth={3} 
+                  dot={false} 
+                />
+                <Line 
+                  type="monotone" 
+                  name={`Non-Branded ${brandedMetric.charAt(0).toUpperCase() + brandedMetric.slice(1)}`} 
+                  dataKey={brandedMetric === 'clicks' ? 'nonBrandedClicks' : 'nonBrandedImpr'} 
+                  stroke="#10b981" 
+                  strokeWidth={3} 
+                  dot={false} 
+                />
               </LineChart>
             </ResponsiveContainer>
           ) : <EmptyState text="No keyword trend data available..." />}
