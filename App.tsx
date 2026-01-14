@@ -14,9 +14,23 @@ const CLIENT_ID = "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleuser
 const SCOPE_GA4 = "https://www.googleapis.com/auth/analytics.readonly";
 const SCOPE_GSC = "https://www.googleapis.com/auth/webmasters.readonly";
 
-const countryMap: Record<string, string> = {
-  'esp': 'Spain', 'mex': 'Mexico', 'usa': 'United States', 'gbr': 'United Kingdom',
-  'fra': 'France', 'deu': 'Germany', 'ita': 'Italy', 'prt': 'Portugal'
+// Expanded normalization map for cleaner data representation
+const COUNTRY_CODE_TO_NAME: Record<string, string> = {
+  'afg': 'Afghanistan', 'alb': 'Albania', 'dza': 'Algeria', 'and': 'Andorra', 'ago': 'Angola',
+  'arg': 'Argentina', 'arm': 'Armenia', 'aus': 'Australia', 'aut': 'Austria', 'aze': 'Azerbaijan',
+  'bel': 'Belgium', 'bra': 'Brazil', 'can': 'Canada', 'che': 'Switzerland', 'chl': 'Chile',
+  'chn': 'China', 'col': 'Colombia', 'deu': 'Germany', 'dnk': 'Denmark', 'esp': 'Spain',
+  'fin': 'Finland', 'fra': 'France', 'gbr': 'United Kingdom', 'grc': 'Greece', 'hkg': 'Hong Kong',
+  'irl': 'Ireland', 'ind': 'India', 'ita': 'Italy', 'jpn': 'Japan', 'mex': 'Mexico',
+  'nld': 'Netherlands', 'nor': 'Norway', 'per': 'Peru', 'pol': 'Poland', 'prt': 'Portugal',
+  'rus': 'Russia', 'swe': 'Sweden', 'tur': 'Turkey', 'usa': 'United States', 'zaf': 'South Africa'
+};
+
+const normalizeCountry = (val: string): string => {
+  if (!val) return 'Unknown';
+  const clean = val.toLowerCase().trim();
+  // Return mapped name or capitalized version of the input
+  return COUNTRY_CODE_TO_NAME[clean] || (val.charAt(0).toUpperCase() + val.slice(1).toLowerCase());
 };
 
 const PRIORITY_DIMENSIONS = [
@@ -259,7 +273,7 @@ const App: React.FC = () => {
       const dailyMapped: DailyData[] = (ga4Data.rows || []).map((row: any) => ({
         date: `${row.dimensionValues[0].value.slice(0,4)}-${row.dimensionValues[0].value.slice(4,6)}-${row.dimensionValues[0].value.slice(6,8)}`,
         channel: row.dimensionValues[1].value,
-        country: row.dimensionValues[2].value,
+        country: normalizeCountry(row.dimensionValues[2].value),
         queryType: 'Non-Branded' as QueryType,
         landingPage: row.dimensionValues[3].value,
         dateRangeLabel: row.dimensionValues.length > 4 && row.dimensionValues[4].value === 'date_range_1' ? 'previous' : 'current',
@@ -298,11 +312,10 @@ const App: React.FC = () => {
         const data = await resp.json();
         if (data.error) throw new Error(data.error.message);
         return (data.rows || []).map((row: any) => {
-          const countryCode = row.keys[2]?.toLowerCase() || 'unknown';
           return {
             keyword: row.keys[0],
             landingPage: row.keys[1],
-            country: countryMap[countryCode] || row.keys[2],
+            country: normalizeCountry(row.keys[2]),
             queryType: 'Non-Branded' as QueryType,
             date: row.keys[3],
             dateRangeLabel: label,
@@ -470,11 +483,9 @@ const App: React.FC = () => {
     let end = new Date();
 
     if (type === 'this_month') {
-      // From 1st of current month to today
       start = new Date(now.getFullYear(), now.getMonth(), 1);
       end = now;
     } else if (type === 'last_month') {
-      // From 1st of previous month to last day of previous month
       start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       end = new Date(now.getFullYear(), now.getMonth(), 0);
     } else if (type === 'last_7') {
@@ -513,6 +524,11 @@ const App: React.FC = () => {
   const filteredSites = useMemo(() => {
     return availableSites.filter(s => s.siteUrl.toLowerCase().includes(gscSearch.toLowerCase()));
   }, [availableSites, gscSearch]);
+
+  const uniqueCountries = useMemo(() => {
+    const set = new Set([...realDailyData.map(d => d.country), ...realKeywordData.map(k => k.country)]);
+    return Array.from(set).filter(Boolean).sort();
+  }, [realDailyData, realKeywordData]);
 
   if (!user) {
     return (
@@ -724,7 +740,7 @@ const App: React.FC = () => {
                <Globe className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                <select className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" value={filters.country} onChange={e => setFilters({...filters, country: e.target.value})}>
                   <option value="All">Todos Países</option>
-                  {Array.from(new Set([...realDailyData.map(d => d.country), ...realKeywordData.map(k => k.country)])).filter(Boolean).sort().map(c => <option key={c} value={c}>{c}</option>)}
+                  {uniqueCountries.map(c => <option key={c} value={c}>{c}</option>)}
                </select>
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5 border-b sm:border-b-0 sm:border-r border-slate-100">
