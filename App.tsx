@@ -815,7 +815,11 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
   
   const scatterData = useMemo(() => {
     const map: Record<string, { country: string; sessions: number; sales: number; revenue: number }> = {};
-    data.filter((d: any) => d.dateRangeLabel === 'current').forEach((d: any) => {
+    // Only Organic Search
+    data.filter((d: any) => 
+      d.dateRangeLabel === 'current' && 
+      d.channel?.toLowerCase().includes('organic')
+    ).forEach((d: any) => {
       if (!map[d.country]) map[d.country] = { country: d.country, sessions: 0, sales: 0, revenue: 0 };
       map[d.country].sessions += d.sessions;
       map[d.country].sales += d.sales;
@@ -826,8 +830,8 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
       .map(item => ({
         country: item.country,
         traffic: item.sessions,
-        cr: item.sessions > 0 ? (item.sales / item.sessions) * 100 : 0,
-        revenue: item.revenue
+        revenue: item.revenue,
+        sales: item.sales
       }))
       .filter(item => item.traffic > 0);
   }, [data]);
@@ -858,7 +862,7 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
         <KpiCard title="CTR GSC" value={`${(gscStats.current.impressions > 0 ? (gscStats.current.clicks/gscStats.current.impressions)*100 : 0).toFixed(2)}%`} comparison={comparisonEnabled ? gscStats.changes.ctr : undefined} icon={<Percent />} />
         <KpiCard title="CR GA4 Organic" value={`${organicGa4.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? organicGa4.changes.cr : undefined} icon={<TrendingUp />} color="emerald" />
         <KpiCard title="Revenue GA4" value={`€${organicGa4.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.revenue : undefined} icon={<Tag />} color="emerald" prefix="€" />
-        <KpiCard title="Ventas GA4" value={organicGa4.current.sales} comparison={comparisonEnabled ? organicGa4.changes.sales : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.sales : undefined} icon={<ShoppingBag />} color="emerald" />
+        <KpiCard title="Ventas GA4" value={organicGa4.current.sales} comparison={comparisonEnabled ? organicGa4.changes.sales : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.revenue : undefined} icon={<ShoppingBag />} color="emerald" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -877,8 +881,8 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Análisis de Eficiencia por Mercado</h4>
-            <p className="text-[11px] font-bold text-slate-600">Tráfico (X) vs Conversión (Y) | Tamaño = Revenue</p>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Análisis de Eficiencia por Mercado (Organic Search)</h4>
+            <p className="text-[11px] font-bold text-slate-600">Tráfico (X) vs Revenue (Y) | Tamaño = Revenue</p>
           </div>
           <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
              <Activity className="w-4 h-4" />
@@ -890,8 +894,8 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
               <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis type="number" dataKey="traffic" name="Tráfico" unit=" ses." axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
-                <YAxis type="number" dataKey="cr" name="Conversion Rate" unit="%" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
-                <ZAxis type="number" dataKey="revenue" range={[100, 2000]} name="Revenue" unit="€" />
+                <YAxis type="number" dataKey="revenue" name="Revenue" unit=" €" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `€${val.toLocaleString()}`} />
+                <ZAxis type="number" dataKey="revenue" range={[100, 2000]} name="Valor de Mercado" unit=" €" />
                 <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }) => {
                   if (active && payload && payload.length) {
                     const d = payload[0].payload;
@@ -900,22 +904,22 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
                         <p className="text-[10px] font-black uppercase tracking-widest mb-2 border-b border-white/10 pb-2">{d.country}</p>
                         <div className="space-y-1">
                           <p className="text-[9px] flex justify-between gap-4"><span>Tráfico:</span> <span className="font-bold">{d.traffic.toLocaleString()} ses.</span></p>
-                          <p className="text-[9px] flex justify-between gap-4"><span>Conv. Rate:</span> <span className="font-bold text-emerald-400">{d.cr.toFixed(2)}%</span></p>
-                          <p className="text-[9px] flex justify-between gap-4"><span>Revenue:</span> <span className="font-bold text-indigo-400">€{d.revenue.toLocaleString()}</span></p>
+                          <p className="text-[9px] flex justify-between gap-4"><span>Revenue:</span> <span className="font-bold text-emerald-400">€{d.revenue.toLocaleString()}</span></p>
+                          <p className="text-[9px] flex justify-between gap-4"><span>Eficiencia:</span> <span className="font-bold text-indigo-400">€{(d.revenue / d.traffic).toFixed(2)}/ses.</span></p>
                         </div>
                       </div>
                     );
                   }
                   return null;
                 }} />
-                <Scatter name="Mercados" data={scatterData}>
+                <Scatter name="Mercados Orgánicos" data={scatterData}>
                   {scatterData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.cr > 2 ? '#10b981' : entry.cr > 1 ? '#6366f1' : '#f59e0b'} fillOpacity={0.6} strokeWidth={2} stroke={entry.cr > 2 ? '#059669' : entry.cr > 1 ? '#4f46e5' : '#d97706'} />
+                    <Cell key={`cell-${index}`} fill={entry.revenue > 10000 ? '#10b981' : entry.revenue > 5000 ? '#6366f1' : '#f59e0b'} fillOpacity={0.6} strokeWidth={2} stroke={entry.revenue > 10000 ? '#059669' : entry.revenue > 5000 ? '#4f46e5' : '#d97706'} />
                   ))}
                 </Scatter>
               </ScatterChart>
             </ResponsiveContainer>
-          ) : <EmptyState text="No hay suficientes datos para el Scatter Plot..." />}
+          ) : <EmptyState text="No hay suficientes datos orgánicos para el Scatter Plot..." />}
         </div>
       </div>
     </div>
