@@ -155,7 +155,11 @@ const App: React.FC = () => {
   });
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [aiInsights, setAiInsights] = useState<string | null>(null);
+  const [tabInsights, setTabInsights] = useState<Record<DashboardTab, string | null>>({
+    [DashboardTab.ORGANIC_VS_PAID]: null,
+    [DashboardTab.SEO_BY_COUNTRY]: null,
+    [DashboardTab.KEYWORD_DEEP_DIVE]: null
+  });
   const [loadingInsights, setLoadingInsights] = useState(false);
 
   const tokenClientGa4 = useRef<any>(null);
@@ -502,21 +506,55 @@ const App: React.FC = () => {
     setLoadingInsights(true);
     setError(null);
     try {
-      const dashboardName = activeTab === DashboardTab.ORGANIC_VS_PAID ? "Organic vs Paid" : (activeTab === DashboardTab.SEO_BY_COUNTRY ? "SEO by Country" : "Deep Keyword Dive");
-      const summary = `GA4 Sessions: ${filteredDailyData.reduce((a,b)=>a+b.sessions,0)}. GSC Clicks: ${filteredKeywordData.reduce((a,b)=>a+b.clicks,0)}. Revenue: ${currencySymbol}${filteredDailyData.reduce((a,b)=>a+b.revenue,0).toLocaleString()}.`;
-      
+      let summary = "";
+      const dashboardName = activeTab === DashboardTab.ORGANIC_VS_PAID ? "Organic vs Paid Performance" : 
+                           (activeTab === DashboardTab.SEO_BY_COUNTRY ? "SEO Market Efficiency by Country" : 
+                           "Deep URL and Keyword Analysis");
+
+      if (activeTab === DashboardTab.ORGANIC_VS_PAID) {
+        summary = `
+          Context: Analysis of Organic vs Paid Search funnels.
+          Organic Stats: ${channelStats.organic.current.sessions} sessions, £${channelStats.organic.current.revenue.toLocaleString()} revenue, ${channelStats.organic.current.cr.toFixed(2)}% CR.
+          Paid Stats: ${channelStats.paid.current.sessions} sessions, £${channelStats.paid.current.revenue.toLocaleString()} revenue, ${channelStats.paid.current.cr.toFixed(2)}% CR.
+          Funnel Highlights: Organic Add-to-basket: ${channelStats.organic.current.addToCarts}. Paid Add-to-basket: ${channelStats.paid.current.addToCarts}.
+        `;
+      } else if (activeTab === DashboardTab.SEO_BY_COUNTRY) {
+        const topCountries = filteredDailyData
+          .filter(d => d.dateRangeLabel === 'current' && d.channel.toLowerCase().includes('organic'))
+          .slice(0, 5)
+          .map(d => `${d.country} (£${d.revenue.toLocaleString()})`)
+          .join(", ");
+        summary = `
+          Context: Market-level SEO efficiency.
+          Top Organic Markets: ${topCountries}.
+          Total Impressions (GSC): ${filteredKeywordData.reduce((a, b) => a + b.impressions, 0).toLocaleString()}.
+          Total Clicks (GSC): ${filteredKeywordData.reduce((a, b) => a + b.clicks, 0).toLocaleString()}.
+          Global CTR: ${((filteredKeywordData.reduce((a, b) => a + b.clicks, 0) / (filteredKeywordData.reduce((a, b) => a + b.impressions, 0) || 1)) * 100).toFixed(2)}%.
+        `;
+      } else if (activeTab === DashboardTab.KEYWORD_DEEP_DIVE) {
+        const topUrls = Array.from(new Set(filteredKeywordData.map(k => k.landingPage)))
+          .slice(0, 5)
+          .map(url => {
+            const uData = filteredKeywordData.filter(k => k.landingPage === url);
+            return `${url}: ${uData.reduce((a, b) => a + b.clicks, 0)} clicks.`;
+          }).join(" | ");
+        summary = `
+          Context: Granular URL and Keyword Performance.
+          Focus URLs: ${topUrls}.
+          Branded vs Non-Branded split: Branded clicks: ${filteredKeywordData.filter(k => k.queryType === 'Branded').reduce((a, b) => a + b.clicks, 0)}, Non-Branded: ${filteredKeywordData.filter(k => k.queryType === 'Non-Branded').reduce((a, b) => a + b.clicks, 0)}.
+        `;
+      }
+
       let insights: string | undefined;
       
       if (aiProvider === 'openai') {
-        if (!openaiKey) {
-          throw new Error("Please enter your OpenAI API Key in the sidebar.");
-        }
+        if (!openaiKey) throw new Error("Please enter your OpenAI API Key in the sidebar.");
         insights = await getOpenAiInsights(openaiKey, summary, dashboardName);
       } else {
         insights = await getDashboardInsights(summary, dashboardName);
       }
       
-      setAiInsights(insights || null);
+      setTabInsights(prev => ({ ...prev, [activeTab]: insights || null }));
     } catch (err: any) { 
       console.error(err); 
       setError(err.message || "Failed to generate insights.");
@@ -535,14 +573,8 @@ const App: React.FC = () => {
     return Array.from(set).filter(c => c && c !== 'Other' && c !== 'Unknown').sort();
   }, [realDailyData, realKeywordData]);
 
-  // Persist AI Config
-  useEffect(() => {
-    localStorage.setItem('ai_provider', aiProvider);
-  }, [aiProvider]);
-
-  useEffect(() => {
-    localStorage.setItem('openai_api_key', openaiKey);
-  }, [openaiKey]);
+  useEffect(() => { localStorage.setItem('ai_provider', aiProvider); }, [aiProvider]);
+  useEffect(() => { localStorage.setItem('openai_api_key', openaiKey); }, [openaiKey]);
 
   if (!user) {
     return (
@@ -617,15 +649,12 @@ const App: React.FC = () => {
                   className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 focus:ring-1 ring-emerald-500 outline-none transition-all" 
                   placeholder="sk-..." 
                 />
-                <p className="text-[7px] font-medium text-slate-500 leading-tight">
-                  Using gpt-4o-mini for strategic report analysis.
-                </p>
               </div>
             )}
             
             {aiProvider === 'gemini' && (
               <p className="text-[8px] font-black text-indigo-400/70 uppercase tracking-widest text-center py-2 border border-dashed border-indigo-500/20 rounded-xl">
-                Gemini 3 Flash Active
+                Gemini 3 Pro Active
               </p>
             )}
           </div>
@@ -725,14 +754,8 @@ const App: React.FC = () => {
             
             <div className="flex items-center gap-2 px-3 py-1.5 border-b sm:border-b-0 sm:border-r border-slate-100">
                <Filter className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-               <select 
-                 className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" 
-                 value={filters.ga4Dimension} 
-                 onChange={e => setFilters({...filters, ga4Dimension: e.target.value})}
-               >
-                  {availableDimensions.map(d => (
-                    <option key={d.value} value={d.value}>{d.label}</option>
-                  ))}
+               <select className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" value={filters.ga4Dimension} onChange={e => setFilters({...filters, ga4Dimension: e.target.value})}>
+                  {availableDimensions.map(d => (<option key={d.value} value={d.value}>{d.label}</option>))}
                   {availableDimensions.length === 0 && <option value="sessionDefaultChannelGroup">Channel Grouping</option>}
                </select>
             </div>
@@ -753,26 +776,16 @@ const App: React.FC = () => {
                </select>
             </div>
           </div>
-          {realKeywordData.length === 0 && !isLoadingGsc && (
-            <div className="text-[10px] font-bold text-amber-600 bg-amber-50 px-4 py-2 rounded-xl flex items-center gap-2 border border-amber-100">
-               <Info className="w-3 h-3" /> Search Console has a 2-3 day lag. Adjust the range if you don't see Keyword data yet.
-            </div>
-          )}
         </header>
 
         {error && (
           <div className="mb-8 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-3 text-rose-700 shadow-sm animate-in fade-in slide-in-from-top-4">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="w-5 h-5 flex-shrink-0" />
-              <p className="font-bold text-xs">{error}</p>
-            </div>
-            <button onClick={() => setError(null)} className="p-1.5 hover:bg-rose-100 rounded-full transition-colors">
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-3"><AlertCircle className="w-5 h-5 flex-shrink-0" /><p className="font-bold text-xs">{error}</p></div>
+            <button onClick={() => setError(null)} className="p-1.5 hover:bg-rose-100 rounded-full transition-colors"><X className="w-4 h-4" /></button>
           </div>
         )}
 
-        {aiInsights && (
+        {tabInsights[activeTab] && (
           <div className="mb-10 bg-slate-900 rounded-[32px] p-8 md:p-10 text-white shadow-2xl relative animate-in fade-in zoom-in-95 duration-500 overflow-hidden">
             <div className="absolute top-0 right-0 p-12 opacity-10 pointer-events-none">
               {aiProvider === 'openai' ? <Cpu className="w-48 h-48 text-emerald-500" /> : <Sparkles className="w-48 h-48 text-indigo-500" />}
@@ -781,15 +794,13 @@ const App: React.FC = () => {
               <div className="flex items-center gap-3">
                 {aiProvider === 'openai' ? <Cpu className="w-5 h-5 text-emerald-400" /> : <Sparkles className="w-5 h-5 text-indigo-400" />}
                 <div className="flex flex-col">
-                  <h3 className="text-xl font-black">Strategic Analysis Report</h3>
-                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
-                    Generated by {aiProvider === 'openai' ? 'OpenAI GPT-4o-mini' : 'Google Gemini 3 Flash'}
-                  </p>
+                  <h3 className="text-xl font-black">Strategic Report: {activeTab === DashboardTab.ORGANIC_VS_PAID ? "Channels" : activeTab === DashboardTab.SEO_BY_COUNTRY ? "Markets" : "Deep Dive"}</h3>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Generated by {aiProvider === 'openai' ? 'OpenAI GPT-4o-mini' : 'Google Gemini 3 Pro'}</p>
                 </div>
               </div>
-              <button onClick={() => setAiInsights(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X className="w-4 h-4" /></button>
+              <button onClick={() => setTabInsights({...tabInsights, [activeTab]: null})} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X className="w-4 h-4" /></button>
             </div>
-            <div className="prose prose-invert max-w-none font-medium text-sm md:text-base leading-relaxed z-10 relative" dangerouslySetInnerHTML={{ __html: aiInsights.replace(/\n/g, '<br/>') }} />
+            <div className="prose prose-invert max-w-none font-medium text-sm md:text-base leading-relaxed z-10 relative" dangerouslySetInnerHTML={{ __html: tabInsights[activeTab]!.replace(/\n/g, '<br/>') }} />
           </div>
         )}
 
@@ -806,7 +817,7 @@ const App: React.FC = () => {
             className={`flex items-center gap-3 px-10 py-4 ${aiProvider === 'openai' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20' : 'bg-slate-950 hover:bg-slate-800 shadow-slate-900/20'} text-white rounded-3xl text-xs font-black shadow-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50`}
           >
             {loadingInsights ? <RefreshCw className="w-4 h-4 animate-spin" /> : (aiProvider === 'openai' ? <Cpu className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />)} 
-            Generate {aiProvider === 'openai' ? 'GPT-4o-mini' : 'Gemini AI'} Report
+            Generate {activeTab === DashboardTab.ORGANIC_VS_PAID ? 'Channel' : activeTab === DashboardTab.SEO_BY_COUNTRY ? 'Market' : 'SEO'} Insights
           </button>
         </div>
       </main>
@@ -829,19 +840,9 @@ const EcommerceFunnel = ({ title, data, color }: any) => {
                 <span className="text-[10px] font-bold text-slate-500">{stage.value.toLocaleString()}</span>
               </div>
               <div className="h-9 bg-slate-50 rounded-xl overflow-hidden border border-slate-100 p-1">
-                <div 
-                  className={`h-full bg-${color}-600 rounded-lg transition-all duration-1000 ease-out flex items-center justify-end px-3 min-w-[5%]`}
-                  style={{ width: `${width}%` }}
-                >
-                  <span className="text-[8px] font-black text-white">{width.toFixed(1)}%</span>
-                </div>
+                <div className={`h-full bg-${color}-600 rounded-lg transition-all duration-1000 ease-out flex items-center justify-end px-3 min-w-[5%]`} style={{ width: `${width}%` }}><span className="text-[8px] font-black text-white">{width.toFixed(1)}%</span></div>
               </div>
-              {i < data.length - 1 && (
-                <div className="absolute left-1/2 -bottom-4.5 -translate-x-1/2 z-10 flex flex-col items-center">
-                   <div className="w-[1px] h-3 bg-slate-200"></div>
-                   <ChevronDown className="w-3 h-3 text-slate-300 -mt-1" />
-                </div>
-              )}
+              {i < data.length - 1 && (<div className="absolute left-1/2 -bottom-4.5 -translate-x-1/2 z-10 flex flex-col items-center"><div className="w-[1px] h-3 bg-slate-200"></div><ChevronDown className="w-3 h-3 text-slate-300 -mt-1" /></div>)}
             </div>
           );
         })}
@@ -857,48 +858,18 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
     if (!data.length) return [];
     const currentData = data.filter((d: any) => d.dateRangeLabel === 'current');
     const map: any = {};
-    
     currentData.forEach((d: any) => {
       const isOrg = d.channel?.toLowerCase().includes('organic');
       const isPaid = d.channel?.toLowerCase().includes('paid') || d.channel?.toLowerCase().includes('cpc');
       const isSearch = isOrg || isPaid;
-
       let key = d.date;
       if (grouping === 'weekly') key = formatDate(getStartOfWeek(new Date(d.date)));
       else if (grouping === 'monthly') key = `${d.date.slice(0, 7)}-01`;
-      
-      if (!map[key]) {
-        map[key] = { 
-          date: key, 
-          organic: 0, 
-          paid: 0, 
-          organicRevenue: 0, 
-          paidRevenue: 0, 
-          searchCombined: 0, 
-          othersCombined: 0,
-          searchRevenueCombined: 0,
-          othersRevenueCombined: 0
-        };
-      }
-
-      if (isOrg) { 
-        map[key].organic += d.sessions; 
-        map[key].organicRevenue += d.revenue; 
-      }
-      if (isPaid) { 
-        map[key].paid += d.sessions; 
-        map[key].paidRevenue += d.revenue; 
-      }
-      
-      if (isSearch) {
-        map[key].searchCombined += d.sessions;
-        map[key].searchRevenueCombined += d.revenue;
-      } else {
-        map[key].othersCombined += d.sessions;
-        map[key].othersRevenueCombined += d.revenue;
-      }
+      if (!map[key]) map[key] = { date: key, organic: 0, paid: 0, organicRevenue: 0, paidRevenue: 0, searchCombined: 0, othersCombined: 0, searchRevenueCombined: 0, othersRevenueCombined: 0 };
+      if (isOrg) { map[key].organic += d.sessions; map[key].organicRevenue += d.revenue; }
+      if (isPaid) { map[key].paid += d.sessions; map[key].paidRevenue += d.revenue; }
+      if (isSearch) { map[key].searchCombined += d.sessions; map[key].searchRevenueCombined += d.revenue; } else { map[key].othersCombined += d.sessions; map[key].othersRevenueCombined += d.revenue; }
     });
-
     return Object.values(map).sort((a: any, b: any) => a.date.localeCompare(b.date));
   }, [data, grouping]);
 
@@ -953,10 +924,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
           <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Revenue Trend</h4>
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl">
-            <Tag className="w-3 h-3" />
-            <span className="text-[9px] font-black uppercase tracking-widest">Total Revenue ({currencySymbol})</span>
-          </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl"><Tag className="w-3 h-3" /><span className="text-[9px] font-black uppercase tracking-widest">Total Revenue ({currencySymbol})</span></div>
         </div>
         <div className="h-[300px]">
           {chartData.length > 0 ? (
@@ -982,96 +950,39 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
 
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-          <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Search Channels weight Evolution</h4>
-            <p className="text-[11px] font-bold text-slate-600">Total Search (Paid + Organic) vs All Other Channels combined</p>
-          </div>
+          <div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Search Channels weight Evolution</h4><p className="text-[11px] font-bold text-slate-600">Total Search (Paid + Organic) vs All Other Channels combined</p></div>
           <div className="flex bg-slate-100 p-1 rounded-xl">
-            <button 
-              onClick={() => setWeightMetric('sessions')} 
-              className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'sessions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
-            >
-              Sessions
-            </button>
-            <button 
-              onClick={() => setWeightMetric('revenue')} 
-              className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'revenue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
-            >
-              Revenue
-            </button>
+            <button onClick={() => setWeightMetric('sessions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'sessions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Sessions</button>
+            <button onClick={() => setWeightMetric('revenue')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'revenue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Revenue</button>
           </div>
         </div>
-
         <div className="h-[400px]">
           {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData}>
                 <defs>
-                  <linearGradient id="colorSearch" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorOthers" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#94a3b8" stopOpacity={0}/>
-                  </linearGradient>
+                  <linearGradient id="colorSearch" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/><stop offset="95%" stopColor="#6366f1" stopOpacity={0}/></linearGradient>
+                  <linearGradient id="colorOthers" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#94a3b8" stopOpacity={0.1}/><stop offset="95%" stopColor="#94a3b8" stopOpacity={0}/></linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{fontSize: 9, fontWeight: 700}} 
-                  tickFormatter={(val) => weightMetric === 'revenue' ? `${currencySymbol}${val.toLocaleString()}` : val.toLocaleString()}
-                />
-                <Tooltip 
-                  contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                  formatter={(val: number) => [weightMetric === 'revenue' ? `${currencySymbol}${val.toLocaleString()}` : val.toLocaleString(), '']}
-                />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => weightMetric === 'revenue' ? `${currencySymbol}${val.toLocaleString()}` : val.toLocaleString()} />
+                <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} formatter={(val: number) => [weightMetric === 'revenue' ? `${currencySymbol}${val.toLocaleString()}` : val.toLocaleString(), '']} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
-                <Area 
-                  name="Total Search (Paid + Organic)" 
-                  type="monotone" 
-                  dataKey={weightMetric === 'sessions' ? 'searchCombined' : 'searchRevenueCombined'} 
-                  stroke="#6366f1" 
-                  strokeWidth={3} 
-                  fillOpacity={1} 
-                  fill="url(#colorSearch)" 
-                />
-                <Area 
-                  name="All Other Channels" 
-                  type="monotone" 
-                  dataKey={weightMetric === 'sessions' ? 'othersCombined' : 'othersRevenueCombined'} 
-                  stroke="#94a3b8" 
-                  strokeWidth={3} 
-                  fillOpacity={1} 
-                  fill="url(#colorOthers)" 
-                />
+                <Area name="Total Search (Paid + Organic)" type="monotone" dataKey={weightMetric === 'sessions' ? 'searchCombined' : 'searchRevenueCombined'} stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorSearch)" />
+                <Area name="All Other Channels" type="monotone" dataKey={weightMetric === 'sessions' ? 'othersCombined' : 'othersRevenueCombined'} stroke="#94a3b8" strokeWidth={3} fillOpacity={1} fill="url(#colorOthers)" />
               </AreaChart>
             </ResponsiveContainer>
           ) : <EmptyState text="No data available for weight analysis" />}
         </div>
-        
         <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col items-center">
               <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Avg Search Share (Sessions)</p>
-              <p className="text-xl font-black text-indigo-600">
-                {(() => {
-                  const total = (chartData as any[]).reduce((acc: number, d: any) => acc + (d.searchCombined || 0) + (d.othersCombined || 0), 0);
-                  const search = (chartData as any[]).reduce((acc: number, d: any) => acc + (d.searchCombined || 0), 0);
-                  return total > 0 ? ((search / total) * 100).toFixed(1) : "0.0";
-                })()}%
-              </p>
+              <p className="text-xl font-black text-indigo-600">{(() => { const total = (chartData as any[]).reduce((acc: number, d: any) => acc + (d.searchCombined || 0) + (d.othersCombined || 0), 0); const search = (chartData as any[]).reduce((acc: number, d: any) => acc + (d.searchCombined || 0), 0); return total > 0 ? ((search / total) * 100).toFixed(1) : "0.0"; })()}%</p>
            </div>
            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col items-center">
               <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Avg Search Share (Revenue)</p>
-              <p className="text-xl font-black text-emerald-600">
-                {(() => {
-                  const total = (chartData as any[]).reduce((acc: number, d: any) => acc + (d.searchRevenueCombined || 0) + (d.othersRevenueCombined || 0), 0);
-                  const search = (chartData as any[]).reduce((acc: number, d: any) => acc + (d.searchRevenueCombined || 0), 0);
-                  return total > 0 ? ((search / total) * 100).toFixed(1) : "0.0";
-                })()}%
-              </p>
+              <p className="text-xl font-black text-emerald-600">{(() => { const total = (chartData as any[]).reduce((acc: number, d: any) => acc + (d.searchRevenueCombined || 0) + (d.othersRevenueCombined || 0), 0); const search = (chartData as any[]).reduce((acc: number, d: any) => acc + (d.searchRevenueCombined || 0), 0); return total > 0 ? ((search / total) * 100).toFixed(1) : "0.0"; })()}%</p>
            </div>
         </div>
       </div>
@@ -1085,95 +996,34 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, c
   
   const scatterData = useMemo(() => {
     const map: Record<string, { country: string; sessions: number; sales: number; revenue: number }> = {};
-    data.filter((d: any) => 
-      d.dateRangeLabel === 'current' && 
-      d.channel?.toLowerCase().includes('organic')
-    ).forEach((d: any) => {
-      if (!map[d.country]) map[d.country] = { country: d.country, sessions: 0, sales: 0, revenue: 0 };
-      map[d.country].sessions += d.sessions;
-      map[d.country].sales += d.sales;
-      map[d.country].revenue += d.revenue;
-    });
-
-    return Object.values(map)
-      .map(item => ({
-        country: item.country,
-        traffic: item.sessions,
-        revenue: item.revenue,
-        sales: item.sales
-      }))
-      .filter(item => item.traffic > 0);
+    data.filter((d: any) => d.dateRangeLabel === 'current' && d.channel?.toLowerCase().includes('organic')).forEach((d: any) => { if (!map[d.country]) map[d.country] = { country: d.country, sessions: 0, sales: 0, revenue: 0 }; map[d.country].sessions += d.sessions; map[d.country].sales += d.sales; map[d.country].revenue += d.revenue; });
+    return Object.values(map).map(item => ({ country: item.country, traffic: item.sessions, revenue: item.revenue, sales: item.sales })).filter(item => item.traffic > 0);
   }, [data]);
 
   const shareOfVoiceWalletData = useMemo(() => {
     const currentKeywords = keywordData.filter(k => k.dateRangeLabel === 'current');
     const currentOrganicDaily = data.filter(d => d.dateRangeLabel === 'current' && d.channel?.toLowerCase().includes('organic'));
-    
     const totalImpressions = currentKeywords.reduce((acc, k) => acc + k.impressions, 0);
     const totalOrganicRevenue = currentOrganicDaily.reduce((acc, d) => acc + d.revenue, 0);
-
     const map: Record<string, { country: string; impressions: number; revenue: number }> = {};
-    
-    currentKeywords.forEach(k => {
-      if (!map[k.country]) map[k.country] = { country: k.country, impressions: 0, revenue: 0 };
-      map[k.country].impressions += k.impressions;
-    });
-
-    currentOrganicDaily.forEach(d => {
-      if (!map[d.country]) map[d.country] = { country: d.country, impressions: 0, revenue: 0 };
-      map[d.country].revenue += d.revenue;
-    });
-
-    return Object.values(map)
-      .map(item => ({
-        country: item.country,
-        sov: totalImpressions > 0 ? (item.impressions / totalImpressions) * 100 : 0,
-        sow: totalOrganicRevenue > 0 ? (item.revenue / totalOrganicRevenue) * 100 : 0
-      }))
-      .filter(item => item.sov > 0 || item.sow > 0)
-      .sort((a, b) => b.sov - a.sov)
-      .slice(0, 10);
+    currentKeywords.forEach(k => { if (!map[k.country]) map[k.country] = { country: k.country, impressions: 0, revenue: 0 }; map[k.country].impressions += k.impressions; });
+    currentOrganicDaily.forEach(d => { if (!map[d.country]) map[d.country] = { country: d.country, impressions: 0, revenue: 0 }; map[d.country].revenue += d.revenue; });
+    return Object.values(map).map(item => ({ country: item.country, sov: totalImpressions > 0 ? (item.impressions / totalImpressions) * 100 : 0, sow: totalOrganicRevenue > 0 ? (item.revenue / totalOrganicRevenue) * 100 : 0 })).filter(item => item.sov > 0 || item.sow > 0).sort((a, b) => b.sov - a.sov).slice(0, 10);
   }, [keywordData, data]);
 
   const opportunityData = useMemo(() => {
     const currentKeywords = keywordData.filter(k => k.dateRangeLabel === 'current');
     const map: Record<string, { country: string; impressions: number; clicks: number }> = {};
-    
-    currentKeywords.forEach(k => {
-      if (!map[k.country]) map[k.country] = { country: k.country, impressions: 0, clicks: 0 };
-      map[k.country].impressions += k.impressions;
-      map[k.country].clicks += k.clicks;
-    });
-
-    return Object.values(map)
-      .map(item => ({
-        ...item,
-        ctr: item.impressions > 0 ? (item.clicks / item.impressions) * 100 : 0
-      }))
-      .sort((a, b) => b.impressions - a.impressions)
-      .slice(0, 15)
-      .sort((a, b) => a.ctr - b.ctr)
-      .slice(0, 10);
+    currentKeywords.forEach(k => { if (!map[k.country]) map[k.country] = { country: k.country, impressions: 0, clicks: 0 }; map[k.country].impressions += k.impressions; map[k.country].clicks += k.clicks; });
+    return Object.values(map).map(item => ({ ...item, ctr: item.impressions > 0 ? (item.clicks / item.impressions) * 100 : 0 })).sort((a, b) => b.impressions - a.impressions).slice(0, 15).sort((a, b) => a.ctr - b.ctr).slice(0, 10);
   }, [keywordData]);
 
   const opportunityDrillDown = useMemo(() => {
     if (!selectedOpportunityCountry) return [];
     const currentKeywords = keywordData.filter(k => k.dateRangeLabel === 'current' && k.country === selectedOpportunityCountry);
-    
     const pageMap: Record<string, { url: string; impressions: number; clicks: number }> = {};
-    currentKeywords.forEach(k => {
-      if (!pageMap[k.landingPage]) pageMap[k.landingPage] = { url: k.landingPage, impressions: 0, clicks: 0 };
-      pageMap[k.landingPage].impressions += k.impressions;
-      pageMap[k.landingPage].clicks += k.clicks;
-    });
-
-    return Object.values(pageMap)
-      .map(item => ({
-        ...item,
-        ctr: item.impressions > 0 ? (item.clicks / item.impressions) * 100 : 0
-      }))
-      .sort((a, b) => b.impressions - a.impressions)
-      .slice(0, 5);
+    currentKeywords.forEach(k => { if (!pageMap[k.landingPage]) pageMap[k.landingPage] = { url: k.landingPage, impressions: 0, clicks: 0 }; pageMap[k.landingPage].impressions += k.impressions; pageMap[k.landingPage].clicks += k.clicks; });
+    return Object.values(pageMap).map(item => ({ ...item, ctr: item.impressions > 0 ? (item.clicks / item.impressions) * 100 : 0 })).sort((a, b) => b.impressions - a.impressions).slice(0, 5);
   }, [selectedOpportunityCountry, keywordData]);
 
   const gscStats = useMemo(() => {
@@ -1187,10 +1037,7 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, c
 
   const countryStats = useMemo(() => {
     const map: any = {};
-    keywordData.filter((k:any) => k.dateRangeLabel === 'current').forEach((k: any) => {
-      if (!map[k.country]) map[k.country] = { country: k.country, clicks: 0, impressions: 0 };
-      map[k.country].clicks += k.clicks; map[k.country].impressions += k.impressions;
-    });
+    keywordData.filter((k:any) => k.dateRangeLabel === 'current').forEach((k: any) => { if (!map[k.country]) map[k.country] = { country: k.country, clicks: 0, impressions: 0 }; map[k.country].clicks += k.clicks; map[k.country].impressions += k.impressions; });
     return Object.values(map).sort((a: any, b: any) => b.clicks - a.clicks).slice(0, 10);
   }, [keywordData]);
 
@@ -1204,185 +1051,30 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, c
         <KpiCard title="GA4 Revenue" value={`${currencySymbol}${organicGa4.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.revenue : undefined} icon={<Tag />} color="emerald" prefix={currencySymbol} />
         <KpiCard title="GA4 Sales" value={organicGa4.current.sales} comparison={comparisonEnabled ? organicGa4.changes.sales : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.revenue : undefined} icon={<ShoppingBag />} color="emerald" />
       </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {[ {title: 'Clicks by Market', key: 'clicks', color: '#6366f1'}, {title: 'Visibility by Market', key: 'impressions', color: '#0ea5e9'} ].map(chart => (
           <div key={chart.key} className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm h-[400px]">
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-8">{chart.title}</h4>
-            {countryStats.length > 0 ? (
-              <ResponsiveContainer width="100%" height="85%">
-                <BarChart data={countryStats}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="country" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} /><YAxis axisLine={false} tickLine={false} tick={{fontSize: 9}} /><Tooltip cursor={{fill: '#f8fafc'}} /><Bar dataKey={chart.key} fill={chart.color} radius={[6, 6, 0, 0]} /></BarChart>
-              </ResponsiveContainer>
-            ) : <EmptyState text="Syncing markets..." />}
+            {countryStats.length > 0 ? (<ResponsiveContainer width="100%" height="85%"><BarChart data={countryStats}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="country" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} /><YAxis axisLine={false} tickLine={false} tick={{fontSize: 9}} /><Tooltip cursor={{fill: '#f8fafc'}} /><Bar dataKey={chart.key} fill={chart.color} radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer>) : <EmptyState text="Syncing markets..." />}
           </div>
         ))}
       </div>
-
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Market Efficiency Analysis (Organic Search)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Traffic (X) vs Revenue (Y) | Size = Revenue</p>
-          </div>
-          <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
-             <Activity className="w-4 h-4" />
-          </div>
-        </div>
+        <div className="flex justify-between items-center mb-8"><div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Market Efficiency Analysis (Organic Search)</h4><p className="text-[11px] font-bold text-slate-600">Traffic (X) vs Revenue (Y) | Size = Revenue</p></div><div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><Activity className="w-4 h-4" /></div></div>
         <div className="h-[450px]">
-          {scatterData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis type="number" dataKey="traffic" name="Traffic" unit=" sess." axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
-                <YAxis type="number" dataKey="revenue" name="Revenue" unit={` ${currencySymbol}`} axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} />
-                <ZAxis type="number" dataKey="revenue" range={[100, 2000]} name="Market Value" unit={` ${currencySymbol}`} />
-                <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }) => {
-                  if (active && payload && payload.length) {
-                    const d = payload[0].payload;
-                    return (
-                      <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10">
-                        <p className="text-[10px] font-black uppercase tracking-widest mb-2 border-b border-white/10 pb-2">{d.country}</p>
-                        <div className="space-y-1">
-                          <p className="text-[9px] flex justify-between gap-4"><span>Traffic:</span> <span className="font-bold">{d.traffic.toLocaleString()} sess.</span></p>
-                          <p className="text-[9px] flex justify-between gap-4"><span>Revenue:</span> <span className="font-bold text-emerald-400">{currencySymbol}{d.revenue.toLocaleString()}</span></p>
-                          <p className="text-[9px] flex justify-between gap-4"><span>Efficiency:</span> <span className="font-bold text-indigo-400">{currencySymbol}{(d.revenue / d.traffic).toFixed(2)}/sess.</span></p>
-                        </div>
-                      </div>
-                    );
-                  }
-                  return null;
-                }} />
-                <Scatter name="Organic Markets" data={scatterData}>
-                  {scatterData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.revenue > 10000 ? '#10b981' : entry.revenue > 5000 ? '#6366f1' : '#f59e0b'} fillOpacity={0.6} strokeWidth={2} stroke={entry.revenue > 10000 ? '#059669' : entry.revenue > 5000 ? '#4f46e5' : '#d97706'} />
-                  ))}
-                </Scatter>
-              </ScatterChart>
-            </ResponsiveContainer>
-          ) : <EmptyState text="Not enough organic data for the Scatter Plot..." />}
+          {scatterData.length > 0 ? (<ResponsiveContainer width="100%" height="100%"><ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis type="number" dataKey="traffic" name="Traffic" unit=" sess." axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} /><YAxis type="number" dataKey="revenue" name="Revenue" unit={` ${currencySymbol}`} axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} /><ZAxis type="number" dataKey="revenue" range={[100, 2000]} name="Market Value" unit={` ${currencySymbol}`} /><Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }) => { if (active && payload && payload.length) { const d = payload[0].payload; return (<div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10"><p className="text-[10px] font-black uppercase tracking-widest mb-2 border-b border-white/10 pb-2">{d.country}</p><div className="space-y-1"><p className="text-[9px] flex justify-between gap-4"><span>Traffic:</span> <span className="font-bold">{d.traffic.toLocaleString()} sess.</span></p><p className="text-[9px] flex justify-between gap-4"><span>Revenue:</span> <span className="font-bold text-emerald-400">{currencySymbol}{d.revenue.toLocaleString()}</span></p><p className="text-[9px] flex justify-between gap-4"><span>Efficiency:</span> <span className="font-bold text-indigo-400">{currencySymbol}{(d.revenue / d.traffic).toFixed(2)}/sess.</span></p></div></div>); } return null; }} /><Scatter name="Organic Markets" data={scatterData}>{scatterData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.revenue > 10000 ? '#10b981' : entry.revenue > 5000 ? '#6366f1' : '#f59e0b'} fillOpacity={0.6} strokeWidth={2} stroke={entry.revenue > 10000 ? '#059669' : entry.revenue > 5000 ? '#4f46e5' : '#d97706'} />))}</Scatter></ScatterChart></ResponsiveContainer>) : <EmptyState text="Not enough organic data for the Scatter Plot..." />}
         </div>
       </div>
-
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Share of Voice vs. Share of Wallet</h4>
-            <p className="text-[11px] font-bold text-slate-600">Comparison: Visibility (% GSC Impr) vs Organic Profitability (% GA4 Rev)</p>
-          </div>
-          <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
-             <BarChart3 className="w-4 h-4" />
-          </div>
-        </div>
-        <div className="h-[400px]">
-          {shareOfVoiceWalletData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={shareOfVoiceWalletData} barGap={8}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="country" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} unit="%" />
-                <Tooltip 
-                  cursor={{fill: '#f8fafc'}}
-                  contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                  formatter={(val: number) => [`${val.toFixed(1)}%`, '']}
-                />
-                <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{fontSize: 9, fontWeight: 800, textTransform: 'uppercase', paddingBottom: 20}} />
-                <Bar name="Share of Voice (Impr %)" dataKey="sov" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
-                <Bar name="Share of Wallet (Revenue %)" dataKey="sow" fill="#10b981" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : <EmptyState text="Insufficient data for Share comparison..." />}
-        </div>
-      </div>
-
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Opportunity Map (Pure GSC)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Unmet Demand: Markets with high Visibility but low click capture</p>
-          </div>
-          <div className="p-2 bg-rose-50 text-rose-600 rounded-xl">
-             <Map className="w-4 h-4" />
-          </div>
-        </div>
-        
+        <div className="flex justify-between items-center mb-8"><div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Opportunity Map (Pure GSC)</h4><p className="text-[11px] font-bold text-slate-600">Unmet Demand: Markets with high Visibility but low click capture</p></div><div className="p-2 bg-rose-50 text-rose-600 rounded-xl"><Map className="w-4 h-4" /></div></div>
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
           <div className="space-y-4">
-            <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Zap className="w-3 h-3 text-amber-500" /> Top 10 Opportunity Markets
-            </h5>
-            <div className="bg-slate-50 rounded-2xl border border-slate-100 overflow-hidden">
-              <table className="w-full text-left text-[11px]">
-                <thead className="bg-slate-100 text-slate-500 font-black uppercase text-[8px] tracking-widest">
-                  <tr>
-                    <th className="px-4 py-3">Country</th>
-                    <th className="px-4 py-3 text-right">Impressions</th>
-                    <th className="px-4 py-3 text-right">CTR</th>
-                    <th className="px-4 py-3"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {opportunityData.map((item) => (
-                    <tr 
-                      key={item.country} 
-                      onClick={() => setSelectedOpportunityCountry(item.country)}
-                      className={`cursor-pointer transition-all hover:bg-white ${selectedOpportunityCountry === item.country ? 'bg-white border-l-4 border-rose-500' : ''}`}
-                    >
-                      <td className="px-4 py-4 font-black text-slate-800">{item.country}</td>
-                      <td className="px-4 py-4 text-right font-medium text-slate-500">{item.impressions.toLocaleString()}</td>
-                      <td className="px-4 py-4 text-right">
-                        <span className={`px-2 py-1 rounded-lg font-bold ${item.ctr < 1.5 ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
-                          {item.ctr.toFixed(2)}%
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 text-right"><ChevronRight className="w-4 h-4 text-slate-300" /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Zap className="w-3 h-3 text-amber-500" /> Top 10 Opportunity Markets</h5>
+            <div className="bg-slate-50 rounded-2xl border border-slate-100 overflow-hidden"><table className="w-full text-left text-[11px]"><thead className="bg-slate-100 text-slate-500 font-black uppercase text-[8px] tracking-widest"><tr><th className="px-4 py-3">Country</th><th className="px-4 py-3 text-right">Impressions</th><th className="px-4 py-3 text-right">CTR</th><th className="px-4 py-3"></th></tr></thead><tbody className="divide-y divide-slate-100">{opportunityData.map((item) => (<tr key={item.country} onClick={() => setSelectedOpportunityCountry(item.country)} className={`cursor-pointer transition-all hover:bg-white ${selectedOpportunityCountry === item.country ? 'bg-white border-l-4 border-rose-500' : ''}`}><td className="px-4 py-4 font-black text-slate-800">{item.country}</td><td className="px-4 py-4 text-right font-medium text-slate-500">{item.impressions.toLocaleString()}</td><td className="px-4 py-4 text-right"><span className={`px-2 py-1 rounded-lg font-bold ${item.ctr < 1.5 ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>{item.ctr.toFixed(2)}%</span></td><td className="px-4 py-4 text-right"><ChevronRight className="w-4 h-4 text-slate-300" /></td></tr>))}</tbody></table></div>
           </div>
-
           <div className="flex flex-col">
-            <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Target className="w-3 h-3 text-indigo-500" /> Opportunity Drill-down {selectedOpportunityCountry && `: ${selectedOpportunityCountry}`}
-            </h5>
-            {selectedOpportunityCountry ? (
-              <div className="space-y-4 flex-1">
-                {opportunityDrillDown.map((item, idx) => (
-                  <div key={idx} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors">
-                    <div className="flex justify-between items-start mb-3">
-                      <p className="text-[10px] font-bold text-slate-900 break-all max-w-[80%]">{item.url}</p>
-                      <span className="bg-slate-100 px-2 py-1 rounded-lg text-[9px] font-black text-slate-500">GSC DATA</span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="bg-slate-50 p-2 rounded-xl border border-slate-100">
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Impressions</p>
-                        <p className="text-[11px] font-black text-slate-800">{item.impressions.toLocaleString()}</p>
-                      </div>
-                      <div className="bg-slate-50 p-2 rounded-xl border border-slate-100">
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Clicks</p>
-                        <p className="text-[11px] font-black text-slate-800">{item.clicks.toLocaleString()}</p>
-                      </div>
-                      <div className="bg-rose-50 p-2 rounded-xl border border-rose-100">
-                        <p className="text-[8px] font-black text-rose-400 uppercase tracking-tighter">Local CTR</p>
-                        <p className="text-[11px] font-black text-rose-600">{item.ctr.toFixed(2)}%</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                <div className="mt-4 p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-3">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-[10px] font-medium text-amber-700 leading-relaxed">
-                    These URLs have high visibility in <strong>{selectedOpportunityCountry}</strong> but attract few clicks. Consider optimising the <strong>SEO Snippet (Metatitle/Description)</strong> or reviewing content relevance for the local language/dialect.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-[32px] p-10 text-center opacity-40">
-                <MousePointer2 className="w-10 h-10 mb-4" />
-                <p className="text-xs font-black uppercase tracking-widest text-slate-400">Select a country from the list to see its opportunity pages</p>
-              </div>
-            )}
+            <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Target className="w-3 h-3 text-indigo-500" /> Opportunity Drill-down {selectedOpportunityCountry && `: ${selectedOpportunityCountry}`}</h5>
+            {selectedOpportunityCountry ? (<div className="space-y-4 flex-1">{opportunityDrillDown.map((item, idx) => (<div key={idx} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors"><div className="flex justify-between items-start mb-3"><p className="text-[10px] font-bold text-slate-900 break-all max-w-[80%]">{item.url}</p><span className="bg-slate-100 px-2 py-1 rounded-lg text-[9px] font-black text-slate-500">GSC DATA</span></div><div className="grid grid-cols-3 gap-2"><div className="bg-slate-50 p-2 rounded-xl border border-slate-100"><p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Impressions</p><p className="text-[11px] font-black text-slate-800">{item.impressions.toLocaleString()}</p></div><div className="bg-slate-50 p-2 rounded-xl border border-slate-100"><p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Clicks</p><p className="text-[11px] font-black text-slate-800">{item.clicks.toLocaleString()}</p></div><div className="bg-rose-50 p-2 rounded-xl border border-rose-100"><p className="text-[8px] font-black text-rose-400 uppercase tracking-tighter">Local CTR</p><p className="text-[11px] font-black text-rose-600">{item.ctr.toFixed(2)}%</p></div></div></div>))}<div className="mt-4 p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-3"><AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" /><p className="text-[10px] font-medium text-amber-700 leading-relaxed">These URLs have high visibility in <strong>{selectedOpportunityCountry}</strong> but attract few clicks. Consider optimising the <strong>SEO Snippet (Metatitle/Description)</strong>.</p></div></div>) : (<div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-[32px] p-10 text-center opacity-40"><MousePointer2 className="w-10 h-10 mb-4" /><p className="text-xs font-black uppercase tracking-widest text-slate-400">Select a country from the list to see its opportunity pages</p></div>)}
           </div>
         </div>
       </div>
@@ -1398,21 +1090,12 @@ const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, compa
     keywords.forEach((k: any) => {
       const url = k.landingPage || 'Unknown URL';
       if (!map[url]) map[url] = { url, clicks: 0, impressions: 0, prevClicks: 0, children: {} };
-      if (k.dateRangeLabel === 'current') { map[url].clicks += k.clicks; map[url].impressions += k.impressions; }
-      else { map[url].prevClicks += k.clicks; }
+      if (k.dateRangeLabel === 'current') { map[url].clicks += k.clicks; map[url].impressions += k.impressions; } else { map[url].prevClicks += k.clicks; }
       const kw = k.keyword || 'Not provided';
       if (!map[url].children[kw]) map[url].children[kw] = { keyword: kw, queryType: k.queryType, clicks: 0, impressions: 0, prevClicks: 0 };
-      if (k.dateRangeLabel === 'current') { map[url].children[kw].clicks += k.clicks; map[url].children[kw].impressions += k.impressions; }
-      else { map[url].children[kw].prevClicks += k.clicks; }
+      if (k.dateRangeLabel === 'current') { map[url].children[kw].clicks += k.clicks; map[url].children[kw].impressions += k.impressions; } else { map[url].children[kw].prevClicks += k.clicks; }
     });
-    return Object.values(map).map((page: any) => ({
-      ...page,
-      ctr: page.impressions > 0 ? (page.clicks / page.impressions) * 100 : 0,
-      clickChange: page.prevClicks === 0 ? 0 : ((page.clicks - page.prevClicks) / page.prevClicks) * 100,
-      children: Object.values(page.children).sort((a: any, b: any) => b.clicks - a.clicks)
-    }))
-    .filter((p: any) => p.url.toLowerCase().includes(searchTerm.toLowerCase()) || p.children.some((c: any) => c.keyword.toLowerCase().includes(searchTerm.toLowerCase())))
-    .sort((a: any, b: any) => b.clicks - a.clicks);
+    return Object.values(map).map((page: any) => ({ ...page, ctr: page.impressions > 0 ? (page.clicks / page.impressions) * 100 : 0, clickChange: page.prevClicks === 0 ? 0 : ((page.clicks - page.prevClicks) / page.prevClicks) * 100, children: Object.values(page.children).sort((a: any, b: any) => b.clicks - a.clicks) })).filter((p: any) => p.url.toLowerCase().includes(searchTerm.toLowerCase()) || p.children.some((c: any) => c.keyword.toLowerCase().includes(searchTerm.toLowerCase()))).sort((a: any, b: any) => b.clicks - a.clicks);
   }, [keywords, searchTerm]);
 
   return (
@@ -1421,47 +1104,12 @@ const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, compa
         <div><h3 className="text-xl font-black mb-1">Deep SEO Drill-down</h3><p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">URLs & Keywords</p></div>
         <div className="relative w-full md:w-80"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" /><input type="text" placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-medium focus:ring-2 ring-indigo-500/10 outline-none" /></div>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs table-fixed min-w-[1000px]">
-          <thead className="bg-slate-50 text-slate-400 font-black uppercase text-[9px] tracking-widest border-b border-slate-100">
-            <tr><th className="px-6 py-4 w-16"></th><th className="px-4 py-4 w-[50%]">Page</th><th className="px-6 py-4 text-center w-32">Impr.</th><th className="px-6 py-4 text-center w-32">Clicks</th><th className="px-6 py-4 text-center w-28">CTR</th></tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {aggregatedByUrl.slice(0, 100).map((row: any) => (
-              <React.Fragment key={row.url}>
-                <tr onClick={() => toggleUrl(row.url)} className="group cursor-pointer hover:bg-slate-50/50 transition-all">
-                  <td className="pl-6 py-5 flex justify-center">{expandedUrls.has(row.url) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</td>
-                  <td className="px-4 py-5 font-bold text-slate-900 break-all">{row.url}</td>
-                  <td className="px-6 py-5 text-center text-slate-500">{row.impressions.toLocaleString()}</td>
-                  <td className="px-6 py-5 text-center font-black text-slate-900">{row.clicks.toLocaleString()}</td>
-                  <td className="px-6 py-5 text-center"><span className="px-2 py-1 rounded-lg bg-slate-100 font-bold">{row.ctr.toFixed(1)}%</span></td>
-                </tr>
-                {expandedUrls.has(row.url) && row.children.map((child: any, ci: number) => (
-                  <tr key={ci} className="bg-slate-50/30 border-l-4 border-indigo-500">
-                    <td className="py-3"></td><td className="px-4 py-3 pl-14"><div className="flex items-center gap-3"><span className="text-slate-700 font-semibold">{child.keyword}</span><span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase ${child.queryType === 'Branded' ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-500'}`}>{child.queryType}</span></div></td>
-                    <td className="px-6 py-3 text-center text-slate-400">{child.impressions.toLocaleString()}</td><td className="px-6 py-3 text-center text-slate-600 font-bold">{child.clicks.toLocaleString()}</td><td className="px-6 py-3 text-center text-slate-400 font-bold">{(child.impressions > 0 ? child.clicks/child.impressions*100 : 0).toFixed(1)}%</td>
-                  </tr>
-                ))}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
-        {aggregatedByUrl.length === 0 && <div className="px-6 py-20 text-center text-slate-400 italic font-medium">No results found. Try broadening the date range.</div>}
-      </div>
+      <div className="overflow-x-auto"><table className="w-full text-left text-xs table-fixed min-w-[1000px]"><thead className="bg-slate-50 text-slate-400 font-black uppercase text-[9px] tracking-widest border-b border-slate-100"><tr><th className="px-6 py-4 w-16"></th><th className="px-4 py-4 w-[50%]">Page</th><th className="px-6 py-4 text-center w-32">Impr.</th><th className="px-6 py-4 text-center w-32">Clicks</th><th className="px-6 py-4 text-center w-28">CTR</th></tr></thead><tbody className="divide-y divide-slate-100">{aggregatedByUrl.slice(0, 100).map((row: any) => (<React.Fragment key={row.url}><tr onClick={() => toggleUrl(row.url)} className="group cursor-pointer hover:bg-slate-50/50 transition-all"><td className="pl-6 py-5 flex justify-center">{expandedUrls.has(row.url) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</td><td className="px-4 py-5 font-bold text-slate-900 break-all">{row.url}</td><td className="px-6 py-5 text-center text-slate-500">{row.impressions.toLocaleString()}</td><td className="px-6 py-5 text-center font-black text-slate-900">{row.clicks.toLocaleString()}</td><td className="px-6 py-5 text-center"><span className="px-2 py-1 rounded-lg bg-slate-100 font-bold">{row.ctr.toFixed(1)}%</span></td></tr>{expandedUrls.has(row.url) && row.children.map((child: any, ci: number) => (<tr key={ci} className="bg-slate-50/30 border-l-4 border-indigo-500"><td className="py-3"></td><td className="px-4 py-3 pl-14"><div className="flex items-center gap-3"><span className="text-slate-700 font-semibold">{child.keyword}</span><span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase ${child.queryType === 'Branded' ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-500'}`}>{child.queryType}</span></div></td><td className="px-6 py-3 text-center text-slate-400">{child.impressions.toLocaleString()}</td><td className="px-6 py-3 text-center text-slate-600 font-bold">{child.clicks.toLocaleString()}</td><td className="px-6 py-3 text-center text-slate-400 font-bold">{(child.impressions > 0 ? child.clicks/child.impressions*100 : 0).toFixed(1)}%</td></tr>))}</React.Fragment>))}</tbody></table>{aggregatedByUrl.length === 0 && <div className="px-6 py-20 text-center text-slate-400 italic font-medium">No results found. Try broadening the date range.</div>}</div>
     </div>
   );
 };
 
-const SidebarLink = ({ active, onClick, icon, label }: any) => (
-  <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black transition-all ${active ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>
-    {React.cloneElement(icon as React.ReactElement<any>, { className: 'w-4 h-4' })} {label}
-  </button>
-);
-
-const EmptyState = ({ text }: { text: string }) => (
-  <div className="h-full flex flex-col items-center justify-center py-10 opacity-50">
-    <Activity className="w-8 h-8 text-slate-200 mb-4" /><p className="text-slate-400 italic text-xs font-medium">{text}</p>
-  </div>
-);
+const SidebarLink = ({ active, onClick, icon, label }: any) => (<button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black transition-all ${active ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>{React.cloneElement(icon as React.ReactElement<any>, { className: 'w-4 h-4' })} {label}</button>);
+const EmptyState = ({ text }: { text: string }) => (<div className="h-full flex flex-col items-center justify-center py-10 opacity-50"><Activity className="w-8 h-8 text-slate-200 mb-4" /><p className="text-slate-400 italic text-xs font-medium">{text}</p></div>);
 
 export default App;

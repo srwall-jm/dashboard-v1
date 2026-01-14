@@ -5,15 +5,18 @@ export const getDashboardInsights = async (dataSummary: string, dashboardName: s
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
-    /* Use gemini-3-pro-preview for complex reasoning tasks like business data analysis */
+    /* Use gemini-3-pro-preview for high-precision business reasoning */
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
-      contents: `You are a world-class SEO and Data Analyst. Analyze the following summary of ${dashboardName} and provide 3-4 bullet points of actionable insights and observations.
+      contents: `You are a world-class SEO, Paid Search, and Data Strategist. 
+      You are analysing the "${dashboardName}" page of an advanced dashboard. 
+      Provide 3-4 specific, high-impact bullet points of actionable insights BASED ONLY on the visible metrics provided in the summary.
       
-      Data Summary:
+      Summary of current page view:
       ${dataSummary}
       
-      Focus on growth opportunities, efficiency between channels, and anomalies. Keep it concise, professional, and respond in British English.`,
+      Focus on ROI, channel weight, market opportunity, or URL performance depending on the page context. 
+      Keep it professional, data-driven, and respond in British English.`,
     });
     
     return response.text;
@@ -36,11 +39,11 @@ export const getOpenAiInsights = async (apiKey: string, dataSummary: string, das
         messages: [
           { 
             role: 'system', 
-            content: `You are a world-class SEO and Data Analyst. Analyze the following summary of ${dashboardName} and provide 3-4 key points with actionable insights and observations. Focus on growth opportunities, channel efficiency, and anomalies. Keep the response concise, professional, and in British English.`
+            content: `You are a world-class SEO and Data Analyst. Analyze the following summary of the "${dashboardName}" page. Provide 3-4 key points with actionable insights based strictly on the context of this specific view. Focus on ROI, growth, and efficiency. British English only.`
           },
           { 
             role: 'user', 
-            content: `Data Summary:\n${dataSummary}` 
+            content: `Data for ${dashboardName}:\n${dataSummary}` 
           }
         ],
         temperature: 0.7
