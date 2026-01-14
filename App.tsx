@@ -1,10 +1,10 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key
+  BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key, PieChart as PieIcon
 } from 'lucide-react';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Legend, LineChart, Line, ScatterChart, Scatter, ZAxis, Cell
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Legend, LineChart, Line, ScatterChart, Scatter, ZAxis, Cell, PieChart, Pie
 } from 'recharts';
 import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, QueryType, ChannelType } from './types';
 import { getDashboardInsights, getOpenAiInsights } from './geminiService';
@@ -850,6 +850,31 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
     return Object.values(map).sort((a: any, b: any) => a.date.localeCompare(b.date));
   }, [data, grouping]);
 
+  const totalStats = useMemo(() => {
+    const current = data.filter((d: any) => d.dateRangeLabel === 'current');
+    const sessions = current.reduce((acc: number, d: any) => acc + d.sessions, 0);
+    const revenue = current.reduce((acc: number, d: any) => acc + d.revenue, 0);
+    return { sessions, revenue };
+  }, [data]);
+
+  const searchStats = useMemo(() => {
+    const sessions = stats.organic.current.sessions + stats.paid.current.sessions;
+    const revenue = stats.organic.current.revenue + stats.paid.current.revenue;
+    return { sessions, revenue };
+  }, [stats]);
+
+  const otherStats = useMemo(() => {
+    return {
+      sessions: Math.max(0, totalStats.sessions - searchStats.sessions),
+      revenue: Math.max(0, totalStats.revenue - searchStats.revenue)
+    };
+  }, [totalStats, searchStats]);
+
+  const weightData = useMemo(() => [
+    { name: 'Total Search (Org + Paid)', sessions: searchStats.sessions, revenue: searchStats.revenue, fill: '#6366f1' },
+    { name: 'Other Channels', sessions: otherStats.sessions, revenue: otherStats.revenue, fill: '#e2e8f0' }
+  ], [searchStats, otherStats]);
+
   const organicFunnelData = useMemo(() => [
     { stage: 'Sessions', value: stats.organic.current.sessions },
     { stage: 'Add to Basket', value: stats.organic.current.addToCarts },
@@ -926,6 +951,97 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <EcommerceFunnel title="Organic Search Funnel" data={organicFunnelData} color="indigo" />
         <EcommerceFunnel title="Paid Search Funnel" data={paidFunnelData} color="amber" />
+      </div>
+
+      {/* NEW SECTION: Weight Analysis */}
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Search Channels Weight Analysis</h4>
+            <p className="text-[11px] font-bold text-slate-600">Combined impact of Organic + Paid Search vs Other Channels</p>
+          </div>
+          <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+             <PieIcon className="w-4 h-4" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+          <div className="flex flex-col items-center">
+            <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Total Sessions Share</h5>
+            <div className="h-[250px] w-full relative">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={weightData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="sessions"
+                  >
+                    {weightData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} stroke="transparent" />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <p className="text-xl font-black text-slate-900">
+                  {totalStats.sessions > 0 ? ((searchStats.sessions / totalStats.sessions) * 100).toFixed(1) : 0}%
+                </p>
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-tight">Search Share</p>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap justify-center gap-6">
+              {weightData.map((d) => (
+                <div key={d.name} className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.fill }}></div>
+                  <p className="text-[9px] font-black uppercase text-slate-500">{d.name}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center">
+            <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Total Revenue Share</h5>
+            <div className="h-[250px] w-full relative">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={weightData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="revenue"
+                  >
+                    {weightData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} stroke="transparent" />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(val: number) => `£${val.toLocaleString()}`} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <p className="text-xl font-black text-emerald-600">
+                  {totalStats.revenue > 0 ? ((searchStats.revenue / totalStats.revenue) * 100).toFixed(1) : 0}%
+                </p>
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-tight">Search Share</p>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap justify-center gap-6">
+              {weightData.map((d) => (
+                <div key={d.name} className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.fill }}></div>
+                  <p className="text-[9px] font-black uppercase text-slate-500">{d.name}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -1115,7 +1231,6 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
         </div>
       </div>
 
-      {/* Share of Voice vs. Share of Wallet */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -1147,7 +1262,6 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
         </div>
       </div>
 
-      {/* Opportunity Map (Pure GSC) */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex justify-between items-center mb-8">
           <div>
