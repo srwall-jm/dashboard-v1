@@ -33,9 +33,7 @@ const COUNTRY_CODE_TO_NAME: Record<string, string> = {
 const normalizeCountry = (val: string): string => {
   if (!val) return 'Other';
   const clean = val.toLowerCase().trim();
-  // If it's a 3-letter code we know, use the name. Otherwise, capitalize.
   if (COUNTRY_CODE_TO_NAME[clean]) return COUNTRY_CODE_TO_NAME[clean];
-  // If GA4 sends a full name already, it won't match the map but we keep it.
   return val.length <= 3 ? (COUNTRY_CODE_TO_NAME[clean] || val.toUpperCase()) : val;
 };
 
@@ -125,7 +123,7 @@ const App: React.FC = () => {
   const [realKeywordData, setRealKeywordData] = useState<KeywordData[]>([]);
   
   const [isLoadingGa4, setIsLoadingGa4] = useState(false);
-  const [isLoadingGsc, setIsLoadingGsc(false);
+  const [isLoadingGsc, setIsLoadingGsc] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [brandRegexStr, setBrandRegexStr] = useState('tienda|deportes|pro|brandname');
@@ -301,7 +299,6 @@ const App: React.FC = () => {
     setIsLoadingGsc(true);
     try {
       const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
-      
       const fetchOneRange = async (start: string, end: string, label: 'current' | 'previous') => {
         const resp = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
           method: 'POST',
@@ -758,16 +755,8 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
               <AreaChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{fontSize: 9, fontWeight: 700}} 
-                  tickFormatter={(val) => `€${val.toLocaleString()}`}
-                />
-                <Tooltip 
-                  contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} 
-                  formatter={(val: number) => [`€${val.toLocaleString()}`, '']}
-                />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `€${val.toLocaleString()}`} />
+                <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} formatter={(val: number) => [`€${val.toLocaleString()}`, '']} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
                 <Area name="Organic Revenue" type="monotone" dataKey="organicRevenue" stroke="#6366f1" strokeWidth={3} fillOpacity={0.1} fill="#6366f1" />
                 <Area name="Paid Revenue" type="monotone" dataKey="paidRevenue" stroke="#f59e0b" strokeWidth={3} fillOpacity={0.1} fill="#f59e0b" />
@@ -826,7 +815,6 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
   
   const scatterData = useMemo(() => {
     const map: Record<string, { country: string; sessions: number; sales: number; revenue: number }> = {};
-    // Usamos GA4 data para correlacionar Tráfico vs Calidad (CR) y Valor (Revenue)
     data.filter((d: any) => d.dateRangeLabel === 'current').forEach((d: any) => {
       if (!map[d.country]) map[d.country] = { country: d.country, sessions: 0, sales: 0, revenue: 0 };
       map[d.country].sessions += d.sessions;
@@ -904,25 +892,22 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled }:
                 <XAxis type="number" dataKey="traffic" name="Tráfico" unit=" ses." axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
                 <YAxis type="number" dataKey="cr" name="Conversion Rate" unit="%" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
                 <ZAxis type="number" dataKey="revenue" range={[100, 2000]} name="Revenue" unit="€" />
-                <Tooltip 
-                  cursor={{ strokeDasharray: '3 3' }} 
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      const data = payload[0].payload;
-                      return (
-                        <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10">
-                          <p className="text-[10px] font-black uppercase tracking-widest mb-2 border-b border-white/10 pb-2">{data.country}</p>
-                          <div className="space-y-1">
-                            <p className="text-[9px] flex justify-between gap-4"><span>Tráfico:</span> <span className="font-bold">{data.traffic.toLocaleString()} ses.</span></p>
-                            <p className="text-[9px] flex justify-between gap-4"><span>Conv. Rate:</span> <span className="font-bold text-emerald-400">{data.cr.toFixed(2)}%</span></p>
-                            <p className="text-[9px] flex justify-between gap-4"><span>Revenue:</span> <span className="font-bold text-indigo-400">€{data.revenue.toLocaleString()}</span></p>
-                          </div>
+                <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    const d = payload[0].payload;
+                    return (
+                      <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10">
+                        <p className="text-[10px] font-black uppercase tracking-widest mb-2 border-b border-white/10 pb-2">{d.country}</p>
+                        <div className="space-y-1">
+                          <p className="text-[9px] flex justify-between gap-4"><span>Tráfico:</span> <span className="font-bold">{d.traffic.toLocaleString()} ses.</span></p>
+                          <p className="text-[9px] flex justify-between gap-4"><span>Conv. Rate:</span> <span className="font-bold text-emerald-400">{d.cr.toFixed(2)}%</span></p>
+                          <p className="text-[9px] flex justify-between gap-4"><span>Revenue:</span> <span className="font-bold text-indigo-400">€{d.revenue.toLocaleString()}</span></p>
                         </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
+                      </div>
+                    );
+                  }
+                  return null;
+                }} />
                 <Scatter name="Mercados" data={scatterData}>
                   {scatterData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.cr > 2 ? '#10b981' : entry.cr > 1 ? '#6366f1' : '#f59e0b'} fillOpacity={0.6} strokeWidth={2} stroke={entry.cr > 2 ? '#059669' : entry.cr > 1 ? '#4f46e5' : '#d97706'} />
