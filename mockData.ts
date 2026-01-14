@@ -29,8 +29,6 @@ export const generateMockDailyData = (): DailyData[] => {
           const impressions = clicks * (Math.floor(Math.random() * 30) + 10);
           const sales = Math.floor(sessions * (0.02 + Math.random() * 0.04));
           const revenue = sales * (40 + Math.random() * 20);
-          const addToCarts = Math.floor(sessions * (0.12 + Math.random() * 0.1));
-          const checkouts = Math.floor(sessions * (0.06 + Math.random() * 0.04));
           
           data.push({
             date: dateStr,
@@ -43,9 +41,7 @@ export const generateMockDailyData = (): DailyData[] => {
             ctr: (clicks / impressions) * 100,
             conversionRate: (sales / sessions) * 100,
             revenue,
-            sales,
-            addToCarts,
-            checkouts
+            sales
           });
         });
       });
@@ -72,8 +68,6 @@ export const generateMockKeywordData = (): KeywordData[] => {
     const impressions = clicks * (12 + Math.random() * 10);
     const sales = Math.floor(sessions * 0.035);
     const country = COUNTRIES[Math.floor(Math.random() * COUNTRIES.length)];
-    const addToCarts = Math.floor(sessions * 0.1);
-    const checkouts = Math.floor(sessions * 0.05);
     
     return {
       keyword: keywords[i % keywords.length] + (i > 10 ? ` ${i}` : ''),
@@ -86,9 +80,7 @@ export const generateMockKeywordData = (): KeywordData[] => {
       sessions,
       conversionRate: (sales / sessions) * 100,
       revenue: sales * 55,
-      sales,
-      addToCarts,
-      checkouts
+      sales
     };
   });
 };
