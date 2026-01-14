@@ -5,8 +5,9 @@ export const getDashboardInsights = async (dataSummary: string, dashboardName: s
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
+    /* Use gemini-3-pro-preview for complex reasoning tasks like business data analysis */
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview',
       contents: `You are a world-class SEO and Data Analyst. Analyze the following summary of ${dashboardName} and provide 3-4 bullet points of actionable insights and observations.
       
       Data Summary:
