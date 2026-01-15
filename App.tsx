@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key, PieChart as PieIcon
+  BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key, PieChart as PieIcon, Check
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Legend, LineChart, Line, ScatterChart, Scatter, ZAxis, Cell, PieChart, Pie
@@ -98,6 +98,116 @@ const KpiCard: React.FC<{
     </h3>
   </div>
 );
+
+const DateRangeSelector: React.FC<{
+  filters: DashboardFilters;
+  setFilters: (f: DashboardFilters) => void;
+}> = ({ filters, setFilters }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const ranges = [
+    { label: 'Today', getValue: () => { const d = new Date(); return { start: d, end: d }; } },
+    { label: 'Yesterday', getValue: () => { const d = new Date(); d.setDate(d.getDate() - 1); return { start: d, end: d }; } },
+    { label: 'This week', getValue: () => { const d = new Date(); const start = getStartOfWeek(d); return { start, end: d }; } },
+    { label: 'This month', getValue: () => { const d = new Date(); return { start: new Date(d.getFullYear(), d.getMonth(), 1), end: new Date(d.getFullYear(), d.getMonth() + 1, 0) }; } },
+    { label: 'This month to date', getValue: () => { const d = new Date(); return { start: new Date(d.getFullYear(), d.getMonth(), 1), end: d }; } },
+    { label: 'This quarter', getValue: () => { const d = new Date(); const q = Math.floor(d.getMonth() / 3); return { start: new Date(d.getFullYear(), q * 3, 1), end: new Date(d.getFullYear(), (q + 1) * 3, 0) }; } },
+    { label: 'This quarter to date', getValue: () => { const d = new Date(); const q = Math.floor(d.getMonth() / 3); return { start: new Date(d.getFullYear(), q * 3, 1), end: d }; } },
+    { label: 'This year', getValue: () => { const d = new Date(); return { start: new Date(d.getFullYear(), 0, 1), end: new Date(d.getFullYear(), 11, 31) }; } },
+    { label: 'This year to date', getValue: () => { const d = new Date(); return { start: new Date(d.getFullYear(), 0, 1), end: d }; } },
+    { label: 'Last 7 days', getValue: () => { const end = new Date(); const start = new Date(); start.setDate(start.getDate() - 7); return { start, end }; } },
+    { label: 'Last 14 days', getValue: () => { const end = new Date(); const start = new Date(); start.setDate(start.getDate() - 14); return { start, end }; } },
+    { label: 'Last 28 days', getValue: () => { const end = new Date(); const start = new Date(); start.setDate(start.getDate() - 28); return { start, end }; } },
+    { label: 'Last 30 days', getValue: () => { const end = new Date(); const start = new Date(); start.setDate(start.getDate() - 30); return { start, end }; } },
+    { label: 'Last week', getValue: () => { const d = new Date(); d.setDate(d.getDate() - 7); const start = getStartOfWeek(d); const end = new Date(start); end.setDate(end.getDate() + 6); return { start, end }; } },
+    { label: 'Last month', getValue: () => { const d = new Date(); return { start: new Date(d.getFullYear(), d.getMonth() - 1, 1), end: new Date(d.getFullYear(), d.getMonth(), 0) }; } },
+    { label: 'Last quarter', getValue: () => { const d = new Date(); const q = Math.floor(d.getMonth() / 3) - 1; return { start: new Date(d.getFullYear(), q * 3, 1), end: new Date(d.getFullYear(), (q + 1) * 3, 0) }; } },
+    { label: 'Last year', getValue: () => { const d = new Date(); return { start: new Date(d.getFullYear() - 1, 0, 1), end: new Date(d.getFullYear() - 1, 11, 31) }; } },
+  ];
+
+  const handleRangeSelect = (range: any) => {
+    const { start, end } = range.getValue();
+    setFilters({ ...filters, dateRange: { start: formatDate(start), end: formatDate(end) } });
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-3 px-4 py-2 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-indigo-300 transition-all text-[10px] font-bold"
+      >
+        <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+        <span className="text-slate-900">{filters.dateRange.start}</span>
+        <span className="text-slate-300">/</span>
+        <span className="text-slate-900">{filters.dateRange.end}</span>
+        <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full mt-2 left-0 w-[480px] bg-white rounded-3xl shadow-2xl border border-slate-200 z-[100] overflow-hidden flex animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-1/2 border-r border-slate-100 bg-slate-50/50 max-h-[400px] overflow-y-auto custom-scrollbar">
+            <div className="p-2 grid grid-cols-1 gap-0.5">
+              {ranges.map((r) => (
+                <button
+                  key={r.label}
+                  onClick={() => handleRangeSelect(r)}
+                  className="px-4 py-2 text-left text-[10px] font-black uppercase text-slate-600 hover:bg-white hover:text-indigo-600 hover:shadow-sm rounded-xl transition-all"
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="w-1/2 p-6 flex flex-col gap-6">
+            <div>
+              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Custom Range</h4>
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[8px] font-black text-slate-500 uppercase">Start Date</label>
+                  <input 
+                    type="date" 
+                    value={filters.dateRange.start} 
+                    onChange={e => setFilters({...filters, dateRange: {...filters.dateRange, start: e.target.value}})}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none focus:ring-1 ring-indigo-500"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[8px] font-black text-slate-500 uppercase">End Date</label>
+                  <input 
+                    type="date" 
+                    value={filters.dateRange.end} 
+                    onChange={e => setFilters({...filters, dateRange: {...filters.dateRange, end: e.target.value}})}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none focus:ring-1 ring-indigo-500"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="mt-auto pt-6 border-t border-slate-100">
+              <button 
+                onClick={() => setIsOpen(false)}
+                className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-colors shadow-lg"
+              >
+                Apply Range
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const App: React.FC = () => {
   const [user, setUser] = useState<{ name: string; email: string; picture: string } | null>(() => {
@@ -491,17 +601,6 @@ const App: React.FC = () => {
     return { organic, paid };
   }, [filteredDailyData]);
 
-  const setShortcut = (type: string) => {
-    const now = new Date();
-    let start = new Date();
-    let end = new Date();
-    if (type === 'this_month') { start = new Date(now.getFullYear(), now.getMonth(), 1); end = now; }
-    else if (type === 'last_month') { start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0); }
-    else if (type === 'last_7') { start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); end = now; }
-    else if (type === 'last_30') { start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); end = now; }
-    setFilters({ ...filters, dateRange: { start: formatDate(start), end: formatDate(end) } });
-  };
-
   const handleGenerateInsights = async () => {
     setLoadingInsights(true);
     setError(null);
@@ -720,13 +819,6 @@ const App: React.FC = () => {
               </h2>
             </div>
             <div className="flex flex-col items-end gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                {['this_month', 'last_month', 'last_7', 'last_30'].map(type => (
-                  <button key={type} onClick={() => setShortcut(type)} className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[9px] font-black uppercase hover:bg-slate-50 transition-colors shadow-sm">
-                    {type.replace('_', ' ')}
-                  </button>
-                ))}
-              </div>
               <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-2xl border border-slate-200 shadow-sm">
                 <div className="flex items-center gap-2">
                   <input type="checkbox" id="comp_enabled" checked={filters.comparison.enabled} onChange={e => setFilters({...filters, comparison: {...filters.comparison, enabled: e.target.checked}})} className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600" />
@@ -742,38 +834,33 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 bg-white p-1.5 rounded-3xl border border-slate-200 shadow-sm w-full xl:w-max">
-            <div className="flex items-center gap-2 px-3 py-1.5 border-b sm:border-b-0 sm:border-r border-slate-100 min-w-0">
-               <Calendar className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-               <div className="flex items-center gap-1.5 text-[10px] font-bold">
-                  <input type="date" value={filters.dateRange.start} onChange={e => setFilters({...filters, dateRange: {...filters.dateRange, start: e.target.value}})} className="outline-none bg-transparent" />
-                  <span className="text-slate-300">/</span>
-                  <input type="date" value={filters.dateRange.end} onChange={e => setFilters({...filters, dateRange: {...filters.dateRange, end: e.target.value}})} className="outline-none bg-transparent" />
-               </div>
-            </div>
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-4 w-full">
+            <DateRangeSelector filters={filters} setFilters={setFilters} />
             
-            <div className="flex items-center gap-2 px-3 py-1.5 border-b sm:border-b-0 sm:border-r border-slate-100">
-               <Filter className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-               <select className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" value={filters.ga4Dimension} onChange={e => setFilters({...filters, ga4Dimension: e.target.value})}>
-                  {availableDimensions.map(d => (<option key={d.value} value={d.value}>{d.label}</option>))}
-                  {availableDimensions.length === 0 && <option value="sessionDefaultChannelGroup">Channel Grouping</option>}
-               </select>
-            </div>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white p-1.5 rounded-3xl border border-slate-200 shadow-sm">
+              <div className="flex items-center gap-2 px-3 py-1.5 sm:border-r border-slate-100">
+                 <Filter className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                 <select className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" value={filters.ga4Dimension} onChange={e => setFilters({...filters, ga4Dimension: e.target.value})}>
+                    {availableDimensions.map(d => (<option key={d.value} value={d.value}>{d.label}</option>))}
+                    {availableDimensions.length === 0 && <option value="sessionDefaultChannelGroup">Channel Grouping</option>}
+                 </select>
+              </div>
 
-            <div className="flex items-center gap-2 px-3 py-1.5 border-b sm:border-b-0 sm:border-r border-slate-100">
-               <Globe className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-               <select className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" value={filters.country} onChange={e => setFilters({...filters, country: e.target.value})}>
-                  <option value="All">All Countries</option>
-                  {uniqueCountries.map(c => <option key={c} value={c}>{c}</option>)}
-               </select>
-            </div>
-            <div className="flex items-center gap-2 px-3 py-1.5">
-               <Tag className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-               <select className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" value={filters.queryType} onChange={e => setFilters({...filters, queryType: e.target.value as any})}>
-                  <option value="All">Query Type</option>
-                  <option value="Branded">Branded</option>
-                  <option value="Non-Branded">Non-Branded</option>
-               </select>
+              <div className="flex items-center gap-2 px-3 py-1.5 sm:border-r border-slate-100">
+                 <Globe className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                 <select className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" value={filters.country} onChange={e => setFilters({...filters, country: e.target.value})}>
+                    <option value="All">All Countries</option>
+                    {uniqueCountries.map(c => <option key={c} value={c}>{c}</option>)}
+                 </select>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-1.5">
+                 <Tag className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                 <select className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" value={filters.queryType} onChange={e => setFilters({...filters, queryType: e.target.value as any})}>
+                    <option value="All">Query Type</option>
+                    <option value="Branded">Branded</option>
+                    <option value="Non-Branded">Non-Branded</option>
+                 </select>
+              </div>
             </div>
           </div>
         </header>
