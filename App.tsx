@@ -943,22 +943,74 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
 
   const chartData = useMemo(() => {
     if (!data.length) return [];
-    const currentData = data.filter((d: any) => d.dateRangeLabel === 'current');
-    const map: any = {};
-    currentData.forEach((d: any) => {
-      const isOrg = d.channel?.toLowerCase().includes('organic');
-      const isPaid = d.channel?.toLowerCase().includes('paid') || d.channel?.toLowerCase().includes('cpc');
-      const isSearch = isOrg || isPaid;
-      let key = d.date;
-      if (grouping === 'weekly') key = formatDate(getStartOfWeek(new Date(d.date)));
-      else if (grouping === 'monthly') key = `${d.date.slice(0, 7)}-01`;
-      if (!map[key]) map[key] = { date: key, organic: 0, paid: 0, organicRevenue: 0, paidRevenue: 0, searchCombined: 0, othersCombined: 0, searchRevenueCombined: 0, othersRevenueCombined: 0 };
-      if (isOrg) { map[key].organic += d.sessions; map[key].organicRevenue += d.revenue; }
-      if (isPaid) { map[key].paid += d.sessions; map[key].paidRevenue += d.revenue; }
-      if (isSearch) { map[key].searchCombined += d.sessions; map[key].searchRevenueCombined += d.revenue; } else { map[key].othersCombined += d.sessions; map[key].othersRevenueCombined += d.revenue; }
+    
+    // Group by range label
+    const currentData = data.filter(d => d.dateRangeLabel === 'current');
+    const previousData = data.filter(d => d.dateRangeLabel === 'previous');
+
+    // Create a mapping of all unique timestamps for current period
+    const dates = Array.from(new Set(currentData.map(d => {
+      if (grouping === 'weekly') return formatDate(getStartOfWeek(new Date(d.date)));
+      if (grouping === 'monthly') return `${d.date.slice(0, 7)}-01`;
+      return d.date;
+    }))).sort();
+
+    // Calculate day offset to align previous period to current dates
+    // If range is e.g. 7 days, we find corresponding day -7
+    const currentStart = new Date(Math.min(...currentData.map(d => new Date(d.date).getTime())));
+    const previousStart = new Date(Math.min(...previousData.map(d => new Date(d.date).getTime())));
+    const offsetMs = currentStart.getTime() - previousStart.getTime();
+
+    return dates.map(dateKey => {
+      const curItems = currentData.filter(d => {
+        const dKey = grouping === 'weekly' ? formatDate(getStartOfWeek(new Date(d.date))) : (grouping === 'monthly' ? `${d.date.slice(0, 7)}-01` : d.date);
+        return dKey === dateKey;
+      });
+
+      // Find items from previous period that align with this "index" in the current period
+      const prevItems = previousData.filter(d => {
+        const adjustedDate = new Date(new Date(d.date).getTime() + offsetMs);
+        const dKey = grouping === 'weekly' ? formatDate(getStartOfWeek(adjustedDate)) : (grouping === 'monthly' ? `${formatDate(adjustedDate).slice(0, 7)}-01` : formatDate(adjustedDate));
+        return dKey === dateKey;
+      });
+
+      const sum = (items: DailyData[]) => items.reduce((acc, d) => {
+        const isOrg = d.channel?.toLowerCase().includes('organic');
+        const isPaid = d.channel?.toLowerCase().includes('paid') || d.channel?.toLowerCase().includes('cpc');
+        const isSearch = isOrg || isPaid;
+        return {
+          organic: acc.organic + (isOrg ? d.sessions : 0),
+          paid: acc.paid + (isPaid ? d.sessions : 0),
+          organicRev: acc.organicRev + (isOrg ? d.revenue : 0),
+          paidRev: acc.paidRev + (isPaid ? d.revenue : 0),
+          search: acc.search + (isSearch ? d.sessions : 0),
+          others: acc.others + (!isSearch ? d.sessions : 0),
+          searchRev: acc.searchRev + (isSearch ? d.revenue : 0),
+          othersRev: acc.othersRev + (!isSearch ? d.revenue : 0)
+        };
+      }, { organic: 0, paid: 0, organicRev: 0, paidRev: 0, search: 0, others: 0, searchRev: 0, othersRev: 0 });
+
+      const curSum = sum(curItems);
+      const prevSum = sum(prevItems);
+
+      return {
+        date: dateKey,
+        organic: curSum.organic,
+        paid: curSum.paid,
+        organicRev: curSum.organicRev,
+        paidRev: curSum.paidRev,
+        searchWeight: weightMetric === 'sessions' ? curSum.search : curSum.searchRev,
+        othersWeight: weightMetric === 'sessions' ? curSum.others : curSum.othersRev,
+        // Comparison keys
+        organicPrev: prevSum.organic,
+        paidPrev: prevSum.paid,
+        organicRevPrev: prevSum.organicRev,
+        paidRevPrev: prevSum.paidRev,
+        searchWeightPrev: weightMetric === 'sessions' ? prevSum.search : prevSum.searchRev,
+        othersWeightPrev: weightMetric === 'sessions' ? prevSum.others : prevSum.othersRev,
+      };
     });
-    return Object.values(map).sort((a: any, b: any) => a.date.localeCompare(b.date));
-  }, [data, grouping]);
+  }, [data, grouping, weightMetric]);
 
   const organicFunnelData = useMemo(() => [
     { stage: 'Sessions', value: stats.organic.current.sessions },
@@ -989,6 +1041,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
           </div>
         ))}
       </div>
+
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8"><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Session Trend</h4><div className="flex gap-1 bg-slate-100 p-1 rounded-xl">{['daily', 'weekly', 'monthly'].map(g => <button key={g} onClick={() => setGrouping(g)} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === g ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>{g === 'daily' ? 'Day' : g === 'weekly' ? 'Week' : 'Month'}</button>)}</div></div>
         <div className="h-[300px]">
@@ -1000,8 +1053,10 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
                 <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
-                <Area name="Organic" type="monotone" dataKey="organic" stroke="#6366f1" strokeWidth={3} fillOpacity={0.1} fill="#6366f1" />
-                <Area name="Paid" type="monotone" dataKey="paid" stroke="#f59e0b" strokeWidth={3} fillOpacity={0.1} fill="#f59e0b" />
+                <Area name="Organic (Cur)" type="monotone" dataKey="organic" stroke="#6366f1" strokeWidth={3} fillOpacity={0.05} fill="#6366f1" />
+                <Area name="Paid (Cur)" type="monotone" dataKey="paid" stroke="#f59e0b" strokeWidth={3} fillOpacity={0.05} fill="#f59e0b" />
+                {comparisonEnabled && <Area name="Organic (Prev)" type="monotone" dataKey="organicPrev" stroke="#6366f1" strokeWidth={1} strokeDasharray="5 5" fill="transparent" />}
+                {comparisonEnabled && <Area name="Paid (Prev)" type="monotone" dataKey="paidPrev" stroke="#f59e0b" strokeWidth={1} strokeDasharray="5 5" fill="transparent" />}
               </AreaChart>
             </ResponsiveContainer>
           ) : <EmptyState text="No data available to chart" />}
@@ -1022,8 +1077,10 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} />
                 <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} formatter={(val: number) => [`${currencySymbol}${val.toLocaleString()}`, '']} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
-                <Area name="Organic Revenue" type="monotone" dataKey="organicRevenue" stroke="#6366f1" strokeWidth={3} fillOpacity={0.1} fill="#6366f1" />
-                <Area name="Paid Revenue" type="monotone" dataKey="paidRevenue" stroke="#f59e0b" strokeWidth={3} fillOpacity={0.1} fill="#f59e0b" />
+                <Area name="Organic Revenue (Cur)" type="monotone" dataKey="organicRev" stroke="#6366f1" strokeWidth={3} fillOpacity={0.05} fill="#6366f1" />
+                <Area name="Paid Revenue (Cur)" type="monotone" dataKey="paidRev" stroke="#f59e0b" strokeWidth={3} fillOpacity={0.05} fill="#f59e0b" />
+                {comparisonEnabled && <Area name="Organic Rev (Prev)" type="monotone" dataKey="organicRevPrev" stroke="#6366f1" strokeWidth={1} strokeDasharray="5 5" fill="transparent" />}
+                {comparisonEnabled && <Area name="Paid Rev (Prev)" type="monotone" dataKey="paidRevPrev" stroke="#f59e0b" strokeWidth={1} strokeDasharray="5 5" fill="transparent" />}
               </AreaChart>
             </ResponsiveContainer>
           ) : <EmptyState text="No revenue data available to chart" />}
@@ -1056,21 +1113,13 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => weightMetric === 'revenue' ? `${currencySymbol}${val.toLocaleString()}` : val.toLocaleString()} />
                 <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} formatter={(val: number) => [weightMetric === 'revenue' ? `${currencySymbol}${val.toLocaleString()}` : val.toLocaleString(), '']} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
-                <Area name="Total Search (Paid + Organic)" type="monotone" dataKey={weightMetric === 'sessions' ? 'searchCombined' : 'searchRevenueCombined'} stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorSearch)" />
-                <Area name="All Other Channels" type="monotone" dataKey={weightMetric === 'sessions' ? 'othersCombined' : 'othersRevenueCombined'} stroke="#94a3b8" strokeWidth={3} fillOpacity={1} fill="url(#colorOthers)" />
+                <Area name="Total Search (Cur)" type="monotone" dataKey="searchWeight" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorSearch)" />
+                <Area name="All Others (Cur)" type="monotone" dataKey="othersWeight" stroke="#94a3b8" strokeWidth={3} fillOpacity={1} fill="url(#colorOthers)" />
+                {comparisonEnabled && <Area name="Total Search (Prev)" type="monotone" dataKey="searchWeightPrev" stroke="#6366f1" strokeWidth={1} strokeDasharray="5 5" fill="transparent" />}
+                {comparisonEnabled && <Area name="All Others (Prev)" type="monotone" dataKey="othersWeightPrev" stroke="#94a3b8" strokeWidth={1} strokeDasharray="5 5" fill="transparent" />}
               </AreaChart>
             </ResponsiveContainer>
           ) : <EmptyState text="No data available for weight analysis" />}
-        </div>
-        <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
-           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col items-center">
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Avg Search Share (Sessions)</p>
-              <p className="text-xl font-black text-indigo-600">{(() => { const total = (chartData as any[]).reduce((acc: number, d: any) => acc + (d.searchCombined || 0) + (d.othersCombined || 0), 0); const search = (chartData as any[]).reduce((acc: number, d: any) => acc + (d.searchCombined || 0), 0); return total > 0 ? ((search / total) * 100).toFixed(1) : "0.0"; })()}%</p>
-           </div>
-           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col items-center">
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Avg Search Share (Revenue)</p>
-              <p className="text-xl font-black text-emerald-600">{(() => { const total = (chartData as any[]).reduce((acc: number, d: any) => acc + (d.searchRevenueCombined || 0) + (d.othersRevenueCombined || 0), 0); const search = (chartData as any[]).reduce((acc: number, d: any) => acc + (d.searchRevenueCombined || 0), 0); return total > 0 ? ((search / total) * 100).toFixed(1) : "0.0"; })()}%</p>
-           </div>
         </div>
       </div>
     </div>
@@ -1084,43 +1133,57 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, c
   
   const brandedTrendData = useMemo(() => {
     if (!keywordData.length) return [];
-    const currentData = keywordData.filter((k: any) => k.dateRangeLabel === 'current');
-    const map: any = {};
-    currentData.forEach((k: any) => {
-      let key = k.date;
-      if (grouping === 'weekly') key = formatDate(getStartOfWeek(new Date(k.date || '')));
-      else if (grouping === 'monthly') key = `${(k.date || '').slice(0, 7)}-01`;
-      
-      if (!map[key]) {
-        map[key] = { date: key, brandedClicks: 0, nonBrandedClicks: 0, brandedImpr: 0, nonBrandedImpr: 0 };
-      }
-      if (k.queryType === 'Branded') {
-        map[key].brandedClicks += k.clicks;
-        map[key].brandedImpr += k.impressions;
-      } else {
-        map[key].nonBrandedClicks += k.clicks;
-        map[key].nonBrandedImpr += k.impressions;
-      }
+    
+    const currentData = keywordData.filter(k => k.dateRangeLabel === 'current');
+    const previousData = keywordData.filter(k => k.dateRangeLabel === 'previous');
+
+    const dates = Array.from(new Set(currentData.map(k => {
+      if (grouping === 'weekly') return formatDate(getStartOfWeek(new Date(k.date || '')));
+      if (grouping === 'monthly') return `${(k.date || '').slice(0, 7)}-01`;
+      return k.date || '';
+    }))).sort();
+
+    const currentStart = new Date(Math.min(...currentData.map(d => new Date(d.date!).getTime())));
+    const previousStart = new Date(Math.min(...previousData.map(d => new Date(d.date!).getTime())));
+    const offsetMs = isNaN(previousStart.getTime()) ? 0 : currentStart.getTime() - previousStart.getTime();
+
+    return dates.map(dateKey => {
+      const curItems = currentData.filter(k => {
+        const dKey = grouping === 'weekly' ? formatDate(getStartOfWeek(new Date(k.date!))) : (grouping === 'monthly' ? `${k.date!.slice(0, 7)}-01` : k.date);
+        return dKey === dateKey;
+      });
+
+      const prevItems = previousData.filter(k => {
+        const adjustedDate = new Date(new Date(k.date!).getTime() + offsetMs);
+        const dKey = grouping === 'weekly' ? formatDate(getStartOfWeek(adjustedDate)) : (grouping === 'monthly' ? `${formatDate(adjustedDate).slice(0, 7)}-01` : formatDate(adjustedDate));
+        return dKey === dateKey;
+      });
+
+      const sum = (items: KeywordData[]) => items.reduce((acc, k) => ({
+        brandedClicks: acc.brandedClicks + (k.queryType === 'Branded' ? k.clicks : 0),
+        nonBrandedClicks: acc.nonBrandedClicks + (k.queryType === 'Non-Branded' ? k.clicks : 0),
+        brandedImpr: acc.brandedImpr + (k.queryType === 'Branded' ? k.impressions : 0),
+        nonBrandedImpr: acc.nonBrandedImpr + (k.queryType === 'Non-Branded' ? k.impressions : 0)
+      }), { brandedClicks: 0, nonBrandedClicks: 0, brandedImpr: 0, nonBrandedImpr: 0 });
+
+      const curSum = sum(curItems);
+      const prevSum = sum(prevItems);
+
+      return {
+        date: dateKey,
+        brandedVal: brandedMetric === 'clicks' ? curSum.brandedClicks : curSum.brandedImpr,
+        nonBrandedVal: brandedMetric === 'clicks' ? curSum.nonBrandedClicks : curSum.nonBrandedImpr,
+        brandedValPrev: brandedMetric === 'clicks' ? prevSum.brandedClicks : prevSum.brandedImpr,
+        nonBrandedValPrev: brandedMetric === 'clicks' ? prevSum.nonBrandedClicks : prevSum.nonBrandedImpr,
+      };
     });
-    return Object.values(map).sort((a: any, b: any) => a.date.localeCompare(b.date));
-  }, [keywordData, grouping]);
+  }, [keywordData, grouping, brandedMetric]);
 
   const scatterData = useMemo(() => {
     const map: Record<string, { country: string; sessions: number; sales: number; revenue: number }> = {};
     data.filter((d: any) => d.dateRangeLabel === 'current' && d.channel?.toLowerCase().includes('organic')).forEach((d: any) => { if (!map[d.country]) map[d.country] = { country: d.country, sessions: 0, sales: 0, revenue: 0 }; map[d.country].sessions += d.sessions; map[d.country].sales += d.sales; map[d.country].revenue += d.revenue; });
     return Object.values(map).map(item => ({ country: item.country, traffic: item.sessions, revenue: item.revenue, sales: item.sales })).filter(item => item.traffic > 0);
   }, [data]);
-
-  const shareOfVoiceWalletData = useMemo(() => {
-    const currentKeywords = keywordData.filter(k => k.dateRangeLabel === 'current');
-    const currentOrganicDaily = data.filter(d => d.dateRangeLabel === 'current' && d.channel?.toLowerCase().includes('organic'));
-    const totalImpressions = currentKeywords.reduce((acc, k) => acc + k.impressions, 0);
-    const totalOrganicRevenue = currentOrganicDaily.reduce((acc, d) => acc + d.revenue, 0);
-    const map: Record<string, { country: string; impressions: number; revenue: number }> = {};
-    currentKeywords.forEach(k => { if (!map[k.country]) map[k.country] = { country: k.country, impressions: 0, revenue: 0 }; map[k.country].impressions += k.impressions; });
-    currentOrganicDaily.forEach(d => { if (!map[d.country]) map[d.country] = { country: d.country, impressions: 0, revenue: 0 }; map[d.country].revenue += d.revenue; });
-    return Object.values(map).map(item => ({ country: item.country, sov: totalImpressions > 0 ? (item.impressions / totalImpressions) * 100 : 0, sow: totalOrganicRevenue > 0 ? (item.revenue / totalOrganicRevenue) * 100 : 0 })).filter(item => item.sov > 0 || item.sow > 0).sort((a, b) => b.sov - a.sov).slice(0, 10);
-  }, [keywordData, data]);
 
   const opportunityData = useMemo(() => {
     const currentKeywords = keywordData.filter(k => k.dateRangeLabel === 'current');
@@ -1152,6 +1215,8 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, c
     return Object.values(map).sort((a: any, b: any) => b.clicks - a.clicks).slice(0, 10);
   }, [keywordData]);
 
+  const metricName = brandedMetric.charAt(0).toUpperCase() + brandedMetric.slice(1);
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -1162,6 +1227,7 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, c
         <KpiCard title="GA4 Revenue" value={`${currencySymbol}${organicGa4.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.revenue : undefined} icon={<Tag />} color="emerald" prefix={currencySymbol} />
         <KpiCard title="GA4 Sales" value={organicGa4.current.sales} comparison={comparisonEnabled ? organicGa4.changes.sales : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.revenue : undefined} icon={<ShoppingBag />} color="emerald" />
       </div>
+      
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {[ {title: 'Clicks by Market', key: 'clicks', color: '#6366f1'}, {title: 'Visibility by Market', key: 'impressions', color: '#0ea5e9'} ].map(chart => (
           <div key={chart.key} className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm h-[400px]">
@@ -1201,22 +1267,10 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, c
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
                 <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
                 <Legend verticalAlign="top" iconType="circle" />
-                <Line 
-                  type="monotone" 
-                  name={`Branded ${brandedMetric.charAt(0).toUpperCase() + brandedMetric.slice(1)}`} 
-                  dataKey={brandedMetric === 'clicks' ? 'brandedClicks' : 'brandedImpr'} 
-                  stroke="#6366f1" 
-                  strokeWidth={3} 
-                  dot={false} 
-                />
-                <Line 
-                  type="monotone" 
-                  name={`Non-Branded ${brandedMetric.charAt(0).toUpperCase() + brandedMetric.slice(1)}`} 
-                  dataKey={brandedMetric === 'clicks' ? 'nonBrandedClicks' : 'nonBrandedImpr'} 
-                  stroke="#10b981" 
-                  strokeWidth={3} 
-                  dot={false} 
-                />
+                <Line name={`Branded ${metricName} (Cur)`} type="monotone" dataKey="brandedVal" stroke="#6366f1" strokeWidth={3} dot={false} />
+                <Line name={`Non-Branded ${metricName} (Cur)`} type="monotone" dataKey="nonBrandedVal" stroke="#10b981" strokeWidth={3} dot={false} />
+                {comparisonEnabled && <Line name={`Branded ${metricName} (Prev)`} type="monotone" dataKey="brandedValPrev" stroke="#6366f1" strokeWidth={1} strokeDasharray="5 5" dot={false} opacity={0.5} />}
+                {comparisonEnabled && <Line name={`Non-Branded ${metricName} (Prev)`} type="monotone" dataKey="nonBrandedValPrev" stroke="#10b981" strokeWidth={1} strokeDasharray="5 5" dot={false} opacity={0.5} />}
               </LineChart>
             </ResponsiveContainer>
           ) : <EmptyState text="No keyword trend data available..." />}
@@ -1227,19 +1281,6 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, c
         <div className="flex justify-between items-center mb-8"><div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Market Efficiency Analysis (Organic Search)</h4><p className="text-[11px] font-bold text-slate-600">Traffic (X) vs Revenue (Y) | Size = Revenue</p></div><div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><Activity className="w-4 h-4" /></div></div>
         <div className="h-[450px]">
           {scatterData.length > 0 ? (<ResponsiveContainer width="100%" height="100%"><ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis type="number" dataKey="traffic" name="Traffic" unit=" sess." axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} /><YAxis type="number" dataKey="revenue" name="Revenue" unit={` ${currencySymbol}`} axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} /><ZAxis type="number" dataKey="revenue" range={[100, 2000]} name="Market Value" unit={` ${currencySymbol}`} /><Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }) => { if (active && payload && payload.length) { const d = payload[0].payload; return (<div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10"><p className="text-[10px] font-black uppercase tracking-widest mb-2 border-b border-white/10 pb-2">{d.country}</p><div className="space-y-1"><p className="text-[9px] flex justify-between gap-4"><span>Traffic:</span> <span className="font-bold">{d.traffic.toLocaleString()} sess.</span></p><p className="text-[9px] flex justify-between gap-4"><span>Revenue:</span> <span className="font-bold text-emerald-400">{currencySymbol}{d.revenue.toLocaleString()}</span></p><p className="text-[9px] flex justify-between gap-4"><span>Efficiency:</span> <span className="font-bold text-indigo-400">{currencySymbol}{(d.revenue / d.traffic).toFixed(2)}/sess.</span></p></div></div>); } return null; }} /><Scatter name="Organic Markets" data={scatterData}>{scatterData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.revenue > 10000 ? '#10b981' : entry.revenue > 5000 ? '#6366f1' : '#f59e0b'} fillOpacity={0.6} strokeWidth={2} stroke={entry.revenue > 10000 ? '#059669' : entry.revenue > 5000 ? '#4f46e5' : '#d97706'} />))}</Scatter></ScatterChart></ResponsiveContainer>) : <EmptyState text="Not enough organic data for the Scatter Plot..." />}
-        </div>
-      </div>
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
-        <div className="flex justify-between items-center mb-8"><div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Opportunity Map (Pure GSC)</h4><p className="text-[11px] font-bold text-slate-600">Unmet Demand: Markets with high Visibility but low click capture</p></div><div className="p-2 bg-rose-50 text-rose-600 rounded-xl"><Map className="w-4 h-4" /></div></div>
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
-          <div className="space-y-4">
-            <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Zap className="w-3 h-3 text-amber-500" /> Top 10 Opportunity Markets</h5>
-            <div className="bg-slate-50 rounded-2xl border border-slate-100 overflow-hidden"><table className="w-full text-left text-[11px]"><thead className="bg-slate-100 text-slate-500 font-black uppercase text-[8px] tracking-widest"><tr><th className="px-4 py-3">Country</th><th className="px-4 py-3 text-right">Impressions</th><th className="px-4 py-3 text-right">CTR</th><th className="px-4 py-3"></th></tr></thead><tbody className="divide-y divide-slate-100">{opportunityData.map((item) => (<tr key={item.country} onClick={() => setSelectedOpportunityCountry(item.country)} className={`cursor-pointer transition-all hover:bg-white ${selectedOpportunityCountry === item.country ? 'bg-white border-l-4 border-rose-500' : ''}`}><td className="px-4 py-4 font-black text-slate-800">{item.country}</td><td className="px-4 py-4 text-right font-medium text-slate-500">{item.impressions.toLocaleString()}</td><td className="px-4 py-4 text-right"><span className={`px-2 py-1 rounded-lg font-bold ${item.ctr < 1.5 ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>{item.ctr.toFixed(2)}%</span></td><td className="px-4 py-4 text-right"><ChevronRight className="w-4 h-4 text-slate-300" /></td></tr>))}</tbody></table></div>
-          </div>
-          <div className="flex flex-col">
-            <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Target className="w-3 h-3 text-indigo-500" /> Opportunity Drill-down {selectedOpportunityCountry && `: ${selectedOpportunityCountry}`}</h5>
-            {selectedOpportunityCountry ? (<div className="space-y-4 flex-1">{opportunityDrillDown.map((item, idx) => (<div key={idx} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors"><div className="flex justify-between items-start mb-3"><p className="text-[10px] font-bold text-slate-900 break-all max-w-[80%]">{item.url}</p><span className="bg-slate-100 px-2 py-1 rounded-lg text-[9px] font-black text-slate-500">GSC DATA</span></div><div className="grid grid-cols-3 gap-2"><div className="bg-slate-50 p-2 rounded-xl border border-slate-100"><p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Impressions</p><p className="text-[11px] font-black text-slate-800">{item.impressions.toLocaleString()}</p></div><div className="bg-slate-50 p-2 rounded-xl border border-slate-100"><p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Clicks</p><p className="text-[11px] font-black text-slate-800">{item.clicks.toLocaleString()}</p></div><div className="bg-rose-50 p-2 rounded-xl border border-rose-100"><p className="text-[8px] font-black text-rose-400 uppercase tracking-tighter">Local CTR</p><p className="text-[11px] font-black text-rose-600">{item.ctr.toFixed(2)}%</p></div></div></div>))}<div className="mt-4 p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-3"><AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" /><p className="text-[10px] font-medium text-amber-700 leading-relaxed">These URLs have high visibility in <strong>{selectedOpportunityCountry}</strong> but attract few clicks. Consider optimising the <strong>SEO Snippet (Metatitle/Description)</strong>.</p></div></div>) : (<div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-[32px] p-10 text-center opacity-40"><MousePointer2 className="w-10 h-10 mb-4" /><p className="text-xs font-black uppercase tracking-widest text-slate-400">Select a country from the list to see its opportunity pages</p></div>)}
-          </div>
         </div>
       </div>
     </div>
