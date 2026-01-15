@@ -209,6 +209,52 @@ const DateRangeSelector: React.FC<{
   );
 };
 
+// --- Custom Overlay Tooltip ---
+const ComparisonTooltip = ({ active, payload, label, currency = false, currencySymbol = '£' }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10 min-w-[200px]">
+        <p className="text-[10px] font-black uppercase tracking-widest mb-3 text-slate-400 border-b border-white/5 pb-2">{label}</p>
+        <div className="space-y-3">
+          {payload.map((entry: any, index: number) => {
+            if (entry.name.includes('(Prev)')) return null; // We handle previous alongside current manually
+            const prevEntry = payload.find((p: any) => p.name === entry.name.replace('(Cur)', '(Prev)'));
+            const curVal = entry.value;
+            const prevVal = prevEntry ? prevEntry.value : null;
+            const diff = prevVal !== null && prevVal !== 0 ? ((curVal - prevVal) / prevVal) * 100 : 0;
+
+            return (
+              <div key={index} className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.stroke || entry.color }} />
+                  <span className="text-[10px] font-black text-white">{entry.name.replace('(Cur)', '')}</span>
+                </div>
+                <div className="flex justify-between items-baseline gap-4 ml-4">
+                  <span className="text-[11px] font-bold">
+                    {currency ? `${currencySymbol}${curVal.toLocaleString()}` : curVal.toLocaleString()}
+                  </span>
+                  {prevVal !== null && (
+                    <div className={`flex items-center text-[9px] font-black ${diff >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {diff >= 0 ? '+' : ''}{diff.toFixed(1)}%
+                    </div>
+                  )}
+                </div>
+                {prevVal !== null && (
+                  <div className="flex justify-between text-[8px] text-slate-500 ml-4 font-medium uppercase italic">
+                    <span>Previous:</span>
+                    <span>{currency ? `${currencySymbol}${prevVal.toLocaleString()}` : prevVal.toLocaleString()}</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
 const App: React.FC = () => {
   const [user, setUser] = useState<{ name: string; email: string; picture: string } | null>(() => {
     const saved = localStorage.getItem('seo_suite_user');
@@ -653,7 +699,8 @@ const App: React.FC = () => {
         insights = await getDashboardInsights(summary, dashboardName);
       }
       
-      setTabInsights(prev => ({ ...prev, [activeTab]: insights || null }));
+      // FIX: Explicitly type `prev` to avoid "unknown" index type error
+      setTabInsights((prev: Record<DashboardTab, string | null>) => ({ ...prev, [activeTab]: insights || null }));
     } catch (err: any) { 
       console.error(err); 
       setError(err.message || "Failed to generate insights.");
@@ -944,35 +991,40 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
   const chartData = useMemo(() => {
     if (!data.length) return [];
     
-    // Group by range label
-    const currentData = data.filter(d => d.dateRangeLabel === 'current');
-    const previousData = data.filter(d => d.dateRangeLabel === 'previous');
+    // Split data into current and previous streams
+    const curRaw = data.filter(d => d.dateRangeLabel === 'current');
+    const prevRaw = data.filter(d => d.dateRangeLabel === 'previous');
 
-    // Create a mapping of all unique timestamps for current period
-    const dates = Array.from(new Set(currentData.map(d => {
+    // Grouping logic (get unique time buckets for current period)
+    const getBucket = (d: DailyData) => {
       if (grouping === 'weekly') return formatDate(getStartOfWeek(new Date(d.date)));
       if (grouping === 'monthly') return `${d.date.slice(0, 7)}-01`;
       return d.date;
-    }))).sort();
+    };
 
-    // Calculate day offset to align previous period to current dates
-    // If range is e.g. 7 days, we find corresponding day -7
-    const currentStart = new Date(Math.min(...currentData.map(d => new Date(d.date).getTime())));
-    const previousStart = new Date(Math.min(...previousData.map(d => new Date(d.date).getTime())));
-    const offsetMs = currentStart.getTime() - previousStart.getTime();
-
-    return dates.map(dateKey => {
-      const curItems = currentData.filter(d => {
-        const dKey = grouping === 'weekly' ? formatDate(getStartOfWeek(new Date(d.date))) : (grouping === 'monthly' ? `${d.date.slice(0, 7)}-01` : d.date);
-        return dKey === dateKey;
+    const buckets = Array.from(new Set(curRaw.map(getBucket))).sort();
+    
+    // Aggregator helper
+    const aggregateRange = (items: DailyData[]) => {
+      const grouped: Record<string, any> = {};
+      items.forEach(d => {
+        const key = getBucket(d);
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(d);
       });
+      return grouped;
+    };
 
-      // Find items from previous period that align with this "index" in the current period
-      const prevItems = previousData.filter(d => {
-        const adjustedDate = new Date(new Date(d.date).getTime() + offsetMs);
-        const dKey = grouping === 'weekly' ? formatDate(getStartOfWeek(adjustedDate)) : (grouping === 'monthly' ? `${formatDate(adjustedDate).slice(0, 7)}-01` : formatDate(adjustedDate));
-        return dKey === dateKey;
-      });
+    const curGrouped = aggregateRange(curRaw);
+    const prevGrouped = aggregateRange(prevRaw);
+    const prevBuckets = Object.keys(prevGrouped).sort();
+
+    // Map by index to ensure perfect superposition regardless of date offsets
+    return buckets.map((bucket, index) => {
+      const curItems = curGrouped[bucket] || [];
+      // Grab previous data by the SAME INDEX in its own sorted bucket list
+      const prevBucket = prevBuckets[index];
+      const prevItems = prevBucket ? prevGrouped[prevBucket] : [];
 
       const sum = (items: DailyData[]) => items.reduce((acc, d) => {
         const isOrg = d.channel?.toLowerCase().includes('organic');
@@ -994,20 +1046,20 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
       const prevSum = sum(prevItems);
 
       return {
-        date: dateKey,
-        organic: curSum.organic,
-        paid: curSum.paid,
-        organicRev: curSum.organicRev,
-        paidRev: curSum.paidRev,
-        searchWeight: weightMetric === 'sessions' ? curSum.search : curSum.searchRev,
-        othersWeight: weightMetric === 'sessions' ? curSum.others : curSum.othersRev,
-        // Comparison keys
-        organicPrev: prevSum.organic,
-        paidPrev: prevSum.paid,
-        organicRevPrev: prevSum.organicRev,
-        paidRevPrev: prevSum.paidRev,
-        searchWeightPrev: weightMetric === 'sessions' ? prevSum.search : prevSum.searchRev,
-        othersWeightPrev: weightMetric === 'sessions' ? prevSum.others : prevSum.othersRev,
+        date: bucket,
+        'Organic (Cur)': curSum.organic,
+        'Paid (Cur)': curSum.paid,
+        'Organic Rev (Cur)': curSum.organicRev,
+        'Paid Rev (Cur)': curSum.paidRev,
+        'Search Weight (Cur)': weightMetric === 'sessions' ? curSum.search : curSum.searchRev,
+        'Others Weight (Cur)': weightMetric === 'sessions' ? curSum.others : curSum.othersRev,
+        // Superposed comparison fields
+        'Organic (Prev)': prevSum.organic,
+        'Paid (Prev)': prevSum.paid,
+        'Organic Rev (Prev)': prevSum.organicRev,
+        'Paid Rev (Prev)': prevSum.paidRev,
+        'Search Weight (Prev)': weightMetric === 'sessions' ? prevSum.search : prevSum.searchRev,
+        'Others Weight (Prev)': weightMetric === 'sessions' ? prevSum.others : prevSum.othersRev,
       };
     });
   }, [data, grouping, weightMetric]);
@@ -1043,21 +1095,21 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
       </div>
 
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
-        <div className="flex justify-between items-center mb-8"><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Session Trend</h4><div className="flex gap-1 bg-slate-100 p-1 rounded-xl">{['daily', 'weekly', 'monthly'].map(g => <button key={g} onClick={() => setGrouping(g)} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === g ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>{g === 'daily' ? 'Day' : g === 'weekly' ? 'Week' : 'Month'}</button>)}</div></div>
+        <div className="flex justify-between items-center mb-8"><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Sessions Performance (Period Overlay)</h4><div className="flex gap-1 bg-slate-100 p-1 rounded-xl">{['daily', 'weekly', 'monthly'].map(g => <button key={g} onClick={() => setGrouping(g)} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === g ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>{g === 'daily' ? 'Day' : g === 'weekly' ? 'Week' : 'Month'}</button>)}</div></div>
         <div className="h-[300px]">
           {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
+              <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
-                <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                <Tooltip content={<ComparisonTooltip />} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
-                <Area name="Organic (Cur)" type="monotone" dataKey="organic" stroke="#6366f1" strokeWidth={3} fillOpacity={0.05} fill="#6366f1" />
-                <Area name="Paid (Cur)" type="monotone" dataKey="paid" stroke="#f59e0b" strokeWidth={3} fillOpacity={0.05} fill="#f59e0b" />
-                {comparisonEnabled && <Area name="Organic (Prev)" type="monotone" dataKey="organicPrev" stroke="#6366f1" strokeWidth={1} strokeDasharray="5 5" fill="transparent" />}
-                {comparisonEnabled && <Area name="Paid (Prev)" type="monotone" dataKey="paidPrev" stroke="#f59e0b" strokeWidth={1} strokeDasharray="5 5" fill="transparent" />}
-              </AreaChart>
+                <Line name="Organic (Cur)" type="monotone" dataKey="Organic (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                <Line name="Paid (Cur)" type="monotone" dataKey="Paid (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                {comparisonEnabled && <Line name="Organic (Prev)" type="monotone" dataKey="Organic (Prev)" stroke="#6366f1" strokeWidth={1.5} strokeDasharray="4 4" dot={false} opacity={0.35} />}
+                {comparisonEnabled && <Line name="Paid (Prev)" type="monotone" dataKey="Paid (Prev)" stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="4 4" dot={false} opacity={0.35} />}
+              </LineChart>
             </ResponsiveContainer>
           ) : <EmptyState text="No data available to chart" />}
         </div>
@@ -1065,23 +1117,23 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
 
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
-          <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Revenue Trend</h4>
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl"><Tag className="w-3 h-3" /><span className="text-[9px] font-black uppercase tracking-widest">Total Revenue ({currencySymbol})</span></div>
+          <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Revenue Evolution (Period Overlay)</h4>
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl"><Tag className="w-3 h-3" /><span className="text-[9px] font-black uppercase tracking-widest">Currency: {currencySymbol}</span></div>
         </div>
         <div className="h-[300px]">
           {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
+              <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} />
-                <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} formatter={(val: number) => [`${currencySymbol}${val.toLocaleString()}`, '']} />
+                <Tooltip content={<ComparisonTooltip currency currencySymbol={currencySymbol} />} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
-                <Area name="Organic Revenue (Cur)" type="monotone" dataKey="organicRev" stroke="#6366f1" strokeWidth={3} fillOpacity={0.05} fill="#6366f1" />
-                <Area name="Paid Revenue (Cur)" type="monotone" dataKey="paidRev" stroke="#f59e0b" strokeWidth={3} fillOpacity={0.05} fill="#f59e0b" />
-                {comparisonEnabled && <Area name="Organic Rev (Prev)" type="monotone" dataKey="organicRevPrev" stroke="#6366f1" strokeWidth={1} strokeDasharray="5 5" fill="transparent" />}
-                {comparisonEnabled && <Area name="Paid Rev (Prev)" type="monotone" dataKey="paidRevPrev" stroke="#f59e0b" strokeWidth={1} strokeDasharray="5 5" fill="transparent" />}
-              </AreaChart>
+                <Line name="Organic Rev (Cur)" type="monotone" dataKey="Organic Rev (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                <Line name="Paid Rev (Cur)" type="monotone" dataKey="Paid Rev (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                {comparisonEnabled && <Line name="Organic Rev (Prev)" type="monotone" dataKey="Organic Rev (Prev)" stroke="#6366f1" strokeWidth={1.5} strokeDasharray="4 4" dot={false} opacity={0.35} />}
+                {comparisonEnabled && <Line name="Paid Rev (Prev)" type="monotone" dataKey="Paid Rev (Prev)" stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="4 4" dot={false} opacity={0.35} />}
+              </LineChart>
             </ResponsiveContainer>
           ) : <EmptyState text="No revenue data available to chart" />}
         </div>
@@ -1094,7 +1146,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
 
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-          <div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Search Channels weight Evolution</h4><p className="text-[11px] font-bold text-slate-600">Total Search (Paid + Organic) vs All Other Channels combined</p></div>
+          <div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Search Weight Analysis (Superposed)</h4><p className="text-[11px] font-bold text-slate-600">Total Search vs All Other Channels</p></div>
           <div className="flex bg-slate-100 p-1 rounded-xl">
             <button onClick={() => setWeightMetric('sessions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'sessions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Sessions</button>
             <button onClick={() => setWeightMetric('revenue')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'revenue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Revenue</button>
@@ -1103,21 +1155,17 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
         <div className="h-[400px]">
           {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="colorSearch" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/><stop offset="95%" stopColor="#6366f1" stopOpacity={0}/></linearGradient>
-                  <linearGradient id="colorOthers" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#94a3b8" stopOpacity={0.1}/><stop offset="95%" stopColor="#94a3b8" stopOpacity={0}/></linearGradient>
-                </defs>
+              <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => weightMetric === 'revenue' ? `${currencySymbol}${val.toLocaleString()}` : val.toLocaleString()} />
-                <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} formatter={(val: number) => [weightMetric === 'revenue' ? `${currencySymbol}${val.toLocaleString()}` : val.toLocaleString(), '']} />
+                <Tooltip content={<ComparisonTooltip currency={weightMetric === 'revenue'} currencySymbol={currencySymbol} />} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
-                <Area name="Total Search (Cur)" type="monotone" dataKey="searchWeight" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorSearch)" />
-                <Area name="All Others (Cur)" type="monotone" dataKey="othersWeight" stroke="#94a3b8" strokeWidth={3} fillOpacity={1} fill="url(#colorOthers)" />
-                {comparisonEnabled && <Area name="Total Search (Prev)" type="monotone" dataKey="searchWeightPrev" stroke="#6366f1" strokeWidth={1} strokeDasharray="5 5" fill="transparent" />}
-                {comparisonEnabled && <Area name="All Others (Prev)" type="monotone" dataKey="othersWeightPrev" stroke="#94a3b8" strokeWidth={1} strokeDasharray="5 5" fill="transparent" />}
-              </AreaChart>
+                <Line name="Search Weight (Cur)" type="monotone" dataKey="Search Weight (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                <Line name="Others Weight (Cur)" type="monotone" dataKey="Others Weight (Cur)" stroke="#94a3b8" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                {comparisonEnabled && <Line name="Search Weight (Prev)" type="monotone" dataKey="Search Weight (Prev)" stroke="#6366f1" strokeWidth={1.5} strokeDasharray="4 4" dot={false} opacity={0.35} />}
+                {comparisonEnabled && <Line name="Others Weight (Prev)" type="monotone" dataKey="Others Weight (Prev)" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="4 4" dot={false} opacity={0.35} />}
+              </LineChart>
             </ResponsiveContainer>
           ) : <EmptyState text="No data available for weight analysis" />}
         </div>
@@ -1134,30 +1182,35 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, c
   const brandedTrendData = useMemo(() => {
     if (!keywordData.length) return [];
     
-    const currentData = keywordData.filter(k => k.dateRangeLabel === 'current');
-    const previousData = keywordData.filter(k => k.dateRangeLabel === 'previous');
+    const curRaw = keywordData.filter(k => k.dateRangeLabel === 'current');
+    const prevRaw = keywordData.filter(k => k.dateRangeLabel === 'previous');
 
-    const dates = Array.from(new Set(currentData.map(k => {
+    const getBucket = (k: KeywordData) => {
       if (grouping === 'weekly') return formatDate(getStartOfWeek(new Date(k.date || '')));
       if (grouping === 'monthly') return `${(k.date || '').slice(0, 7)}-01`;
       return k.date || '';
-    }))).sort();
+    };
 
-    const currentStart = new Date(Math.min(...currentData.map(d => new Date(d.date!).getTime())));
-    const previousStart = new Date(Math.min(...previousData.map(d => new Date(d.date!).getTime())));
-    const offsetMs = isNaN(previousStart.getTime()) ? 0 : currentStart.getTime() - previousStart.getTime();
-
-    return dates.map(dateKey => {
-      const curItems = currentData.filter(k => {
-        const dKey = grouping === 'weekly' ? formatDate(getStartOfWeek(new Date(k.date!))) : (grouping === 'monthly' ? `${k.date!.slice(0, 7)}-01` : k.date);
-        return dKey === dateKey;
+    const buckets = Array.from(new Set(curRaw.map(getBucket))).sort();
+    
+    const aggregateRange = (items: KeywordData[]) => {
+      const grouped: Record<string, any> = {};
+      items.forEach(k => {
+        const key = getBucket(k);
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(k);
       });
+      return grouped;
+    };
 
-      const prevItems = previousData.filter(k => {
-        const adjustedDate = new Date(new Date(k.date!).getTime() + offsetMs);
-        const dKey = grouping === 'weekly' ? formatDate(getStartOfWeek(adjustedDate)) : (grouping === 'monthly' ? `${formatDate(adjustedDate).slice(0, 7)}-01` : formatDate(adjustedDate));
-        return dKey === dateKey;
-      });
+    const curGrouped = aggregateRange(curRaw);
+    const prevGrouped = aggregateRange(prevRaw);
+    const prevBuckets = Object.keys(prevGrouped).sort();
+
+    return buckets.map((bucket, index) => {
+      const curItems = curGrouped[bucket] || [];
+      const prevBucket = prevBuckets[index];
+      const prevItems = prevBucket ? prevGrouped[prevBucket] : [];
 
       const sum = (items: KeywordData[]) => items.reduce((acc, k) => ({
         brandedClicks: acc.brandedClicks + (k.queryType === 'Branded' ? k.clicks : 0),
@@ -1170,11 +1223,11 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, c
       const prevSum = sum(prevItems);
 
       return {
-        date: dateKey,
-        brandedVal: brandedMetric === 'clicks' ? curSum.brandedClicks : curSum.brandedImpr,
-        nonBrandedVal: brandedMetric === 'clicks' ? curSum.nonBrandedClicks : curSum.nonBrandedImpr,
-        brandedValPrev: brandedMetric === 'clicks' ? prevSum.brandedClicks : prevSum.brandedImpr,
-        nonBrandedValPrev: brandedMetric === 'clicks' ? prevSum.nonBrandedClicks : prevSum.nonBrandedImpr,
+        date: bucket,
+        'Branded (Cur)': brandedMetric === 'clicks' ? curSum.brandedClicks : curSum.brandedImpr,
+        'Non-Branded (Cur)': brandedMetric === 'clicks' ? curSum.nonBrandedClicks : curSum.nonBrandedImpr,
+        'Branded (Prev)': brandedMetric === 'clicks' ? prevSum.brandedClicks : prevSum.brandedImpr,
+        'Non-Branded (Prev)': brandedMetric === 'clicks' ? prevSum.nonBrandedClicks : prevSum.nonBrandedImpr,
       };
     });
   }, [keywordData, grouping, brandedMetric]);
@@ -1185,21 +1238,6 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, c
     return Object.values(map).map(item => ({ country: item.country, traffic: item.sessions, revenue: item.revenue, sales: item.sales })).filter(item => item.traffic > 0);
   }, [data]);
 
-  const opportunityData = useMemo(() => {
-    const currentKeywords = keywordData.filter(k => k.dateRangeLabel === 'current');
-    const map: Record<string, { country: string; impressions: number; clicks: number }> = {};
-    currentKeywords.forEach(k => { if (!map[k.country]) map[k.country] = { country: k.country, impressions: 0, clicks: 0 }; map[k.country].impressions += k.impressions; map[k.country].clicks += k.clicks; });
-    return Object.values(map).map(item => ({ ...item, ctr: item.impressions > 0 ? (item.clicks / item.impressions) * 100 : 0 })).sort((a, b) => b.impressions - a.impressions).slice(0, 15).sort((a, b) => a.ctr - b.ctr).slice(0, 10);
-  }, [keywordData]);
-
-  const opportunityDrillDown = useMemo(() => {
-    if (!selectedOpportunityCountry) return [];
-    const currentKeywords = keywordData.filter(k => k.dateRangeLabel === 'current' && k.country === selectedOpportunityCountry);
-    const pageMap: Record<string, { url: string; impressions: number; clicks: number }> = {};
-    currentKeywords.forEach(k => { if (!pageMap[k.landingPage]) pageMap[k.landingPage] = { url: k.landingPage, impressions: 0, clicks: 0 }; pageMap[k.landingPage].impressions += k.impressions; pageMap[k.landingPage].clicks += k.clicks; });
-    return Object.values(pageMap).map(item => ({ ...item, ctr: item.impressions > 0 ? (item.clicks / item.impressions) * 100 : 0 })).sort((a, b) => b.impressions - a.impressions).slice(0, 5);
-  }, [selectedOpportunityCountry, keywordData]);
-
   const gscStats = useMemo(() => {
     const current = keywordData.filter((k:any) => k.dateRangeLabel === 'current');
     const previous = keywordData.filter((k:any) => k.dateRangeLabel === 'previous');
@@ -1209,13 +1247,7 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, c
     return { current: cSum, changes: { impressions: getChange(cSum.impressions, pSum.impressions), clicks: getChange(cSum.clicks, pSum.clicks), ctr: getChange(cSum.clicks/(cSum.impressions||1), pSum.clicks/(pSum.impressions||1)) }, abs: { impressions: cSum.impressions - pSum.impressions, clicks: cSum.clicks - pSum.clicks } };
   }, [keywordData]);
 
-  const countryStats = useMemo(() => {
-    const map: any = {};
-    keywordData.filter((k:any) => k.dateRangeLabel === 'current').forEach((k: any) => { if (!map[k.country]) map[k.country] = { country: k.country, clicks: 0, impressions: 0 }; map[k.country].clicks += k.clicks; map[k.country].impressions += k.impressions; });
-    return Object.values(map).sort((a: any, b: any) => b.clicks - a.clicks).slice(0, 10);
-  }, [keywordData]);
-
-  const metricName = brandedMetric.charAt(0).toUpperCase() + brandedMetric.slice(1);
+  const metricLabel = brandedMetric.charAt(0).toUpperCase() + brandedMetric.slice(1);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
@@ -1228,34 +1260,16 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, c
         <KpiCard title="GA4 Sales" value={organicGa4.current.sales} comparison={comparisonEnabled ? organicGa4.changes.sales : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.revenue : undefined} icon={<ShoppingBag />} color="emerald" />
       </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {[ {title: 'Clicks by Market', key: 'clicks', color: '#6366f1'}, {title: 'Visibility by Market', key: 'impressions', color: '#0ea5e9'} ].map(chart => (
-          <div key={chart.key} className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm h-[400px]">
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-8">{chart.title}</h4>
-            {countryStats.length > 0 ? (<ResponsiveContainer width="100%" height="85%"><BarChart data={countryStats}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="country" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} /><YAxis axisLine={false} tickLine={false} tick={{fontSize: 9}} /><Tooltip cursor={{fill: '#f8fafc'}} /><Bar dataKey={chart.key} fill={chart.color} radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer>) : <EmptyState text="Syncing markets..." />}
-          </div>
-        ))}
-      </div>
-
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Branded vs. Non-Branded (GSC Trend)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Comparison of search volume capture by query type</p>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Keyword Visibility Overlay (Branded vs Non-Branded)</h4>
+            <p className="text-[11px] font-bold text-slate-600">Period Over Period superposition comparison</p>
           </div>
           <div className="flex bg-slate-100 p-1 rounded-xl">
-            <button 
-              onClick={() => setBrandedMetric('clicks')} 
-              className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'clicks' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
-            >
-              Clicks
-            </button>
-            <button 
-              onClick={() => setBrandedMetric('impressions')} 
-              className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'impressions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
-            >
-              Impressions
-            </button>
+            {['clicks', 'impressions'].map(m => (
+              <button key={m} onClick={() => setBrandedMetric(m as any)} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === m ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>{m}</button>
+            ))}
           </div>
         </div>
         <div className="h-[400px]">
@@ -1265,12 +1279,12 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, c
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
-                <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                <Tooltip content={<ComparisonTooltip />} />
                 <Legend verticalAlign="top" iconType="circle" />
-                <Line name={`Branded ${metricName} (Cur)`} type="monotone" dataKey="brandedVal" stroke="#6366f1" strokeWidth={3} dot={false} />
-                <Line name={`Non-Branded ${metricName} (Cur)`} type="monotone" dataKey="nonBrandedVal" stroke="#10b981" strokeWidth={3} dot={false} />
-                {comparisonEnabled && <Line name={`Branded ${metricName} (Prev)`} type="monotone" dataKey="brandedValPrev" stroke="#6366f1" strokeWidth={1} strokeDasharray="5 5" dot={false} opacity={0.5} />}
-                {comparisonEnabled && <Line name={`Non-Branded ${metricName} (Prev)`} type="monotone" dataKey="nonBrandedValPrev" stroke="#10b981" strokeWidth={1} strokeDasharray="5 5" dot={false} opacity={0.5} />}
+                <Line name="Branded (Cur)" type="monotone" dataKey="Branded (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                <Line name="Non-Branded (Cur)" type="monotone" dataKey="Non-Branded (Cur)" stroke="#10b981" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                {comparisonEnabled && <Line name="Branded (Prev)" type="monotone" dataKey="Branded (Prev)" stroke="#6366f1" strokeWidth={1.5} strokeDasharray="4 4" dot={false} opacity={0.35} />}
+                {comparisonEnabled && <Line name="Non-Branded (Prev)" type="monotone" dataKey="Non-Branded (Prev)" stroke="#10b981" strokeWidth={1.5} strokeDasharray="4 4" dot={false} opacity={0.35} />}
               </LineChart>
             </ResponsiveContainer>
           ) : <EmptyState text="No keyword trend data available..." />}
@@ -1278,7 +1292,7 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, c
       </div>
 
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
-        <div className="flex justify-between items-center mb-8"><div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Market Efficiency Analysis (Organic Search)</h4><p className="text-[11px] font-bold text-slate-600">Traffic (X) vs Revenue (Y) | Size = Revenue</p></div><div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><Activity className="w-4 h-4" /></div></div>
+        <div className="flex justify-between items-center mb-8"><div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Market Efficiency Analysis (Current Period)</h4><p className="text-[11px] font-bold text-slate-600">Traffic vs Revenue | Size = Revenue</p></div></div>
         <div className="h-[450px]">
           {scatterData.length > 0 ? (<ResponsiveContainer width="100%" height="100%"><ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis type="number" dataKey="traffic" name="Traffic" unit=" sess." axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} /><YAxis type="number" dataKey="revenue" name="Revenue" unit={` ${currencySymbol}`} axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} /><ZAxis type="number" dataKey="revenue" range={[100, 2000]} name="Market Value" unit={` ${currencySymbol}`} /><Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }) => { if (active && payload && payload.length) { const d = payload[0].payload; return (<div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10"><p className="text-[10px] font-black uppercase tracking-widest mb-2 border-b border-white/10 pb-2">{d.country}</p><div className="space-y-1"><p className="text-[9px] flex justify-between gap-4"><span>Traffic:</span> <span className="font-bold">{d.traffic.toLocaleString()} sess.</span></p><p className="text-[9px] flex justify-between gap-4"><span>Revenue:</span> <span className="font-bold text-emerald-400">{currencySymbol}{d.revenue.toLocaleString()}</span></p><p className="text-[9px] flex justify-between gap-4"><span>Efficiency:</span> <span className="font-bold text-indigo-400">{currencySymbol}{(d.revenue / d.traffic).toFixed(2)}/sess.</span></p></div></div>); } return null; }} /><Scatter name="Organic Markets" data={scatterData}>{scatterData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.revenue > 10000 ? '#10b981' : entry.revenue > 5000 ? '#6366f1' : '#f59e0b'} fillOpacity={0.6} strokeWidth={2} stroke={entry.revenue > 10000 ? '#059669' : entry.revenue > 5000 ? '#4f46e5' : '#d97706'} />))}</Scatter></ScatterChart></ResponsiveContainer>) : <EmptyState text="Not enough organic data for the Scatter Plot..." />}
         </div>
@@ -1290,17 +1304,35 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, c
 const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, comparisonEnabled }: any) => {
   const [expandedUrls, setExpandedUrls] = useState<Set<string>>(new Set());
   const toggleUrl = (url: string) => { const next = new Set(expandedUrls); if (next.has(url)) next.delete(url); else next.add(url); setExpandedUrls(next); };
+  
+  // FIX: Type the `aggregatedByUrl` result to avoid "unknown" index errors in the template
   const aggregatedByUrl = useMemo(() => {
-    const map: any = {};
+    const map: Record<string, any> = {};
     keywords.forEach((k: any) => {
       const url = k.landingPage || 'Unknown URL';
-      if (!map[url]) map[url] = { url, clicks: 0, impressions: 0, prevClicks: 0, children: {} };
-      if (k.dateRangeLabel === 'current') { map[url].clicks += k.clicks; map[url].impressions += k.impressions; } else { map[url].prevClicks += k.clicks; }
+      // FIX: Cast indices to string to ensure compiler doesn't infer unknown
+      const urlStr = String(url);
+      if (!map[urlStr]) map[urlStr] = { url: urlStr, clicks: 0, impressions: 0, prevClicks: 0, children: {} };
+      if (k.dateRangeLabel === 'current') { 
+        map[urlStr].clicks += k.clicks; map[urlStr].impressions += k.impressions; 
+      } else { 
+        map[urlStr].prevClicks += k.clicks; 
+      }
       const kw = k.keyword || 'Not provided';
-      if (!map[url].children[kw]) map[url].children[kw] = { keyword: kw, queryType: k.queryType, clicks: 0, impressions: 0, prevClicks: 0 };
-      if (k.dateRangeLabel === 'current') { map[url].children[kw].clicks += k.clicks; map[url].children[kw].impressions += k.impressions; } else { map[url].children[kw].prevClicks += k.clicks; }
+      const kwStr = String(kw);
+      if (!map[urlStr].children[kwStr]) map[urlStr].children[kwStr] = { keyword: kwStr, queryType: k.queryType, clicks: 0, impressions: 0, prevClicks: 0 };
+      if (k.dateRangeLabel === 'current') { 
+        map[urlStr].children[kwStr].clicks += k.clicks; map[urlStr].children[kwStr].impressions += k.impressions; 
+      } else { 
+        map[urlStr].children[kwStr].prevClicks += k.clicks; 
+      }
     });
-    return Object.values(map).map((page: any) => ({ ...page, ctr: page.impressions > 0 ? (page.clicks / page.impressions) * 100 : 0, clickChange: page.prevClicks === 0 ? 0 : ((page.clicks - page.prevClicks) / page.prevClicks) * 100, children: Object.values(page.children).sort((a: any, b: any) => b.clicks - a.clicks) })).filter((p: any) => p.url.toLowerCase().includes(searchTerm.toLowerCase()) || p.children.some((c: any) => c.keyword.toLowerCase().includes(searchTerm.toLowerCase()))).sort((a: any, b: any) => b.clicks - a.clicks);
+    return Object.values(map).map((page: any) => ({ 
+      ...page, 
+      ctr: page.impressions > 0 ? (page.clicks / page.impressions) * 100 : 0, 
+      clickChange: page.prevClicks === 0 ? 0 : ((page.clicks - page.prevClicks) / page.prevClicks) * 100, 
+      children: Object.values(page.children).sort((a: any, b: any) => b.clicks - a.clicks) 
+    })).filter((p: any) => p.url.toLowerCase().includes(searchTerm.toLowerCase()) || p.children.some((c: any) => c.keyword.toLowerCase().includes(searchTerm.toLowerCase()))).sort((a: any, b: any) => b.clicks - a.clicks);
   }, [keywords, searchTerm]);
 
   return (
@@ -1309,7 +1341,38 @@ const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, compa
         <div><h3 className="text-xl font-black mb-1">Deep SEO Drill-down</h3><p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">URLs & Keywords</p></div>
         <div className="relative w-full md:w-80"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" /><input type="text" placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-medium focus:ring-2 ring-indigo-500/10 outline-none" /></div>
       </div>
-      <div className="overflow-x-auto"><table className="w-full text-left text-xs table-fixed min-w-[1000px]"><thead className="bg-slate-50 text-slate-400 font-black uppercase text-[9px] tracking-widest border-b border-slate-100"><tr><th className="px-6 py-4 w-16"></th><th className="px-4 py-4 w-[50%]">Page</th><th className="px-6 py-4 text-center w-32">Impr.</th><th className="px-6 py-4 text-center w-32">Clicks</th><th className="px-6 py-4 text-center w-28">CTR</th></tr></thead><tbody className="divide-y divide-slate-100">{aggregatedByUrl.slice(0, 100).map((row: any) => (<React.Fragment key={row.url}><tr onClick={() => toggleUrl(row.url)} className="group cursor-pointer hover:bg-slate-50/50 transition-all"><td className="pl-6 py-5 flex justify-center">{expandedUrls.has(row.url) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</td><td className="px-4 py-5 font-bold text-slate-900 break-all">{row.url}</td><td className="px-6 py-5 text-center text-slate-500">{row.impressions.toLocaleString()}</td><td className="px-6 py-5 text-center font-black text-slate-900">{row.clicks.toLocaleString()}</td><td className="px-6 py-5 text-center"><span className="px-2 py-1 rounded-lg bg-slate-100 font-bold">{row.ctr.toFixed(1)}%</span></td></tr>{expandedUrls.has(row.url) && row.children.map((child: any, ci: number) => (<tr key={ci} className="bg-slate-50/30 border-l-4 border-indigo-500"><td className="py-3"></td><td className="px-4 py-3 pl-14"><div className="flex items-center gap-3"><span className="text-slate-700 font-semibold">{child.keyword}</span><span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase ${child.queryType === 'Branded' ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-500'}`}>{child.queryType}</span></div></td><td className="px-6 py-3 text-center text-slate-400">{child.impressions.toLocaleString()}</td><td className="px-6 py-3 text-center text-slate-600 font-bold">{child.clicks.toLocaleString()}</td><td className="px-6 py-3 text-center text-slate-400 font-bold">{(child.impressions > 0 ? child.clicks/child.impressions*100 : 0).toFixed(1)}%</td></tr>))}</React.Fragment>))}</tbody></table>{aggregatedByUrl.length === 0 && <div className="px-6 py-20 text-center text-slate-400 italic font-medium">No results found. Try broadening the date range.</div>}</div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-xs table-fixed min-w-[1000px]">
+          <thead className="bg-slate-50 text-slate-400 font-black uppercase text-[9px] tracking-widest border-b border-slate-100">
+            <tr><th className="px-6 py-4 w-16"></th><th className="px-4 py-4 w-[50%]">Page</th><th className="px-6 py-4 text-center w-32">Impr.</th><th className="px-6 py-4 text-center w-32">Clicks</th><th className="px-6 py-4 text-center w-28">CTR</th></tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {aggregatedByUrl.slice(0, 100).map((row: any) => (
+              <React.Fragment key={row.url}>
+                {/* FIX: Ensure `row.url` is treated as string for the `toggleUrl` index check */}
+                <tr onClick={() => toggleUrl(String(row.url))} className="group cursor-pointer hover:bg-slate-50/50 transition-all">
+                  <td className="pl-6 py-5 flex justify-center">{expandedUrls.has(String(row.url)) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</td>
+                  <td className="px-4 py-5 font-bold text-slate-900 break-all">{row.url}</td>
+                  <td className="px-6 py-5 text-center text-slate-500">{row.impressions.toLocaleString()}</td>
+                  <td className="px-6 py-5 text-center font-black text-slate-900">{row.clicks.toLocaleString()}</td>
+                  <td className="px-6 py-5 text-center"><span className="px-2 py-1 rounded-lg bg-slate-100 font-bold">{row.ctr.toFixed(1)}%</span></td>
+                </tr>
+                {/* FIX: Cast index access for safety and clarity */}
+                {expandedUrls.has(String(row.url)) && (row.children as any[]).map((child: any, ci: number) => (
+                  <tr key={ci} className="bg-slate-50/30 border-l-4 border-indigo-500">
+                    <td className="py-3"></td>
+                    <td className="px-4 py-3 pl-14"><div className="flex items-center gap-3"><span className="text-slate-700 font-semibold">{child.keyword}</span><span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase ${child.queryType === 'Branded' ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-500'}`}>{child.queryType}</span></div></td>
+                    <td className="px-6 py-3 text-center text-slate-400">{child.impressions.toLocaleString()}</td>
+                    <td className="px-6 py-3 text-center text-slate-600 font-bold">{child.clicks.toLocaleString()}</td>
+                    <td className="px-6 py-3 text-center text-slate-400 font-bold">{(child.impressions > 0 ? child.clicks/child.impressions*100 : 0).toFixed(1)}%</td>
+                  </tr>
+                ))}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+        {aggregatedByUrl.length === 0 && <div className="px-6 py-20 text-center text-slate-400 italic font-medium">No results found. Try broadening the date range.</div>}
+      </div>
     </div>
   );
 };
