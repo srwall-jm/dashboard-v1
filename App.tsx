@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key, PieChart as PieIcon, Check
@@ -1228,8 +1229,26 @@ const SeoMarketplaceView = ({ data, keywordData, gscTotals, aggregate, compariso
   grouping: 'daily' | 'weekly' | 'monthly';
 }) => {
   const [brandedMetric, setBrandedMetric] = useState<'clicks' | 'impressions'>('clicks');
-  const organicGa4 = aggregate(data.filter((d: any) => d.channel?.toLowerCase().includes('organic')));
   
+  // SEO Metrics from GA4
+  const organicGa4 = useMemo(() => aggregate(data.filter((d: any) => d.channel?.toLowerCase().includes('organic'))), [data, aggregate]);
+  
+  // GSC Stats using totals from API for 100% accuracy
+  const gscStats = useMemo(() => {
+    if (!gscTotals) return { current: { clicks: 0, impressions: 0, ctr: 0 }, changes: { clicks: 0, impressions: 0, ctr: 0 } };
+    const cur = gscTotals.current;
+    const prev = gscTotals.previous;
+    const getChange = (c: number, p: number) => p === 0 ? 0 : ((c - p) / p) * 100;
+    return {
+      current: { ...cur, ctr: cur.impressions > 0 ? (cur.clicks / cur.impressions) * 100 : 0 },
+      changes: {
+        clicks: getChange(cur.clicks, prev.clicks),
+        impressions: getChange(cur.impressions, prev.impressions),
+        ctr: getChange(cur.clicks / (cur.impressions || 1), prev.clicks / (prev.impressions || 1))
+      }
+    };
+  }, [gscTotals]);
+
   const brandedTrendData = useMemo(() => {
     if (!keywordData.length) return [];
     
@@ -1294,40 +1313,71 @@ const SeoMarketplaceView = ({ data, keywordData, gscTotals, aggregate, compariso
     return Object.values(map);
   }, [data]);
 
-  const gscStats = useMemo(() => {
-    if (!gscTotals) return { current: { clicks: 0, impressions: 0, ctr: 0 }, changes: { clicks: 0, impressions: 0, ctr: 0 } };
-    const cur = gscTotals.current;
-    const prev = gscTotals.previous;
-    const getChange = (c: number, p: number) => p === 0 ? 0 : ((c - p) / p) * 100;
-    return {
-      current: { ...cur, ctr: cur.impressions > 0 ? (cur.clicks / cur.impressions) * 100 : 0 },
-      changes: {
-        clicks: getChange(cur.clicks, prev.clicks),
-        impressions: getChange(cur.impressions, prev.impressions),
-        ctr: getChange(cur.clicks / (cur.impressions || 1), prev.clicks / (prev.impressions || 1))
-      }
-    };
-  }, [gscTotals]);
-
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard title="SEO Sessions" value={organicGa4.current.sessions} comparison={comparisonEnabled ? organicGa4.changes.sessions : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.sessions : undefined} icon={<TrendingUp />} color="indigo" />
-        <KpiCard title="SEO Revenue" value={`${currencySymbol}${organicGa4.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.revenue : undefined} icon={<Tag />} prefix={currencySymbol} color="emerald" />
-        <KpiCard title="GSC Total Clicks" value={gscStats.current.clicks} comparison={comparisonEnabled ? gscStats.changes.clicks : undefined} icon={<MousePointer2 />} color="sky" />
-        <KpiCard title="GSC Avg. CTR" value={`${gscStats.current.ctr.toFixed(2)}%`} comparison={comparisonEnabled ? gscStats.changes.ctr : undefined} icon={<Percent />} isPercent color="sky" />
+      {/* 6 KPI Cards: 3 from GA, 3 from GSC */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+        <KpiCard 
+          title="Organic Sessions" 
+          value={organicGa4.current.sessions} 
+          comparison={comparisonEnabled ? organicGa4.changes.sessions : undefined} 
+          icon={<TrendingUp />} 
+          color="indigo" 
+        />
+        <KpiCard 
+          title="Organic Revenue" 
+          value={`${currencySymbol}${organicGa4.current.revenue.toLocaleString()}`} 
+          comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} 
+          icon={<Tag />} 
+          prefix={currencySymbol} 
+          color="emerald" 
+        />
+        <KpiCard 
+          title="Organic Conv. Rate" 
+          value={`${organicGa4.current.cr.toFixed(2)}%`} 
+          comparison={comparisonEnabled ? organicGa4.changes.cr : undefined} 
+          icon={<Percent />} 
+          isPercent 
+          color="emerald" 
+        />
+        <KpiCard 
+          title="GSC Clicks" 
+          value={gscStats.current.clicks} 
+          comparison={comparisonEnabled ? gscStats.changes.clicks : undefined} 
+          icon={<MousePointer2 />} 
+          color="sky" 
+        />
+        <KpiCard 
+          title="GSC Impressions" 
+          value={gscStats.current.impressions} 
+          comparison={comparisonEnabled ? gscStats.changes.impressions : undefined} 
+          icon={<Eye />} 
+          color="sky" 
+        />
+        <KpiCard 
+          title="GSC Avg. CTR" 
+          value={`${gscStats.current.ctr.toFixed(2)}%`} 
+          comparison={comparisonEnabled ? gscStats.changes.ctr : undefined} 
+          icon={<Percent />} 
+          isPercent 
+          color="sky" 
+        />
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
+      <div className="flex flex-col gap-8">
+        {/* Brand vs Generic Trends (Full Width) */}
+        <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden w-full">
           <div className="flex justify-between items-center mb-8">
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Brand vs Generic Search</h4>
+            <div>
+              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Brand vs Generic Search</h4>
+              <p className="text-[11px] font-bold text-slate-600">Distribution of organic visibility</p>
+            </div>
             <div className="flex bg-slate-100 p-1 rounded-xl">
                <button onClick={() => setBrandedMetric('clicks')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'clicks' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Clicks</button>
                <button onClick={() => setBrandedMetric('impressions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'impressions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Impr.</button>
             </div>
           </div>
-          <div className="h-[350px]">
+          <div className="h-[400px]">
             {brandedTrendData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={brandedTrendData}>
@@ -1348,16 +1398,37 @@ const SeoMarketplaceView = ({ data, keywordData, gscTotals, aggregate, compariso
           </div>
         </div>
 
-        <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
-          <div className="mb-8"><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Market Efficiency Matrix</h4><p className="text-[11px] font-bold text-slate-600">SEO Revenue vs Volume by Market</p></div>
-          <div className="h-[350px]">
+        {/* Market Efficiency Matrix (Full Width) */}
+        <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm w-full">
+          <div className="mb-8">
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Market Efficiency Matrix</h4>
+            <p className="text-[11px] font-bold text-slate-600">SEO Revenue vs Volume by Market</p>
+          </div>
+          <div className="h-[450px]">
             {scatterData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                <ScatterChart margin={{ top: 20, right: 30, bottom: 40, left: 30 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis type="number" dataKey="sessions" name="Sessions" tick={{fontSize: 9}} label={{ value: 'Sessions', position: 'insideBottom', offset: -10, fontSize: 9, fontWeight: 900, textAnchor: 'middle' }} axisLine={false} tickLine={false} />
-                  <YAxis type="number" dataKey="revenue" name="Revenue" tick={{fontSize: 9}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} axisLine={false} tickLine={false} />
-                  <ZAxis type="number" dataKey="sales" range={[100, 1000]} name="Sales" />
+                  <XAxis 
+                    type="number" 
+                    dataKey="sessions" 
+                    name="Sessions" 
+                    tick={{fontSize: 9}} 
+                    label={{ value: 'Sessions (Organic)', position: 'insideBottom', offset: -20, fontSize: 10, fontWeight: 900 }} 
+                    axisLine={false} 
+                    tickLine={false} 
+                  />
+                  <YAxis 
+                    type="number" 
+                    dataKey="revenue" 
+                    name="Revenue" 
+                    tick={{fontSize: 9}} 
+                    tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} 
+                    label={{ value: 'Revenue', angle: -90, position: 'insideLeft', fontSize: 10, fontWeight: 900 }}
+                    axisLine={false} 
+                    tickLine={false} 
+                  />
+                  <ZAxis type="number" dataKey="sales" range={[150, 2000]} name="Sales" />
                   <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }: any) => {
                     if (active && payload && payload.length) {
                       const d = payload[0].payload;
@@ -1368,6 +1439,7 @@ const SeoMarketplaceView = ({ data, keywordData, gscTotals, aggregate, compariso
                             <p>Revenue: {currencySymbol}{d.revenue.toLocaleString()}</p>
                             <p>Sessions: {d.sessions.toLocaleString()}</p>
                             <p>Sales: {d.sales.toLocaleString()}</p>
+                            <p>Conv. Rate: {(d.sessions > 0 ? (d.sales / d.sessions) * 100 : 0).toFixed(2)}%</p>
                           </div>
                         </div>
                       );
