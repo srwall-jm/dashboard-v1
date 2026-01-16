@@ -1,12 +1,12 @@
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 
 export const getDashboardInsights = async (dataSummary: string, dashboardName: string) => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
     /* Use gemini-3-pro-preview for high-precision business reasoning */
-    const response = await ai.models.generateContent({
+    const response: GenerateContentResponse = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: `You are a world-class SEO, Paid Search, and Data Strategist. 
       You are analysing the "${dashboardName}" page of an advanced dashboard. 

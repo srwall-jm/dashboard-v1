@@ -280,6 +280,7 @@ const App: React.FC = () => {
   
   const [realDailyData, setRealDailyData] = useState<DailyData[]>([]);
   const [realKeywordData, setRealKeywordData] = useState<KeywordData[]>([]);
+  const [gscTotals, setGscTotals] = useState<{current: any, previous: any} | null>(null);
   
   const [isLoadingGa4, setIsLoadingGa4] = useState(false);
   const [isLoadingGsc, setIsLoadingGsc] = useState(false);
@@ -295,6 +296,16 @@ const App: React.FC = () => {
   const [openaiKey, setOpenaiKey] = useState(() => localStorage.getItem('openai_api_key') || '');
 
   const [activeTab, setActiveTab] = useState<DashboardTab>(DashboardTab.ORGANIC_VS_PAID);
+  
+  // Fix "Type 'unknown' cannot be used as an index type" errors by using string keys for the record.
+  // This avoids strict enum indexing issues that can lead to 'unknown' inference in complex scenarios.
+  const [tabInsights, setTabInsights] = useState<Record<string, string | null>>({
+    [DashboardTab.ORGANIC_VS_PAID]: null,
+    [DashboardTab.SEO_BY_COUNTRY]: null,
+    [DashboardTab.KEYWORD_DEEP_DIVE]: null
+  });
+  const [loadingInsights, setLoadingInsights] = useState(false);
+
   const [filters, setFilters] = useState<DashboardFilters>({
     dateRange: { 
       start: formatDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)), 
@@ -310,12 +321,6 @@ const App: React.FC = () => {
   });
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [tabInsights, setTabInsights] = useState<Record<DashboardTab, string | null>>({
-    [DashboardTab.ORGANIC_VS_PAID]: null,
-    [DashboardTab.SEO_BY_COUNTRY]: null,
-    [DashboardTab.KEYWORD_DEEP_DIVE]: null
-  });
-  const [loadingInsights, setLoadingInsights] = useState(false);
 
   const tokenClientGa4 = useRef<any>(null);
   const tokenClientGsc = useRef<any>(null);
@@ -483,20 +488,40 @@ const App: React.FC = () => {
     setIsLoadingGsc(true);
     try {
       const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
+      
       const fetchOneRange = async (start: string, end: string, label: 'current' | 'previous') => {
-        const resp = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
+        // Request 1: GRANULAR (Limited to 25k rows for drill-down)
+        const respGranular = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             startDate: start,
             endDate: end,
             dimensions: ['query', 'page', 'country', 'date'],
-            rowLimit: 5000
+            rowLimit: 25000
           })
         });
-        const data = await resp.json();
-        if (data.error) throw new Error(data.error.message);
-        return (data.rows || []).map((row: any) => ({
+        const dataGranular = await respGranular.json();
+        if (dataGranular.error) throw new Error(dataGranular.error.message);
+
+        // Request 2: SITE TOTALS (No dimensions to avoid privacy filtering of queries, ensuring 100% data matching UI)
+        const respTotals = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            startDate: start,
+            endDate: end,
+            // Fetching by date ensures we get the true volume for that period
+            dimensions: ['date'],
+          })
+        });
+        const dataTotals = await respTotals.json();
+        const totalAggregated = (dataTotals.rows || []).reduce((acc: any, row: any) => ({
+          clicks: acc.clicks + row.clicks,
+          impressions: acc.impressions + row.impressions,
+        }), { clicks: 0, impressions: 0 });
+
+        const mapped = (dataGranular.rows || []).map((row: any) => ({
             keyword: row.keys[0] || '',
             landingPage: row.keys[1] || '',
             country: normalizeCountry(row.keys[2]),
@@ -508,15 +533,27 @@ const App: React.FC = () => {
             ctr: (row.ctr || 0) * 100,
             sessions: 0, conversionRate: 0, revenue: 0, sales: 0, addToCarts: 0, checkouts: 0
         }));
+
+        return { mapped, totals: totalAggregated };
       };
 
-      let combined: KeywordData[] = await fetchOneRange(filters.dateRange.start, filters.dateRange.end, 'current');
+      let combined: KeywordData[] = [];
+      let currentTotals = { clicks: 0, impressions: 0 };
+      let previousTotals = { clicks: 0, impressions: 0 };
+
+      const curData = await fetchOneRange(filters.dateRange.start, filters.dateRange.end, 'current');
+      combined = curData.mapped;
+      currentTotals = curData.totals;
+
       if (filters.comparison.enabled) {
         const comp = getComparisonDates();
-        const prev = await fetchOneRange(comp.start, comp.end, 'previous');
-        combined = [...combined, ...prev];
+        const prevData = await fetchOneRange(comp.start, comp.end, 'previous');
+        combined = [...combined, ...prevData.mapped];
+        previousTotals = prevData.totals;
       }
+      
       setRealKeywordData(combined);
+      setGscTotals({ current: currentTotals, previous: previousTotals });
     } catch (err: any) {
       console.error(err);
       setError(`GSC Error: ${err.message}`);
@@ -696,7 +733,8 @@ const App: React.FC = () => {
         insights = await getDashboardInsights(summary, dashboardName);
       }
       
-      setTabInsights((prev: Record<DashboardTab, string | null>) => ({ ...prev, [activeTab as DashboardTab]: insights || null }));
+      // Fix "Type 'unknown' cannot be used as an index type" error by removing the redundant enum cast.
+      setTabInsights((prev) => ({ ...prev, [activeTab]: insights || null }));
     } catch (err: any) { 
       console.error(err); 
       setError(err.message || "Failed to generate insights.");
@@ -915,7 +953,8 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {tabInsights[activeTab as DashboardTab] && (
+        {/* Fix "Type 'unknown' cannot be used as an index type" error by removing redundant enum cast. */}
+        {tabInsights[activeTab] && (
           <div className="mb-10 bg-slate-900 rounded-[32px] p-8 md:p-10 text-white shadow-2xl relative animate-in fade-in zoom-in-95 duration-500 overflow-hidden">
             <div className="absolute top-0 right-0 p-12 opacity-10 pointer-events-none">
               {aiProvider === 'openai' ? <Cpu className="w-48 h-48 text-emerald-500" /> : <Sparkles className="w-48 h-48 text-indigo-500" />}
@@ -928,15 +967,15 @@ const App: React.FC = () => {
                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Generated by {aiProvider === 'openai' ? 'OpenAI GPT-4o-mini' : 'Google Gemini 3 Pro'}</p>
                 </div>
               </div>
-              <button onClick={() => setTabInsights({...tabInsights, [activeTab as DashboardTab]: null})} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X className="w-4 h-4" /></button>
+              <button onClick={() => setTabInsights({...tabInsights, [activeTab]: null})} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X className="w-4 h-4" /></button>
             </div>
-            <div className="prose prose-invert max-w-none font-medium text-sm md:text-base leading-relaxed z-10 relative" dangerouslySetInnerHTML={{ __html: tabInsights[activeTab as DashboardTab]!.replace(/\n/g, '<br/>') }} />
+            <div className="prose prose-invert max-w-none font-medium text-sm md:text-base leading-relaxed z-10 relative" dangerouslySetInnerHTML={{ __html: tabInsights[activeTab]!.replace(/\n/g, '<br/>') }} />
           </div>
         )}
 
         <div className="w-full">
           {activeTab === DashboardTab.ORGANIC_VS_PAID && <OrganicVsPaidView stats={channelStats} data={filteredDailyData} comparisonEnabled={filters.comparison.enabled} grouping={grouping} setGrouping={setGrouping} currencySymbol={currencySymbol} />}
-          {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={filteredKeywordData} aggregate={aggregate} comparisonEnabled={filters.comparison.enabled} currencySymbol={currencySymbol} grouping={grouping} />}
+          {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={filteredKeywordData} gscTotals={gscTotals} aggregate={aggregate} comparisonEnabled={filters.comparison.enabled} currencySymbol={currencySymbol} grouping={grouping} />}
           {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && <SeoDeepDiveView keywords={filteredKeywordData} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isLoading={isAnythingLoading} comparisonEnabled={filters.comparison.enabled} />}
         </div>
 
@@ -1048,8 +1087,8 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
         'Paid (Prev)': prevSum.paid,
         'Organic Rev (Prev)': prevSum.organicRev,
         'Paid Rev (Prev)': prevSum.paidRev,
-        'Search Weight (Prev)': weightMetric === 'sessions' ? prevSum.search : prevSum.searchRev,
-        'Others Weight (Prev)': weightMetric === 'sessions' ? prevSum.others : prevSum.othersRev,
+        'Search Weight (Prev)': prevSum.search,
+        'Others Weight (Prev)': prevSum.others,
       };
     });
   }, [data, grouping, weightMetric]);
@@ -1097,7 +1136,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
               <KpiCard title="Sessions" value={ch.s.current.sessions} comparison={comparisonEnabled ? ch.s.changes.sessions : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sessions : undefined} icon={<TrendingUp />} color={ch.color} />
               <KpiCard title="Conv. Rate" value={`${ch.s.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? ch.s.changes.cr : undefined} icon={<Percent />} isPercent color={ch.color} />
               <KpiCard title="Revenue" value={`${currencySymbol}${ch.s.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? ch.s.changes.revenue : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<Tag />} prefix={currencySymbol} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
-              <KpiCard title="Sales" value={ch.s.current.sales} comparison={comparisonEnabled ? ch.s.changes.sales : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sales : undefined} icon={<ShoppingBag />} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
+              <KpiCard title="Sales" value={ch.s.current.sales} comparison={comparisonEnabled ? ch.s.changes.sales : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<ShoppingBag />} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
             </div>
           </div>
         ))}
@@ -1183,7 +1222,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
   );
 };
 
-const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, currencySymbol, grouping }: any) => {
+const SeoMarketplaceView = ({ data, keywordData, gscTotals, aggregate, comparisonEnabled, currencySymbol, grouping }: any) => {
   const [brandedMetric, setBrandedMetric] = useState<'clicks' | 'impressions'>('clicks');
   const organicGa4 = aggregate(data.filter((d: any) => d.channel?.toLowerCase().includes('organic')));
   
@@ -1242,148 +1281,4 @@ const SeoMarketplaceView = ({ data, keywordData, aggregate, comparisonEnabled, c
 
   const scatterData = useMemo(() => {
     const map: Record<string, { country: string; sessions: number; sales: number; revenue: number }> = {};
-    data.filter((d: any) => d.dateRangeLabel === 'current' && d.channel?.toLowerCase().includes('organic')).forEach((d: any) => { if (!map[d.country]) map[d.country] = { country: d.country, sessions: 0, sales: 0, revenue: 0 }; map[d.country].sessions += d.sessions; map[d.country].sales += d.sales; map[d.country].revenue += d.revenue; });
-    return Object.values(map).map(item => ({ country: item.country, traffic: item.sessions, revenue: item.revenue, sales: item.sales })).filter(item => item.traffic > 0);
-  }, [data]);
-
-  const gscStats = useMemo(() => {
-    const current = keywordData.filter((k:any) => k.dateRangeLabel === 'current');
-    const previous = keywordData.filter((k:any) => k.dateRangeLabel === 'previous');
-    const sum = (arr: any[]) => arr.reduce((acc, curr) => ({ impressions: acc.impressions + curr.impressions, clicks: acc.clicks + curr.clicks }), { impressions: 0, clicks: 0 });
-    const cSum = sum(current); const pSum = sum(previous);
-    const getChange = (c: number, p: number) => p === 0 ? 0 : ((c - p) / p) * 100;
-    return { current: cSum, changes: { impressions: getChange(cSum.impressions, pSum.impressions), clicks: getChange(cSum.clicks, pSum.clicks), ctr: getChange(cSum.clicks/(cSum.impressions||1), pSum.clicks/(pSum.impressions||1)) }, abs: { impressions: cSum.impressions - pSum.impressions, clicks: cSum.clicks - pSum.clicks } };
-  }, [keywordData]);
-
-  const metricLabel = brandedMetric.charAt(0).toUpperCase() + brandedMetric.slice(1);
-
-  return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <KpiCard title="GSC Impressions" value={gscStats.current.impressions} comparison={comparisonEnabled ? gscStats.changes.impressions : undefined} absoluteChange={comparisonEnabled ? gscStats.abs.impressions : undefined} icon={<Eye />} />
-        <KpiCard title="GSC Clicks" value={gscStats.current.clicks} comparison={comparisonEnabled ? gscStats.changes.clicks : undefined} absoluteChange={comparisonEnabled ? gscStats.abs.clicks : undefined} icon={<MousePointer2 />} />
-        <KpiCard title="GSC CTR" value={`${(gscStats.current.impressions > 0 ? (gscStats.current.clicks/gscStats.current.impressions)*100 : 0).toFixed(2)}%`} comparison={comparisonEnabled ? gscStats.changes.ctr : undefined} icon={<Percent />} />
-        <KpiCard title="GA4 Organic CR" value={`${organicGa4.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? organicGa4.changes.cr : undefined} icon={<TrendingUp />} color="emerald" />
-        <KpiCard title="GA4 Revenue" value={`${currencySymbol}${organicGa4.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.revenue : undefined} icon={<Tag />} color="emerald" prefix={currencySymbol} />
-        <KpiCard title="GA4 Sales" value={organicGa4.current.sales} comparison={comparisonEnabled ? organicGa4.changes.sales : undefined} absoluteChange={comparisonEnabled ? organicGa4.abs.revenue : undefined} icon={<ShoppingBag />} color="emerald" />
-      </div>
-      
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-          <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Keyword Visibility Overlay (Branded vs Non-Branded)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Period Over Period superposition comparison</p>
-          </div>
-          <div className="flex bg-slate-100 p-1 rounded-xl">
-            {['clicks', 'impressions'].map(m => (
-              <button key={m} onClick={() => setBrandedMetric(m as any)} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === m ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>{m}</button>
-            ))}
-          </div>
-        </div>
-        <div className="h-[400px]">
-          {brandedTrendData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={brandedTrendData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
-                <Tooltip content={<ComparisonTooltip />} />
-                <Legend verticalAlign="top" iconType="circle" />
-                <Line name="Branded (Cur)" type="monotone" dataKey="Branded (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
-                <Line name="Non-Branded (Cur)" type="monotone" dataKey="Non-Branded (Cur)" stroke="#10b981" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
-                {comparisonEnabled && <Line name="Branded (Prev)" type="monotone" dataKey="Branded (Prev)" stroke="#6366f1" strokeWidth={1.5} strokeDasharray="4 4" dot={false} opacity={0.35} />}
-                {comparisonEnabled && <Line name="Non-Branded (Prev)" type="monotone" dataKey="Non-Branded (Prev)" stroke="#10b981" strokeWidth={1.5} strokeDasharray="4 4" dot={false} opacity={0.35} />}
-              </LineChart>
-            </ResponsiveContainer>
-          ) : <EmptyState text="No keyword trend data available..." />}
-        </div>
-      </div>
-
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
-        <div className="flex justify-between items-center mb-8"><div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Market Efficiency Analysis (Current Period)</h4><p className="text-[11px] font-bold text-slate-600">Traffic vs Revenue | Size = Revenue</p></div></div>
-        <div className="h-[450px]">
-          {/* Fix: Cast payload and active to any to prevent unknown index errors */}
-          {scatterData.length > 0 ? (<ResponsiveContainer width="100%" height="100%"><ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis type="number" dataKey="traffic" name="Traffic" unit=" sess." axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} /><YAxis type="number" dataKey="revenue" name="Revenue" unit={` ${currencySymbol}`} axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} /><ZAxis type="number" dataKey="revenue" range={[100, 2000]} name="Market Value" unit={` ${currencySymbol}`} /><Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }: any) => { if (active && payload && payload.length) { const d = payload[0].payload; return (<div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10"><p className="text-[10px] font-black uppercase tracking-widest mb-2 border-b border-white/10 pb-2">{d.country}</p><div className="space-y-1"><p className="text-[9px] flex justify-between gap-4"><span>Traffic:</span> <span className="font-bold">{d.traffic.toLocaleString()} sess.</span></p><p className="text-[9px] flex justify-between gap-4"><span>Revenue:</span> <span className="font-bold text-emerald-400">{currencySymbol}{d.revenue.toLocaleString()}</span></p><p className="text-[9px] flex justify-between gap-4"><span>Efficiency:</span> <span className="font-bold text-indigo-400">{currencySymbol}{(d.revenue / d.traffic).toFixed(2)}/sess.</span></p></div></div>); } return null; }} /><Scatter name="Organic Markets" data={scatterData}>{scatterData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.revenue > 10000 ? '#10b981' : entry.revenue > 5000 ? '#6366f1' : '#f59e0b'} fillOpacity={0.6} strokeWidth={2} stroke={entry.revenue > 10000 ? '#059669' : entry.revenue > 5000 ? '#4f46e5' : '#d97706'} />))}</Scatter></ScatterChart></ResponsiveContainer>) : <EmptyState text="Not enough organic data for the Scatter Plot..." />}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, comparisonEnabled }: any) => {
-  const [expandedUrls, setExpandedUrls] = useState<Set<string>>(new Set());
-  const toggleUrl = (url: string) => { const next = new Set(expandedUrls); if (next.has(url)) next.delete(url); else next.add(url); setExpandedUrls(next); };
-  
-  const aggregatedByUrl = useMemo(() => {
-    const map: Record<string, any> = {};
-    keywords.forEach((k: any) => {
-      const url = k.landingPage || 'Unknown URL';
-      const urlStr = String(url);
-      if (!map[urlStr]) map[urlStr] = { url: urlStr, clicks: 0, impressions: 0, prevClicks: 0, children: {} };
-      if (k.dateRangeLabel === 'current') { 
-        map[urlStr].clicks += k.clicks; map[urlStr].impressions += k.impressions; 
-      } else { 
-        map[urlStr].prevClicks += k.clicks; 
-      }
-      const kw = k.keyword || 'Not provided';
-      const kwStr = String(kw);
-      if (!map[urlStr].children[kwStr]) map[urlStr].children[kwStr] = { keyword: kwStr, queryType: k.queryType, clicks: 0, impressions: 0, prevClicks: 0 };
-      if (k.dateRangeLabel === 'current') { 
-        map[urlStr].children[kwStr].clicks += k.clicks; map[urlStr].children[kwStr].impressions += k.impressions; 
-      } else { 
-        map[urlStr].children[kwStr].prevClicks += k.clicks; 
-      }
-    });
-    return Object.values(map).map((page: any) => ({ 
-      ...page, 
-      ctr: page.impressions > 0 ? (page.clicks / page.impressions) * 100 : 0, 
-      clickChange: page.prevClicks === 0 ? 0 : ((page.clicks - page.prevClicks) / page.prevClicks) * 100, 
-      children: Object.values(page.children).sort((a: any, b: any) => b.clicks - a.clicks) 
-    })).filter((p: any) => p.url.toLowerCase().includes(searchTerm.toLowerCase()) || p.children.some((c: any) => c.keyword.toLowerCase().includes(searchTerm.toLowerCase()))).sort((a: any, b: any) => b.clicks - a.clicks);
-  }, [keywords, searchTerm]);
-
-  return (
-    <div className="bg-white rounded-[32px] border border-slate-200 overflow-hidden shadow-sm">
-      <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-50/50">
-        <div><h3 className="text-xl font-black mb-1">Deep SEO Drill-down</h3><p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">URLs & Keywords</p></div>
-        <div className="relative w-full md:w-80"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" /><input type="text" placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-medium focus:ring-2 ring-indigo-500/10 outline-none" /></div>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs table-fixed min-w-[1000px]">
-          <thead className="bg-slate-50 text-slate-400 font-black uppercase text-[9px] tracking-widest border-b border-slate-100">
-            <tr><th className="px-6 py-4 w-16"></th><th className="px-4 py-4 w-[50%]">Page</th><th className="px-6 py-4 text-center w-32">Impr.</th><th className="px-6 py-4 text-center w-32">Clicks</th><th className="px-6 py-4 text-center w-28">CTR</th></tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {aggregatedByUrl.slice(0, 100).map((row: any) => (
-              <React.Fragment key={row.url}>
-                <tr onClick={() => toggleUrl(String(row.url))} className="group cursor-pointer hover:bg-slate-50/50 transition-all">
-                  <td className="pl-6 py-5 flex justify-center">{expandedUrls.has(String(row.url)) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</td>
-                  <td className="px-4 py-5 font-bold text-slate-900 break-all">{row.url}</td>
-                  <td className="px-6 py-5 text-center text-slate-500">{row.impressions.toLocaleString()}</td>
-                  <td className="px-6 py-5 text-center font-black text-slate-900">{row.clicks.toLocaleString()}</td>
-                  <td className="px-6 py-5 text-center"><span className="px-2 py-1 rounded-lg bg-slate-100 font-bold">{row.ctr.toFixed(1)}%</span></td>
-                </tr>
-                {expandedUrls.has(String(row.url)) && (row.children as any[]).map((child: any, ci: number) => (
-                  <tr key={ci} className="bg-slate-50/30 border-l-4 border-indigo-500">
-                    <td className="py-3"></td>
-                    <td className="px-4 py-3 pl-14"><div className="flex items-center gap-3"><span className="text-slate-700 font-semibold">{child.keyword}</span><span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase ${child.queryType === 'Branded' ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-500'}`}>{child.queryType}</span></div></td>
-                    <td className="px-6 py-3 text-center text-slate-400">{child.impressions.toLocaleString()}</td>
-                    <td className="px-6 py-3 text-center text-slate-600 font-bold">{child.clicks.toLocaleString()}</td>
-                    <td className="px-6 py-3 text-center text-slate-400 font-bold">{(child.impressions > 0 ? child.clicks/child.impressions*100 : 0).toFixed(1)}%</td>
-                  </tr>
-                ))}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
-        {aggregatedByUrl.length === 0 && <div className="px-6 py-20 text-center text-slate-400 italic font-medium">No results found. Try broadening the date range.</div>}
-      </div>
-    </div>
-  );
-};
-
-/* Fix: Cast icon to any to ensure React.cloneElement works without unknown type issues */
-const SidebarLink = ({ active, onClick, icon, label }: any) => (<button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black transition-all ${active ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}>{React.cloneElement(icon as any, { className: 'w-4 h-4' })} {label}</button>);
-const EmptyState = ({ text }: { text: string }) => (<div className="h-full flex flex-col items-center justify-center py-10 opacity-50"><Activity className="w-8 h-8 text-slate-200 mb-4" /><p className="text-slate-400 italic text-xs font-medium">{text}</p></div>);
-
-export default App;
+    data.filter((d: any) => d.dateRangeLabel === 'current' && d.channel?.toLowerCase().includes('organic')).forEach((d: any) => { if (!map[d.country]) map[d.country] = { country: d.country, sessions: 0, sales: 0, revenue: 0 }; map[d.country].sessions +=
