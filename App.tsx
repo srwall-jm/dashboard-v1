@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key, PieChart as PieIcon, Check
@@ -489,7 +488,7 @@ const App: React.FC = () => {
       const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
       
       const fetchOneRange = async (start: string, end: string, label: 'current' | 'previous') => {
-        // Obtenemos el máximo de queries permitidas para categorización
+        // High limit for maximum query detail
         const respGranular = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
@@ -503,7 +502,7 @@ const App: React.FC = () => {
         const dataGranular = await respGranular.json();
         if (dataGranular.error) throw new Error(dataGranular.error.message);
 
-        // Obtenemos los totales ABSOLUTOS del sitio por fecha (para 100% de clicks/impresiones)
+        // Fetch site-level absolute totals (100% accurate)
         const respTotals = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
@@ -528,7 +527,7 @@ const App: React.FC = () => {
 
         const mapped = (dataGranular.rows || []).map((row: any) => ({
             keyword: row.keys[0] || '',
-            landingPage: '', // No incluimos landing en este fetch granular para no diluir los clicks de query
+            landingPage: '',
             country: 'All',
             queryType: 'Non-Branded' as QueryType,
             date: row.keys[1] || '',
@@ -713,7 +712,7 @@ const App: React.FC = () => {
     try {
       let summary = "";
       const dashboardName = activeTab === DashboardTab.ORGANIC_VS_PAID ? "Organic vs Paid Performance" : 
-                           (activeTab === DashboardTab.SEO_BY_COUNTRY ? "SEO Market Efficiency by Country" : 
+                           (activeTab === DashboardTab.SEO_BY_COUNTRY ? "SEO Performance by Country" : 
                            "Deep URL and Keyword Analysis");
 
       if (activeTab === DashboardTab.ORGANIC_VS_PAID) {
@@ -979,7 +978,7 @@ const App: React.FC = () => {
 
         <div className="w-full">
           {activeTab === DashboardTab.ORGANIC_VS_PAID && <OrganicVsPaidView stats={channelStats} data={filteredDailyData} comparisonEnabled={filters.comparison.enabled} grouping={grouping} setGrouping={setGrouping} currencySymbol={currencySymbol} />}
-          {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={realKeywordData} gscDailyTotals={gscDailyTotals} gscTotals={gscTotals} aggregate={aggregate} comparisonEnabled={filters.comparison.enabled} currencySymbol={currencySymbol} grouping={grouping} isBranded={isBranded} />}
+          {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={realKeywordData} gscDailyTotals={gscDailyTotals} gscTotals={gscTotals} aggregate={aggregate} comparisonEnabled={filters.comparison.enabled} currencySymbol={currencySymbol} grouping={grouping} isBranded={isBranded} queryTypeFilter={filters.queryType} />}
           {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && <SeoDeepDiveView keywords={filteredKeywordData} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isLoading={isAnythingLoading} comparisonEnabled={filters.comparison.enabled} />}
         </div>
 
@@ -1233,7 +1232,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
   );
 };
 
-const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggregate, comparisonEnabled, currencySymbol, grouping, isBranded }: {
+const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggregate, comparisonEnabled, currencySymbol, grouping, isBranded, queryTypeFilter }: {
   data: DailyData[];
   keywordData: KeywordData[];
   gscDailyTotals: any[];
@@ -1243,18 +1242,39 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
   currencySymbol: string;
   grouping: 'daily' | 'weekly' | 'monthly';
   isBranded: (text: string) => boolean;
+  queryTypeFilter: QueryType | 'All';
 }) => {
   const [brandedMetric, setBrandedMetric] = useState<'clicks' | 'impressions'>('clicks');
   
-  // SEO Metrics from GA4
+  // GA4 Organic Metrics
   const organicGa4 = useMemo(() => aggregate(data.filter((d: any) => d.channel?.toLowerCase().includes('organic'))), [data, aggregate]);
   
-  // GSC Site Stats (Usando el Total real del sitio)
+  // GSC Metrics que REACCIONAN al filtro Branded/Non-Branded
   const gscStats = useMemo(() => {
     if (!gscTotals) return { current: { clicks: 0, impressions: 0, ctr: 0 }, changes: { clicks: 0, impressions: 0, ctr: 0 } };
-    const cur = gscTotals.current;
-    const prev = gscTotals.previous;
+    
+    const getRangeStats = (label: 'current' | 'previous', absTotal: any) => {
+      // Calculamos el valor Branded real sumando queries individuales
+      const brandedSum = keywordData.filter(k => k.dateRangeLabel === label && isBranded(k.keyword))
+        .reduce((acc, k) => ({ clicks: acc.clicks + k.clicks, impressions: acc.impressions + k.impressions }), { clicks: 0, impressions: 0 });
+
+      if (queryTypeFilter === 'Branded') {
+        return brandedSum;
+      } else if (queryTypeFilter === 'Non-Branded') {
+        // Lógica Diferencial: El resto es Non-Branded (incluye anonimizadas)
+        return { 
+          clicks: Math.max(0, absTotal.clicks - brandedSum.clicks), 
+          impressions: Math.max(0, absTotal.impressions - brandedSum.impressions) 
+        };
+      }
+      return absTotal; // Caso "All"
+    };
+
+    const cur = getRangeStats('current', gscTotals.current);
+    const prev = getRangeStats('previous', gscTotals.previous);
+    
     const getChange = (c: number, p: number) => p === 0 ? 0 : ((c - p) / p) * 100;
+    
     return {
       current: { ...cur, ctr: cur.impressions > 0 ? (cur.clicks / cur.impressions) * 100 : 0 },
       changes: {
@@ -1263,9 +1283,8 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
         ctr: getChange(cur.clicks / (cur.impressions || 1), prev.clicks / (prev.impressions || 1))
       }
     };
-  }, [gscTotals]);
+  }, [gscTotals, keywordData, queryTypeFilter, isBranded]);
 
-  // Lógica de Brand vs Generic basada en resta de Site Totals
   const brandedTrendData = useMemo(() => {
     if (!gscDailyTotals.length) return [];
     
@@ -1277,7 +1296,6 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
 
     const bucketsCurrent = Array.from(new Set(gscDailyTotals.filter(t => t.label === 'current').map(t => getBucket(t.date)))).sort();
 
-    // Agregamos totales reales del sitio por bucket
     const aggSiteTotals = (items: any[]) => {
       const grouped: Record<string, any> = {};
       items.forEach(t => {
@@ -1289,7 +1307,6 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
       return grouped;
     };
 
-    // Agregamos sólo lo que coincide con el Regex como "Branded"
     const aggBrandedOnly = (items: KeywordData[]) => {
       const grouped: Record<string, any> = {};
       items.forEach(k => {
@@ -1318,7 +1335,6 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
       const sitePrev = prevBucket ? prevSite[prevBucket] : { clicks: 0, impressions: 0 };
       const brandPrev = prevBucket ? prevBranded[prevBucket] : { clicks: 0, impressions: 0 };
 
-      // VISIBILIDAD 100%: Non-Branded es el resto (incluye queries ocultas por Google)
       return {
         date: bucket,
         'Branded (Cur)': brandedMetric === 'clicks' ? brandCur.clicks : brandCur.impressions,
@@ -1342,7 +1358,6 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
-      {/* 6 Cajas de KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         <KpiCard 
           title="GSC Clicks" 
@@ -1392,12 +1407,11 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
       </div>
 
       <div className="flex flex-col gap-8">
-        {/* Brand vs Generic (1 columna, 100% ancho) */}
         <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden w-full">
           <div className="flex justify-between items-center mb-8">
             <div>
               <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Brand vs Generic Search</h4>
-              <p className="text-[11px] font-bold text-slate-600">Basado en el 100% de clicks del sitio (Diferencial por Regex)</p>
+              <p className="text-[11px] font-bold text-slate-600">Clicks totales del sitio filtrados por queries Branded (Regex)</p>
             </div>
             <div className="flex bg-slate-100 p-1 rounded-xl">
                <button onClick={() => setBrandedMetric('clicks')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'clicks' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Clicks</button>
@@ -1421,15 +1435,14 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
                   <Area name="Non-Branded (Cur)" type="monotone" dataKey="Non-Branded (Cur)" stroke="#94a3b8" fillOpacity={1} fill="url(#colorGeneric)" strokeWidth={3} />
                 </AreaChart>
               </ResponsiveContainer>
-            ) : <EmptyState text="No hay datos de queries para categorización" />}
+            ) : <EmptyState text="No query data available" />}
           </div>
         </div>
 
-        {/* Market Efficiency Matrix (1 columna, 100% ancho) */}
         <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm w-full">
           <div className="mb-8">
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Market Efficiency Matrix</h4>
-            <p className="text-[11px] font-bold text-slate-600">Distribución de Ingresos SEO por Mercado</p>
+            <p className="text-[11px] font-bold text-slate-600">SEO Revenue vs Volume by Market</p>
           </div>
           <div className="h-[450px]">
             {scatterData.length > 0 ? (
@@ -1478,7 +1491,7 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
                   </Scatter>
                 </ScatterChart>
               </ResponsiveContainer>
-            ) : <EmptyState text="No hay datos de mercados disponibles" />}
+            ) : <EmptyState text="No market data available" />}
           </div>
         </div>
       </div>
@@ -1499,7 +1512,7 @@ const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, compa
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-           <div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">URL & Keyword Precision Analysis</h4><p className="text-[11px] font-bold text-slate-600">Vista granular basada en queries de Search Console</p></div>
+           <div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">URL & Keyword Precision Analysis</h4><p className="text-[11px] font-bold text-slate-600">Performance granular view from Search Console</p></div>
            <div className="relative w-full md:w-80">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input type="text" placeholder="Search keyword or URL..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-1 ring-indigo-500 transition-all" />
@@ -1509,7 +1522,7 @@ const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, compa
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-slate-100"><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Keyword</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Query Type</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Clicks</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Impr.</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">CTR</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Análisis</th></tr>
+              <tr className="border-b border-slate-100"><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Keyword</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Query Type</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Clicks</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Impr.</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">CTR</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Primary Landing Page</th></tr>
             </thead>
             <tbody>
               {filtered.filter(k => k.dateRangeLabel === 'current').slice(0, 50).map((k, i) => {
@@ -1531,7 +1544,7 @@ const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, compa
                        <div className="text-[11px] font-black text-slate-900">{k.ctr.toFixed(2)}%</div>
                        <div className="w-16 h-1 bg-slate-100 rounded-full mt-1.5 ml-auto overflow-hidden"><div className="h-full bg-sky-500" style={{ width: `${Math.min(k.ctr * 5, 100)}%` }} /></div>
                     </td>
-                    <td className="py-4 px-4"><div className="flex items-center gap-2 group/link"><span className="text-[10px] font-medium text-slate-400 truncate max-w-[200px]">{k.landingPage || 'Vista Query'}</span><ChevronRight className="w-3 h-3 text-slate-300 group-hover/link:translate-x-1 transition-transform" /></div></td>
+                    <td className="py-4 px-4"><div className="flex items-center gap-2 group/link"><span className="text-[10px] font-medium text-slate-400 truncate max-w-[200px]">{k.landingPage || 'Query View'}</span><ChevronRight className="w-3 h-3 text-slate-300 group-hover/link:translate-x-1 transition-transform" /></div></td>
                   </tr>
                 );
               })}
