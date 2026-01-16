@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key, PieChart as PieIcon, Check
@@ -965,7 +964,7 @@ const App: React.FC = () => {
 
         <div className="w-full">
           {activeTab === DashboardTab.ORGANIC_VS_PAID && <OrganicVsPaidView stats={channelStats} data={filteredDailyData} comparisonEnabled={filters.comparison.enabled} grouping={grouping} setGrouping={setGrouping} currencySymbol={currencySymbol} />}
-          {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={filteredKeywordData} gscTotals={gscTotals} aggregate={aggregate} comparisonEnabled={filters.comparison.enabled} currencySymbol={currencySymbol} grouping={grouping} />}
+          {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={filteredKeywordData} gscTotals={gscTotals} aggregate={aggregate} comparisonEnabled={filters.comparison.enabled} currencySymbol={currencySymbol} grouping={grouping} isBranded={isBranded} />}
           {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && <SeoDeepDiveView keywords={filteredKeywordData} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isLoading={isAnythingLoading} comparisonEnabled={filters.comparison.enabled} />}
         </div>
 
@@ -1219,7 +1218,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
   );
 };
 
-const SeoMarketplaceView = ({ data, keywordData, gscTotals, aggregate, comparisonEnabled, currencySymbol, grouping }: {
+const SeoMarketplaceView = ({ data, keywordData, gscTotals, aggregate, comparisonEnabled, currencySymbol, grouping, isBranded }: {
   data: DailyData[];
   keywordData: KeywordData[];
   gscTotals: any;
@@ -1227,13 +1226,14 @@ const SeoMarketplaceView = ({ data, keywordData, gscTotals, aggregate, compariso
   comparisonEnabled: boolean;
   currencySymbol: string;
   grouping: 'daily' | 'weekly' | 'monthly';
+  isBranded: (text: string) => boolean;
 }) => {
   const [brandedMetric, setBrandedMetric] = useState<'clicks' | 'impressions'>('clicks');
   
   // SEO Metrics from GA4
   const organicGa4 = useMemo(() => aggregate(data.filter((d: any) => d.channel?.toLowerCase().includes('organic'))), [data, aggregate]);
   
-  // GSC Stats using totals from API for 100% accuracy
+  // GSC Stats using totals from API for 100% accuracy (Site Total - includes all queries/URLs)
   const gscStats = useMemo(() => {
     if (!gscTotals) return { current: { clicks: 0, impressions: 0, ctr: 0 }, changes: { clicks: 0, impressions: 0, ctr: 0 } };
     const cur = gscTotals.current;
@@ -1249,6 +1249,7 @@ const SeoMarketplaceView = ({ data, keywordData, gscTotals, aggregate, compariso
     };
   }, [gscTotals]);
 
+  // Brand vs Generic chart data based on query dimensions
   const brandedTrendData = useMemo(() => {
     if (!keywordData.length) return [];
     
@@ -1282,12 +1283,16 @@ const SeoMarketplaceView = ({ data, keywordData, gscTotals, aggregate, compariso
       const prevBucket = prevBuckets[index];
       const prevItems = prevBucket ? prevGrouped[prevBucket] : [];
 
-      const sum = (items: KeywordData[]) => items.reduce((acc, k) => ({
-        brandedClicks: acc.brandedClicks + (k.queryType === 'Branded' ? k.clicks : 0),
-        nonBrandedClicks: acc.nonBrandedClicks + (k.queryType === 'Non-Branded' ? k.clicks : 0),
-        brandedImpr: acc.brandedImpr + (k.queryType === 'Branded' ? k.impressions : 0),
-        nonBrandedImpr: acc.nonBrandedImpr + (k.queryType === 'Non-Branded' ? k.impressions : 0)
-      }), { brandedClicks: 0, nonBrandedClicks: 0, brandedImpr: 0, nonBrandedImpr: 0 });
+      const sum = (items: KeywordData[]) => items.reduce((acc, k) => {
+        // Apply Regex Logic for categorization
+        const branded = isBranded(k.keyword);
+        return {
+          brandedClicks: acc.brandedClicks + (branded ? k.clicks : 0),
+          nonBrandedClicks: acc.nonBrandedClicks + (!branded ? k.clicks : 0),
+          brandedImpr: acc.brandedImpr + (branded ? k.impressions : 0),
+          nonBrandedImpr: acc.nonBrandedImpr + (!branded ? k.impressions : 0)
+        };
+      }, { brandedClicks: 0, nonBrandedClicks: 0, brandedImpr: 0, nonBrandedImpr: 0 });
 
       const curSum = sum(curItems);
       const prevSum = sum(prevItems);
@@ -1300,7 +1305,7 @@ const SeoMarketplaceView = ({ data, keywordData, gscTotals, aggregate, compariso
         'Non-Branded (Prev)': brandedMetric === 'clicks' ? prevSum.nonBrandedClicks : prevSum.nonBrandedImpr,
       };
     });
-  }, [keywordData, grouping, brandedMetric]);
+  }, [keywordData, grouping, brandedMetric, isBranded]);
 
   const scatterData = useMemo(() => {
     const map: Record<string, { country: string; sessions: number; sales: number; revenue: number }> = {};
@@ -1315,31 +1320,9 @@ const SeoMarketplaceView = ({ data, keywordData, gscTotals, aggregate, compariso
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
-      {/* 6 KPI Cards: 3 from GA, 3 from GSC */}
+      {/* 6 Dashboard Box KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-        <KpiCard 
-          title="Organic Sessions" 
-          value={organicGa4.current.sessions} 
-          comparison={comparisonEnabled ? organicGa4.changes.sessions : undefined} 
-          icon={<TrendingUp />} 
-          color="indigo" 
-        />
-        <KpiCard 
-          title="Organic Revenue" 
-          value={`${currencySymbol}${organicGa4.current.revenue.toLocaleString()}`} 
-          comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} 
-          icon={<Tag />} 
-          prefix={currencySymbol} 
-          color="emerald" 
-        />
-        <KpiCard 
-          title="Organic Conv. Rate" 
-          value={`${organicGa4.current.cr.toFixed(2)}%`} 
-          comparison={comparisonEnabled ? organicGa4.changes.cr : undefined} 
-          icon={<Percent />} 
-          isPercent 
-          color="emerald" 
-        />
+        {/* GSC boxes use site-total data for 100% accuracy */}
         <KpiCard 
           title="GSC Clicks" 
           value={gscStats.current.clicks} 
@@ -1362,15 +1345,38 @@ const SeoMarketplaceView = ({ data, keywordData, gscTotals, aggregate, compariso
           isPercent 
           color="sky" 
         />
+        <KpiCard 
+          title="Organic Sessions" 
+          value={organicGa4.current.sessions} 
+          comparison={comparisonEnabled ? organicGa4.changes.sessions : undefined} 
+          icon={<TrendingUp />} 
+          color="indigo" 
+        />
+        <KpiCard 
+          title="Organic Revenue" 
+          value={`${currencySymbol}${organicGa4.current.revenue.toLocaleString()}`} 
+          comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} 
+          icon={<Tag />} 
+          prefix={currencySymbol} 
+          color="emerald" 
+        />
+        <KpiCard 
+          title="Organic Conv. Rate" 
+          value={`${organicGa4.current.cr.toFixed(2)}%`} 
+          comparison={comparisonEnabled ? organicGa4.changes.cr : undefined} 
+          icon={<ShoppingBag />} 
+          isPercent 
+          color="emerald" 
+        />
       </div>
 
       <div className="flex flex-col gap-8">
-        {/* Brand vs Generic Trends (Full Width) */}
+        {/* Brand vs Generic Trend Analysis (Full Width) */}
         <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden w-full">
           <div className="flex justify-between items-center mb-8">
             <div>
               <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Brand vs Generic Search</h4>
-              <p className="text-[11px] font-bold text-slate-600">Distribution of organic visibility</p>
+              <p className="text-[11px] font-bold text-slate-600">Keyword-based distribution (by Queries)</p>
             </div>
             <div className="flex bg-slate-100 p-1 rounded-xl">
                <button onClick={() => setBrandedMetric('clicks')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'clicks' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Clicks</button>
@@ -1394,11 +1400,11 @@ const SeoMarketplaceView = ({ data, keywordData, gscTotals, aggregate, compariso
                   <Area name="Non-Branded (Cur)" type="monotone" dataKey="Non-Branded (Cur)" stroke="#94a3b8" fillOpacity={1} fill="url(#colorGeneric)" strokeWidth={3} />
                 </AreaChart>
               </ResponsiveContainer>
-            ) : <EmptyState text="No keyword data available for brand analysis" />}
+            ) : <EmptyState text="No query data available for brand categorization" />}
           </div>
         </div>
 
-        {/* Market Efficiency Matrix (Full Width) */}
+        {/* Market Efficiency Matrixbubble chart (Full Width) */}
         <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm w-full">
           <div className="mb-8">
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Market Efficiency Matrix</h4>
