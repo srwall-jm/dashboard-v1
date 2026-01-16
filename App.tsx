@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key, PieChart as PieIcon, Check
@@ -488,21 +489,21 @@ const App: React.FC = () => {
       const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
       
       const fetchOneRange = async (start: string, end: string, label: 'current' | 'previous') => {
-        // High limit for maximum query detail
+        // Obtenemos el máximo de queries permitidas para categorización
         const respGranular = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             startDate: start,
             endDate: end,
-            dimensions: ['query', 'page', 'country', 'date'],
+            dimensions: ['query', 'date'],
             rowLimit: 25000 
           })
         });
         const dataGranular = await respGranular.json();
         if (dataGranular.error) throw new Error(dataGranular.error.message);
 
-        // Fetch site-level absolute totals (100% accurate)
+        // Obtenemos los totales ABSOLUTOS del sitio por fecha (para 100% de clicks/impresiones)
         const respTotals = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
@@ -527,10 +528,10 @@ const App: React.FC = () => {
 
         const mapped = (dataGranular.rows || []).map((row: any) => ({
             keyword: row.keys[0] || '',
-            landingPage: row.keys[1] || '',
-            country: normalizeCountry(row.keys[2]),
+            landingPage: '', // No incluimos landing en este fetch granular para no diluir los clicks de query
+            country: 'All',
             queryType: 'Non-Branded' as QueryType,
-            date: row.keys[3] || '',
+            date: row.keys[1] || '',
             dateRangeLabel: label,
             clicks: row.clicks || 0,
             impressions: row.impressions || 0,
@@ -978,7 +979,7 @@ const App: React.FC = () => {
 
         <div className="w-full">
           {activeTab === DashboardTab.ORGANIC_VS_PAID && <OrganicVsPaidView stats={channelStats} data={filteredDailyData} comparisonEnabled={filters.comparison.enabled} grouping={grouping} setGrouping={setGrouping} currencySymbol={currencySymbol} />}
-          {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={filteredKeywordData} gscDailyTotals={gscDailyTotals} gscTotals={gscTotals} aggregate={aggregate} comparisonEnabled={filters.comparison.enabled} currencySymbol={currencySymbol} grouping={grouping} isBranded={isBranded} />}
+          {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={realKeywordData} gscDailyTotals={gscDailyTotals} gscTotals={gscTotals} aggregate={aggregate} comparisonEnabled={filters.comparison.enabled} currencySymbol={currencySymbol} grouping={grouping} isBranded={isBranded} />}
           {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && <SeoDeepDiveView keywords={filteredKeywordData} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isLoading={isAnythingLoading} comparisonEnabled={filters.comparison.enabled} />}
         </div>
 
@@ -1248,7 +1249,7 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
   // SEO Metrics from GA4
   const organicGa4 = useMemo(() => aggregate(data.filter((d: any) => d.channel?.toLowerCase().includes('organic'))), [data, aggregate]);
   
-  // GSC Site Stats for 100% accurate KPIs
+  // GSC Site Stats (Usando el Total real del sitio)
   const gscStats = useMemo(() => {
     if (!gscTotals) return { current: { clicks: 0, impressions: 0, ctr: 0 }, changes: { clicks: 0, impressions: 0, ctr: 0 } };
     const cur = gscTotals.current;
@@ -1264,7 +1265,7 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
     };
   }, [gscTotals]);
 
-  // Brand vs Generic chart data based on site totals to ensure 100% accurate visibility
+  // Lógica de Brand vs Generic basada en resta de Site Totals
   const brandedTrendData = useMemo(() => {
     if (!gscDailyTotals.length) return [];
     
@@ -1276,6 +1277,7 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
 
     const bucketsCurrent = Array.from(new Set(gscDailyTotals.filter(t => t.label === 'current').map(t => getBucket(t.date)))).sort();
 
+    // Agregamos totales reales del sitio por bucket
     const aggSiteTotals = (items: any[]) => {
       const grouped: Record<string, any> = {};
       items.forEach(t => {
@@ -1287,14 +1289,15 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
       return grouped;
     };
 
-    const aggQueries = (items: KeywordData[]) => {
+    // Agregamos sólo lo que coincide con el Regex como "Branded"
+    const aggBrandedOnly = (items: KeywordData[]) => {
       const grouped: Record<string, any> = {};
       items.forEach(k => {
         const key = getBucket(k.date || '');
-        if (!grouped[key]) grouped[key] = { brandedClicks: 0, brandedImpr: 0 };
+        if (!grouped[key]) grouped[key] = { clicks: 0, impressions: 0 };
         if (isBranded(k.keyword)) {
-          grouped[key].brandedClicks += k.clicks;
-          grouped[key].brandedImpr += k.impressions;
+          grouped[key].clicks += k.clicks;
+          grouped[key].impressions += k.impressions;
         }
       });
       return grouped;
@@ -1302,27 +1305,26 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
 
     const curSite = aggSiteTotals(gscDailyTotals.filter(t => t.label === 'current'));
     const prevSite = aggSiteTotals(gscDailyTotals.filter(t => t.label === 'previous'));
-    const curQueries = aggQueries(keywordData.filter(k => k.dateRangeLabel === 'current'));
-    const prevQueries = aggQueries(keywordData.filter(k => k.dateRangeLabel === 'previous'));
+    const curBranded = aggBrandedOnly(keywordData.filter(k => k.dateRangeLabel === 'current'));
+    const prevBranded = aggBrandedOnly(keywordData.filter(k => k.dateRangeLabel === 'previous'));
     
     const prevBuckets = Object.keys(prevSite).sort();
 
     return bucketsCurrent.map((bucket, index) => {
       const siteCur = curSite[bucket] || { clicks: 0, impressions: 0 };
-      const qCur = curQueries[bucket] || { brandedClicks: 0, brandedImpr: 0 };
+      const brandCur = curBranded[bucket] || { clicks: 0, impressions: 0 };
       
       const prevBucket = prevBuckets[index];
       const sitePrev = prevBucket ? prevSite[prevBucket] : { clicks: 0, impressions: 0 };
-      const qPrev = prevBucket ? prevQueries[prevBucket] : { brandedClicks: 0, brandedImpr: 0 };
+      const brandPrev = prevBucket ? prevBranded[prevBucket] : { clicks: 0, impressions: 0 };
 
-      // Calculate visibility by subtracting known branded from site total
-      // This ensures 100% of traffic is captured, and anonymized/generic falls into Non-Branded
+      // VISIBILIDAD 100%: Non-Branded es el resto (incluye queries ocultas por Google)
       return {
         date: bucket,
-        'Branded (Cur)': brandedMetric === 'clicks' ? qCur.brandedClicks : qCur.brandedImpr,
-        'Non-Branded (Cur)': brandedMetric === 'clicks' ? Math.max(0, siteCur.clicks - qCur.brandedClicks) : Math.max(0, siteCur.impressions - qCur.brandedImpr),
-        'Branded (Prev)': brandedMetric === 'clicks' ? qPrev.brandedClicks : qPrev.brandedImpr,
-        'Non-Branded (Prev)': brandedMetric === 'clicks' ? Math.max(0, sitePrev.clicks - qPrev.brandedClicks) : Math.max(0, sitePrev.impressions - qPrev.brandedImpr),
+        'Branded (Cur)': brandedMetric === 'clicks' ? brandCur.clicks : brandCur.impressions,
+        'Non-Branded (Cur)': brandedMetric === 'clicks' ? Math.max(0, siteCur.clicks - brandCur.clicks) : Math.max(0, siteCur.impressions - brandCur.impressions),
+        'Branded (Prev)': brandedMetric === 'clicks' ? brandPrev.clicks : brandPrev.impressions,
+        'Non-Branded (Prev)': brandedMetric === 'clicks' ? Math.max(0, sitePrev.clicks - brandPrev.clicks) : Math.max(0, sitePrev.impressions - brandPrev.impressions),
       };
     });
   }, [gscDailyTotals, keywordData, grouping, brandedMetric, isBranded]);
@@ -1340,9 +1342,8 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
-      {/* 6 Dashboard Box KPIs */}
+      {/* 6 Cajas de KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-        {/* GSC boxes use site-total data for 100% accuracy */}
         <KpiCard 
           title="GSC Clicks" 
           value={gscStats.current.clicks} 
@@ -1391,12 +1392,12 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
       </div>
 
       <div className="flex flex-col gap-8">
-        {/* Brand vs Generic Trend Analysis (Full Width) */}
+        {/* Brand vs Generic (1 columna, 100% ancho) */}
         <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden w-full">
           <div className="flex justify-between items-center mb-8">
             <div>
               <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Brand vs Generic Search</h4>
-              <p className="text-[11px] font-bold text-slate-600">Calculated from Site Totals - Matches Regex = Branded</p>
+              <p className="text-[11px] font-bold text-slate-600">Basado en el 100% de clicks del sitio (Diferencial por Regex)</p>
             </div>
             <div className="flex bg-slate-100 p-1 rounded-xl">
                <button onClick={() => setBrandedMetric('clicks')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'clicks' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Clicks</button>
@@ -1420,15 +1421,15 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
                   <Area name="Non-Branded (Cur)" type="monotone" dataKey="Non-Branded (Cur)" stroke="#94a3b8" fillOpacity={1} fill="url(#colorGeneric)" strokeWidth={3} />
                 </AreaChart>
               </ResponsiveContainer>
-            ) : <EmptyState text="No query data available for brand categorization" />}
+            ) : <EmptyState text="No hay datos de queries para categorización" />}
           </div>
         </div>
 
-        {/* Market Efficiency Matrixbubble chart (Full Width) */}
+        {/* Market Efficiency Matrix (1 columna, 100% ancho) */}
         <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm w-full">
           <div className="mb-8">
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Market Efficiency Matrix</h4>
-            <p className="text-[11px] font-bold text-slate-600">SEO Revenue vs Volume by Market</p>
+            <p className="text-[11px] font-bold text-slate-600">Distribución de Ingresos SEO por Mercado</p>
           </div>
           <div className="h-[450px]">
             {scatterData.length > 0 ? (
@@ -1477,7 +1478,7 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
                   </Scatter>
                 </ScatterChart>
               </ResponsiveContainer>
-            ) : <EmptyState text="No market data available" />}
+            ) : <EmptyState text="No hay datos de mercados disponibles" />}
           </div>
         </div>
       </div>
@@ -1498,7 +1499,7 @@ const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, compa
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-           <div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">URL & Keyword Precision Analysis</h4><p className="text-[11px] font-bold text-slate-600">Performance granular view from Search Console</p></div>
+           <div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">URL & Keyword Precision Analysis</h4><p className="text-[11px] font-bold text-slate-600">Vista granular basada en queries de Search Console</p></div>
            <div className="relative w-full md:w-80">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input type="text" placeholder="Search keyword or URL..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-1 ring-indigo-500 transition-all" />
@@ -1508,7 +1509,7 @@ const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, compa
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-slate-100"><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Keyword</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Query Type</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Clicks</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Impr.</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">CTR</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Primary Landing Page</th></tr>
+              <tr className="border-b border-slate-100"><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Keyword</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Query Type</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Clicks</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Impr.</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">CTR</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Análisis</th></tr>
             </thead>
             <tbody>
               {filtered.filter(k => k.dateRangeLabel === 'current').slice(0, 50).map((k, i) => {
@@ -1530,7 +1531,7 @@ const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, compa
                        <div className="text-[11px] font-black text-slate-900">{k.ctr.toFixed(2)}%</div>
                        <div className="w-16 h-1 bg-slate-100 rounded-full mt-1.5 ml-auto overflow-hidden"><div className="h-full bg-sky-500" style={{ width: `${Math.min(k.ctr * 5, 100)}%` }} /></div>
                     </td>
-                    <td className="py-4 px-4"><div className="flex items-center gap-2 group/link"><span className="text-[10px] font-medium text-slate-400 truncate max-w-[200px]">{k.landingPage}</span><ChevronRight className="w-3 h-3 text-slate-300 group-hover/link:translate-x-1 transition-transform" /></div></td>
+                    <td className="py-4 px-4"><div className="flex items-center gap-2 group/link"><span className="text-[10px] font-medium text-slate-400 truncate max-w-[200px]">{k.landingPage || 'Vista Query'}</span><ChevronRight className="w-3 h-3 text-slate-300 group-hover/link:translate-x-1 transition-transform" /></div></td>
                   </tr>
                 );
               })}
