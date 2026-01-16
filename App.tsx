@@ -479,29 +479,55 @@ const App: React.FC = () => {
     }
   };
 
-  const fetchGscData = async () => {
+const fetchGscData = async () => {
     if (!gscAuth?.site || !gscAuth.token) return;
     setIsLoadingGsc(true);
+    
     try {
       const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
-      const fetchOneRange = async (start: string, end: string, label: 'current' | 'previous') => {
-        const resp = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            startDate: start,
-            endDate: end,
-            dimensions: ['query', 'page', 'country', 'date'],
-            rowLimit: 5000
-          })
-        });
-        const data = await resp.json();
-        if (data.error) throw new Error(data.error.message);
-        return (data.rows || []).map((row: any) => ({
+      
+      // Función auxiliar para traer TODOS los datos paginando
+      const fetchAllRows = async (start: string, end: string, label: 'current' | 'previous') => {
+        let allRows: any[] = [];
+        let startRow = 0;
+        const batchSize = 25000; // Máximo permitido por GSC API por llamada
+        let moreDataAvailable = true;
+
+        while (moreDataAvailable) {
+          const resp = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              startDate: start,
+              endDate: end,
+              dimensions: ['query', 'page', 'country', 'date'],
+              rowLimit: batchSize,
+              startRow: startRow // <--- IMPORTANTE: Paginación
+            })
+          });
+
+          const data = await resp.json();
+          if (data.error) throw new Error(data.error.message);
+
+          const rows = data.rows || [];
+          allRows = [...allRows, ...rows];
+
+          // Si devuelve menos filas que el límite, hemos terminado
+          if (rows.length < batchSize) {
+            moreDataAvailable = false;
+          } else {
+            startRow += batchSize;
+          }
+          
+          // SAFETY BREAK: Para evitar bucles infinitos si hay millones de filas, pon un límite duro si quieres
+          if (allRows.length > 200000) moreDataAvailable = false; 
+        }
+
+        return allRows.map((row: any) => ({
             keyword: row.keys[0] || '',
             landingPage: row.keys[1] || '',
             country: normalizeCountry(row.keys[2]),
-            queryType: 'Non-Branded' as QueryType,
+            queryType: 'Non-Branded' as QueryType, // Se recalculará en el useMemo
             date: row.keys[3] || '',
             dateRangeLabel: label,
             clicks: row.clicks || 0,
@@ -511,20 +537,23 @@ const App: React.FC = () => {
         }));
       };
 
-      let combined: KeywordData[] = await fetchOneRange(filters.dateRange.start, filters.dateRange.end, 'current');
+      let combined: KeywordData[] = await fetchAllRows(filters.dateRange.start, filters.dateRange.end, 'current');
+      
       if (filters.comparison.enabled) {
         const comp = getComparisonDates();
-        const prev = await fetchOneRange(comp.start, comp.end, 'previous');
+        const prev = await fetchAllRows(comp.start, comp.end, 'previous');
         combined = [...combined, ...prev];
       }
+      
       setRealKeywordData(combined);
+
     } catch (err: any) {
       console.error(err);
       setError(`GSC Error: ${err.message}`);
     } finally {
       setIsLoadingGsc(false);
     }
-  };
+};
 
   useEffect(() => {
     const initializeOAuth = () => {
@@ -596,21 +625,55 @@ const App: React.FC = () => {
   }, [gscAuth?.site?.siteUrl, filters.dateRange, filters.comparison.enabled, filters.comparison.type]);
 
   const filteredDailyData = useMemo((): DailyData[] => {
+    // 1. OPTIMIZACIÓN: Crear la Regex UNA SOLA VEZ fuera del bucle
+    let brandRegex: RegExp;
+    try {
+      brandRegex = new RegExp(brandRegexStr, 'i');
+    } catch (e) {
+      // Fallback seguro si el usuario escribe un regex inválido (ej: un paréntesis abierto sin cerrar)
+      brandRegex = /shop|brand/i; 
+    }
+
     return realDailyData.filter(d => {
-      const queryTypeActual = isBranded(d.landingPage || '') ? 'Branded' : 'Non-Branded';
-      const countryMatch = filters.country === 'All' || d.country === filters.country;
+      // 2. OPTIMIZACIÓN: Chequear primero el filtro rápido (Country) antes del lento (Regex)
+      if (filters.country !== 'All' && d.country !== filters.country) return false;
+
+      // Ahora ejecutamos la regex pre-compilada
+      const isBrandedMatch = brandRegex.test(d.landingPage || '');
+      const queryTypeActual = isBrandedMatch ? 'Branded' : 'Non-Branded';
+      
       const queryMatch = filters.queryType === 'All' || queryTypeActual === filters.queryType;
-      return countryMatch && queryMatch;
-    }).map(d => ({ ...d, queryType: (isBranded(d.landingPage || '') ? 'Branded' : 'Non-Branded') as QueryType }));
+      return queryMatch;
+    }).map(d => ({ 
+      ...d, 
+      // Reutilizamos la misma instancia de regex
+      queryType: (brandRegex.test(d.landingPage || '') ? 'Branded' : 'Non-Branded') as QueryType 
+    }));
   }, [realDailyData, filters, brandRegexStr]);
 
-  const filteredKeywordData = useMemo((): KeywordData[] => {
+
+const filteredKeywordData = useMemo((): KeywordData[] => {
+    // 1. OPTIMIZACIÓN: Misma lógica, compilar Regex una vez
+    let brandRegex: RegExp;
+    try {
+      brandRegex = new RegExp(brandRegexStr, 'i');
+    } catch (e) {
+      brandRegex = /shop|brand/i;
+    }
+
     return realKeywordData.filter(k => {
-      const queryTypeActual = isBranded(k.keyword) ? 'Branded' : 'Non-Branded';
-      const countryMatch = filters.country === 'All' || k.country === filters.country;
+      // 2. OPTIMIZACIÓN: Country check primero
+      if (filters.country !== 'All' && k.country !== filters.country) return false;
+
+      const isBrandedMatch = brandRegex.test(k.keyword || '');
+      const queryTypeActual = isBrandedMatch ? 'Branded' : 'Non-Branded';
+      
       const queryMatch = filters.queryType === 'All' || queryTypeActual === filters.queryType;
-      return countryMatch && queryMatch;
-    }).map(k => ({ ...k, queryType: (isBranded(k.keyword) ? 'Branded' : 'Non-Branded') as QueryType }));
+      return queryMatch;
+    }).map(k => ({ 
+      ...k, 
+      queryType: (brandRegex.test(k.keyword || '') ? 'Branded' : 'Non-Branded') as QueryType 
+    }));
   }, [realKeywordData, filters, brandRegexStr]);
 
   const aggregate = (data: DailyData[]) => {
