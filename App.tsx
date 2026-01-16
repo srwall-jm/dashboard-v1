@@ -488,7 +488,7 @@ const App: React.FC = () => {
       const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
       
       const fetchOneRange = async (start: string, end: string, label: 'current' | 'previous') => {
-        // High limit for maximum query detail
+        // Obtenemos el máximo de queries permitidas para categorización exacta
         const respGranular = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
@@ -502,7 +502,7 @@ const App: React.FC = () => {
         const dataGranular = await respGranular.json();
         if (dataGranular.error) throw new Error(dataGranular.error.message);
 
-        // Fetch site-level absolute totals (100% accurate)
+        // Obtenemos los totales ABSOLUTOS del sitio (100% de clicks/impresiones del sitio)
         const respTotals = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
@@ -1250,24 +1250,26 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
   const organicGa4 = useMemo(() => aggregate(data.filter((d: any) => d.channel?.toLowerCase().includes('organic'))), [data, aggregate]);
   
   // GSC Metrics que REACCIONAN al filtro Branded/Non-Branded
+  // Para que Non-Branded cuadre con GSC, sumamos solo las queries visibles que NO coinciden con el regex
   const gscStats = useMemo(() => {
     if (!gscTotals) return { current: { clicks: 0, impressions: 0, ctr: 0 }, changes: { clicks: 0, impressions: 0, ctr: 0 } };
     
     const getRangeStats = (label: 'current' | 'previous', absTotal: any) => {
-      // Calculamos el valor Branded real sumando queries individuales
-      const brandedSum = keywordData.filter(k => k.dateRangeLabel === label && isBranded(k.keyword))
+      const visibleItems = keywordData.filter(k => k.dateRangeLabel === label);
+      
+      const brandedSum = visibleItems.filter(k => isBranded(k.keyword))
+        .reduce((acc, k) => ({ clicks: acc.clicks + k.clicks, impressions: acc.impressions + k.impressions }), { clicks: 0, impressions: 0 });
+
+      const nonBrandedSumVisible = visibleItems.filter(k => !isBranded(k.keyword))
         .reduce((acc, k) => ({ clicks: acc.clicks + k.clicks, impressions: acc.impressions + k.impressions }), { clicks: 0, impressions: 0 });
 
       if (queryTypeFilter === 'Branded') {
         return brandedSum;
       } else if (queryTypeFilter === 'Non-Branded') {
-        // Lógica Diferencial: El resto es Non-Branded (incluye anonimizadas)
-        return { 
-          clicks: Math.max(0, absTotal.clicks - brandedSum.clicks), 
-          impressions: Math.max(0, absTotal.impressions - brandedSum.impressions) 
-        };
+        // Ahora usamos solo las queries visibles que NO cumplen el regex (coincide con el filtro de GSC)
+        return nonBrandedSumVisible;
       }
-      return absTotal; // Caso "All"
+      return absTotal; // Caso "All" muestra el 100% real del sitio
     };
 
     const cur = getRangeStats('current', gscTotals.current);
@@ -1307,14 +1309,17 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
       return grouped;
     };
 
-    const aggBrandedOnly = (items: KeywordData[]) => {
+    const aggVisibleQueries = (items: KeywordData[]) => {
       const grouped: Record<string, any> = {};
       items.forEach(k => {
         const key = getBucket(k.date || '');
-        if (!grouped[key]) grouped[key] = { clicks: 0, impressions: 0 };
+        if (!grouped[key]) grouped[key] = { brandedClicks: 0, brandedImpr: 0, genericClicks: 0, genericImpr: 0 };
         if (isBranded(k.keyword)) {
-          grouped[key].clicks += k.clicks;
-          grouped[key].impressions += k.impressions;
+          grouped[key].brandedClicks += k.clicks;
+          grouped[key].brandedImpr += k.impressions;
+        } else {
+          grouped[key].genericClicks += k.clicks;
+          grouped[key].genericImpr += k.impressions;
         }
       });
       return grouped;
@@ -1322,25 +1327,32 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
 
     const curSite = aggSiteTotals(gscDailyTotals.filter(t => t.label === 'current'));
     const prevSite = aggSiteTotals(gscDailyTotals.filter(t => t.label === 'previous'));
-    const curBranded = aggBrandedOnly(keywordData.filter(k => k.dateRangeLabel === 'current'));
-    const prevBranded = aggBrandedOnly(keywordData.filter(k => k.dateRangeLabel === 'previous'));
+    const curVisible = aggVisibleQueries(keywordData.filter(k => k.dateRangeLabel === 'current'));
+    const prevVisible = aggVisibleQueries(keywordData.filter(k => k.dateRangeLabel === 'previous'));
     
     const prevBuckets = Object.keys(prevSite).sort();
 
     return bucketsCurrent.map((bucket, index) => {
       const siteCur = curSite[bucket] || { clicks: 0, impressions: 0 };
-      const brandCur = curBranded[bucket] || { clicks: 0, impressions: 0 };
+      const visCur = curVisible[bucket] || { brandedClicks: 0, brandedImpr: 0, genericClicks: 0, genericImpr: 0 };
       
       const prevBucket = prevBuckets[index];
       const sitePrev = prevBucket ? prevSite[prevBucket] : { clicks: 0, impressions: 0 };
-      const brandPrev = prevBucket ? prevBranded[prevBucket] : { clicks: 0, impressions: 0 };
+      const visPrev = prevBucket ? prevVisible[prevBucket] : { brandedClicks: 0, brandedImpr: 0, genericClicks: 0, genericImpr: 0 };
 
+      // Lógica de visualización:
+      // Branded = Suma de queries branded
+      // Non-Branded = Suma de queries que no coinciden (Coincide con GSC)
+      // Anonymized/Other = Total sitio - (Suma todas las queries visibles)
       return {
         date: bucket,
-        'Branded (Cur)': brandedMetric === 'clicks' ? brandCur.clicks : brandCur.impressions,
-        'Non-Branded (Cur)': brandedMetric === 'clicks' ? Math.max(0, siteCur.clicks - brandCur.clicks) : Math.max(0, siteCur.impressions - brandCur.impressions),
-        'Branded (Prev)': brandedMetric === 'clicks' ? brandPrev.clicks : brandPrev.impressions,
-        'Non-Branded (Prev)': brandedMetric === 'clicks' ? Math.max(0, sitePrev.clicks - brandPrev.clicks) : Math.max(0, sitePrev.impressions - brandPrev.impressions),
+        'Branded (Cur)': brandedMetric === 'clicks' ? visCur.brandedClicks : visCur.brandedImpr,
+        'Non-Branded (Cur)': brandedMetric === 'clicks' ? visCur.genericClicks : visCur.genericImpr,
+        'Anonymized (Cur)': brandedMetric === 'clicks' 
+          ? Math.max(0, siteCur.clicks - (visCur.brandedClicks + visCur.genericClicks)) 
+          : Math.max(0, siteCur.impressions - (visCur.brandedImpr + visCur.genericImpr)),
+        'Branded (Prev)': brandedMetric === 'clicks' ? visPrev.brandedClicks : visPrev.brandedImpr,
+        'Non-Branded (Prev)': brandedMetric === 'clicks' ? visPrev.genericClicks : visPrev.genericImpr,
       };
     });
   }, [gscDailyTotals, keywordData, grouping, brandedMetric, isBranded]);
@@ -1411,7 +1423,7 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
           <div className="flex justify-between items-center mb-8">
             <div>
               <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Brand vs Generic Search</h4>
-              <p className="text-[11px] font-bold text-slate-600">Clicks totales del sitio filtrados por queries Branded (Regex)</p>
+              <p className="text-[11px] font-bold text-slate-600">Categorización exacta: Branded (Regex), Genérico (Visible) y Anonimizado</p>
             </div>
             <div className="flex bg-slate-100 p-1 rounded-xl">
                <button onClick={() => setBrandedMetric('clicks')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'clicks' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Clicks</button>
@@ -1425,6 +1437,7 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
                   <defs>
                     <linearGradient id="colorBrand" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/><stop offset="95%" stopColor="#6366f1" stopOpacity={0}/></linearGradient>
                     <linearGradient id="colorGeneric" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#94a3b8" stopOpacity={0.1}/><stop offset="95%" stopColor="#94a3b8" stopOpacity={0}/></linearGradient>
+                    <linearGradient id="colorAnon" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#e2e8f0" stopOpacity={0.1}/><stop offset="95%" stopColor="#e2e8f0" stopOpacity={0}/></linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
@@ -1433,6 +1446,7 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
                   <Legend verticalAlign="top" align="center" iconType="circle" />
                   <Area name="Branded (Cur)" type="monotone" dataKey="Branded (Cur)" stroke="#6366f1" fillOpacity={1} fill="url(#colorBrand)" strokeWidth={3} />
                   <Area name="Non-Branded (Cur)" type="monotone" dataKey="Non-Branded (Cur)" stroke="#94a3b8" fillOpacity={1} fill="url(#colorGeneric)" strokeWidth={3} />
+                  <Area name="Anonymized (Cur)" type="monotone" dataKey="Anonymized (Cur)" stroke="#cbd5e1" fillOpacity={1} fill="url(#colorAnon)" strokeWidth={1} strokeDasharray="5 5" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : <EmptyState text="No query data available" />}
