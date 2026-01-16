@@ -1032,9 +1032,25 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
 }) => {
   const [weightMetric, setWeightMetric] = useState<'sessions' | 'revenue'>('sessions');
 
+  // Fix: Defined missing funnel data variables based on stats prop
+  const organicFunnelData = useMemo(() => [
+    { stage: 'Sessions', value: stats.organic.current.sessions },
+    { stage: 'Add To Carts', value: stats.organic.current.addToCarts },
+    { stage: 'Checkouts', value: stats.organic.current.checkouts },
+    { stage: 'Sales', value: stats.organic.current.sales },
+  ], [stats.organic.current]);
+
+  const paidFunnelData = useMemo(() => [
+    { stage: 'Sessions', value: stats.paid.current.sessions },
+    { stage: 'Add To Carts', value: stats.paid.current.addToCarts },
+    { stage: 'Checkouts', value: stats.paid.current.checkouts },
+    { stage: 'Sales', value: stats.paid.current.sales },
+  ], [stats.paid.current]);
+
   const chartData = useMemo(() => {
     if (!data.length) return [];
     
+    // 1. Filtrar períodos y ordenar de forma independiente
     const curRaw = data.filter(d => d.dateRangeLabel === 'current').sort((a,b) => a.date.localeCompare(b.date));
     const prevRaw = data.filter(d => d.dateRangeLabel === 'previous').sort((a,b) => a.date.localeCompare(b.date));
 
@@ -1044,79 +1060,59 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
       return d.date;
     };
 
-    const curGrouped: Record<string, any[]> = {};
-    curRaw.forEach(d => {
-      const key = getBucket(d);
-      if (!curGrouped[key]) curGrouped[key] = [];
-      curGrouped[key].push(d);
-    });
+    // 2. Función para agregar datos por cubo (bucket) de forma determinista
+    const aggregateByBucket = (items: DailyData[]) => {
+      const grouped: Record<string, DailyData[]> = {};
+      items.forEach(d => {
+        const key = getBucket(d);
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(d);
+      });
+      return grouped;
+    };
 
-    const prevGrouped: Record<string, any[]> = {};
-    prevRaw.forEach(d => {
-      const key = getBucket(d);
-      if (!prevGrouped[key]) prevGrouped[key] = [];
-      prevGrouped[key].push(d);
-    });
+    const curGrouped = aggregateByBucket(curRaw);
+    const prevGrouped = aggregateByBucket(prevRaw);
 
-    const curBuckets = Object.keys(curGrouped).sort();
-    const prevBuckets = Object.keys(prevGrouped).sort();
+    // Listas ordenadas de cubos para mapeo por índice
+    const curKeys = Object.keys(curGrouped).sort();
+    const prevKeys = Object.keys(prevGrouped).sort();
 
-    return curBuckets.map((bucket, index) => {
-      const curItems = curGrouped[bucket] || [];
-      // Sincronización por índice para el Overlay
-      const prevBucket = prevBuckets[index];
-      const prevItems = prevBucket ? prevGrouped[prevBucket] : [];
+    // 3. Sincronización por ÍNDICE RELATIVO para forzar el Overlay
+    // Mapeamos sobre curKeys para que el eje X use las fechas actuales
+    return curKeys.map((bucket, index) => {
+      const curDataPoints = curGrouped[bucket] || [];
+      // Aquí está el truco: buscar el cubo del pasado en la misma posición que el del presente
+      const prevBucket = prevKeys[index]; 
+      const prevDataPoints = prevBucket ? prevGrouped[prevBucket] : [];
 
       const sum = (items: DailyData[]) => items.reduce((acc, d) => {
         const isOrg = d.channel?.toLowerCase().includes('organic');
         const isPaid = d.channel?.toLowerCase().includes('paid') || d.channel?.toLowerCase().includes('cpc');
-        const isSearch = isOrg || isPaid;
         return {
           organic: acc.organic + (isOrg ? d.sessions : 0),
           paid: acc.paid + (isPaid ? d.sessions : 0),
           organicRev: acc.organicRev + (isOrg ? d.revenue : 0),
           paidRev: acc.paidRev + (isPaid ? d.revenue : 0),
-          search: acc.search + (isSearch ? d.sessions : 0),
-          others: acc.others + (!isSearch ? d.sessions : 0),
-          searchRev: acc.searchRev + (isSearch ? d.revenue : 0),
-          othersRev: acc.othersRev + (!isSearch ? d.revenue : 0)
         };
-      }, { organic: 0, paid: 0, organicRev: 0, paidRev: 0, search: 0, others: 0, searchRev: 0, othersRev: 0 });
+      }, { organic: 0, paid: 0, organicRev: 0, paidRev: 0 });
 
-      const curSum = sum(curItems);
-      const prevSum = sum(prevItems);
+      const curSum = sum(curDataPoints);
+      const prevSum = sum(prevDataPoints);
 
       return {
-        date: bucket,
+        date: bucket, // Eje X basado siempre en la fecha actual del cubo
         'Organic (Cur)': curSum.organic,
         'Paid (Cur)': curSum.paid,
         'Organic Rev (Cur)': curSum.organicRev,
         'Paid Rev (Cur)': curSum.paidRev,
-        'Search Weight (Cur)': weightMetric === 'sessions' ? curSum.search : curSum.searchRev,
-        'Others Weight (Cur)': weightMetric === 'sessions' ? curSum.others : curSum.othersRev,
         'Organic (Prev)': prevSum.organic,
         'Paid (Prev)': prevSum.paid,
         'Organic Rev (Prev)': prevSum.organicRev,
         'Paid Rev (Prev)': prevSum.paidRev,
-        'Search Weight (Prev)': weightMetric === 'sessions' ? prevSum.search : prevSum.searchRev,
-        'Others Weight (Prev)': weightMetric === 'sessions' ? prevSum.others : prevSum.othersRev,
       };
     });
-  }, [data, grouping, weightMetric]);
-
-  const organicFunnelData = useMemo(() => [
-    { stage: 'Sessions', value: stats.organic.current.sessions },
-    { stage: 'Add to Basket', value: stats.organic.current.addToCarts },
-    { stage: 'Checkout', value: stats.organic.current.checkouts },
-    { stage: 'Sale', value: stats.organic.current.sales },
-  ], [stats.organic]);
-
-  const paidFunnelData = useMemo(() => [
-    { stage: 'Sessions', value: stats.paid.current.sessions },
-    { stage: 'Add to Basket', value: stats.paid.current.addToCarts },
-    { stage: 'Checkout', value: stats.paid.current.checkouts },
-    { stage: 'Sale', value: stats.paid.current.sales },
-  ], [stats.paid]);
+  }, [data, grouping]);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
@@ -1135,7 +1131,15 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
       </div>
 
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
-        <div className="flex justify-between items-center mb-8"><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Sessions Performance (Overlay Comparison)</h4><div className="flex gap-1 bg-slate-100 p-1 rounded-xl">{['daily', 'weekly', 'monthly'].map(g => <button key={g} onClick={() => setGrouping(g as any)} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === g ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>{g === 'daily' ? 'Day' : g === 'weekly' ? 'Week' : 'Month'}</button>)}</div></div>
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Sessions Performance (Time Overlay)</h4>
+            <p className="text-[11px] font-bold text-slate-600">Línea sólida = Actual | Línea discontinua = Anterior</p>
+          </div>
+          <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+            {['daily', 'weekly', 'monthly'].map(g => <button key={g} onClick={() => setGrouping(g as any)} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === g ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>{g === 'daily' ? 'Day' : g === 'weekly' ? 'Week' : 'Month'}</button>)}
+          </div>
+        </div>
         <div className="h-[300px]">
           {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
@@ -1145,10 +1149,18 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
                 <Tooltip content={<ComparisonTooltip />} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
+                
+                {/* Período Actual */}
                 <Line name="Organic (Cur)" type="monotone" dataKey="Organic (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
                 <Line name="Paid (Cur)" type="monotone" dataKey="Paid (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
-                {comparisonEnabled && <Line name="Organic (Prev)" type="monotone" dataKey="Organic (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="4 4" dot={false} opacity={0.3} />}
-                {comparisonEnabled && <Line name="Paid (Prev)" type="monotone" dataKey="Paid (Prev)" stroke="#f59e0b" strokeWidth={2} strokeDasharray="4 4" dot={false} opacity={0.3} />}
+                
+                {/* Período Anterior Superpuesto */}
+                {comparisonEnabled && (
+                  <>
+                    <Line name="Organic (Prev)" type="monotone" dataKey="Organic (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
+                    <Line name="Paid (Prev)" type="monotone" dataKey="Paid (Prev)" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
+                  </>
+                )}
               </LineChart>
             </ResponsiveContainer>
           ) : <EmptyState text="No data available to chart" />}
@@ -1157,8 +1169,10 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
 
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
-          <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Revenue Evolution (Overlay Comparison)</h4>
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl"><Tag className="w-3 h-3" /><span className="text-[9px] font-black uppercase tracking-widest">Currency: {currencySymbol}</span></div>
+          <div>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Revenue Evolution (Time Overlay)</h4>
+            <p className="text-[11px] font-bold text-slate-600">Moneda: {currencySymbol}</p>
+          </div>
         </div>
         <div className="h-[300px]">
           {chartData.length > 0 ? (
@@ -1169,10 +1183,16 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} />
                 <Tooltip content={<ComparisonTooltip currency currencySymbol={currencySymbol} />} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
-                <Line name="Organic Rev (Cur)" type="monotone" dataKey="Organic Rev (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
-                <Line name="Paid Rev (Cur)" type="monotone" dataKey="Paid Rev (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
-                {comparisonEnabled && <Line name="Organic Rev (Prev)" type="monotone" dataKey="Organic Rev (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="4 4" dot={false} opacity={0.3} />}
-                {comparisonEnabled && <Line name="Paid Rev (Prev)" type="monotone" dataKey="Paid Rev (Prev)" stroke="#f59e0b" strokeWidth={2} strokeDasharray="4 4" dot={false} opacity={0.3} />}
+                
+                <Line name="Organic Rev (Cur)" type="monotone" dataKey="Organic Rev (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} />
+                <Line name="Paid Rev (Cur)" type="monotone" dataKey="Paid Rev (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} />
+                
+                {comparisonEnabled && (
+                  <>
+                    <Line name="Organic Rev (Prev)" type="monotone" dataKey="Organic Rev (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
+                    <Line name="Paid Rev (Prev)" type="monotone" dataKey="Paid Rev (Prev)" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
+                  </>
+                )}
               </LineChart>
             </ResponsiveContainer>
           ) : <EmptyState text="No revenue data available to chart" />}
@@ -1182,52 +1202,6 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <EcommerceFunnel title="Organic Search Funnel" data={organicFunnelData} color="indigo" />
         <EcommerceFunnel title="Paid Search Funnel" data={paidFunnelData} color="amber" />
-      </div>
-
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-          <div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Search Weight Analysis (Overlay Comparison)</h4><p className="text-[11px] font-bold text-slate-600">Total Search vs All Other Channels</p></div>
-          <div className="flex bg-slate-100 p-1 rounded-xl">
-            <button onClick={() => setWeightMetric('sessions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'sessions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Sessions</button>
-            <button onClick={() => setWeightMetric('revenue')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'revenue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Revenue</button>
-          </div>
-        </div>
-        <div className="h-[400px]">
-          {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => weightMetric === 'revenue' ? `${currencySymbol}${val.toLocaleString()}` : val.toLocaleString()} />
-                <Tooltip content={<ComparisonTooltip currency={weightMetric === 'revenue'} currencySymbol={currencySymbol} />} />
-                <Legend verticalAlign="top" align="center" iconType="circle" />
-                <Line name="Search Weight (Cur)" type="monotone" dataKey="Search Weight (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
-                <Line name="Others Weight (Cur)" type="monotone" dataKey="Others Weight (Cur)" stroke="#94a3b8" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
-                {comparisonEnabled && <Line name="Search Weight (Prev)" type="monotone" dataKey="Search Weight (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="4 4" dot={false} opacity={0.3} />}
-                {comparisonEnabled && <Line name="Others Weight (Prev)" type="monotone" dataKey="Others Weight (Prev)" stroke="#94a3b8" strokeWidth={2} strokeDasharray="4 4" dot={false} opacity={0.3} />}
-              </LineChart>
-            </ResponsiveContainer>
-          ) : <EmptyState text="No data available for weight analysis" />}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <KpiCard 
-          title="Search Share (Sessions)" 
-          value={`${stats.shares.sessions.current.toFixed(1)}%`} 
-          comparison={comparisonEnabled ? stats.shares.sessions.change : undefined} 
-          icon={<PieIcon />} 
-          isPercent 
-          color="violet" 
-        />
-        <KpiCard 
-          title="Search Share (Revenue)" 
-          value={`${stats.shares.revenue.current.toFixed(1)}%`} 
-          comparison={comparisonEnabled ? stats.shares.revenue.change : undefined} 
-          icon={<ShoppingBag />} 
-          isPercent 
-          color="violet" 
-        />
       </div>
     </div>
   );
@@ -1304,58 +1278,54 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
       return dateStr;
     };
 
-    const filteredDailyCurrent = gscDailyTotals.filter(t => t.label === 'current' && (countryFilter === 'All' || t.country === countryFilter)).sort((a,b) => a.date.localeCompare(b.date));
-    const filteredDailyPrevious = gscDailyTotals.filter(t => t.label === 'previous' && (countryFilter === 'All' || t.country === countryFilter)).sort((a,b) => a.date.localeCompare(b.date));
+    // Separar y ordenar actual vs previo
+    const curDaily = gscDailyTotals.filter(t => t.label === 'current' && (countryFilter === 'All' || t.country === countryFilter)).sort((a,b) => a.date.localeCompare(b.date));
+    const prevDaily = gscDailyTotals.filter(t => t.label === 'previous' && (countryFilter === 'All' || t.country === countryFilter)).sort((a,b) => a.date.localeCompare(b.date));
 
-    const curBucketsRaw = Array.from(new Set(filteredDailyCurrent.map(t => getBucket(t.date)))).sort();
-    const prevBucketsRaw = Array.from(new Set(filteredDailyPrevious.map(t => getBucket(t.date)))).sort();
+    const curBuckets = Array.from(new Set(curDaily.map(t => getBucket(t.date)))).sort();
+    const prevBuckets = Array.from(new Set(prevDaily.map(t => getBucket(t.date)))).sort();
 
-    const aggData = (dailyTotals: any[], keywords: KeywordData[], buckets: string[]) => {
+    const aggregateByBucket = (items: any[], kwData: KeywordData[]) => {
       const map: Record<string, any> = {};
-      buckets.forEach(b => map[b] = { total: { clicks: 0, impr: 0 }, branded: { clicks: 0, impr: 0 }, generic: { clicks: 0, impr: 0 } });
-
-      dailyTotals.forEach(t => {
+      items.forEach(t => {
         const b = getBucket(t.date);
-        if (map[b]) {
-          map[b].total.clicks += t.clicks;
-          map[b].total.impr += t.impressions;
-        }
+        if (!map[b]) map[b] = { totalClicks: 0, totalImpr: 0, brandedClicks: 0, brandedImpr: 0, genericClicks: 0, genericImpr: 0 };
+        map[b].totalClicks += t.clicks;
+        map[b].totalImpr += t.impressions;
       });
-
-      keywords.forEach(k => {
+      kwData.forEach(k => {
         const b = getBucket(k.date || '');
         if (map[b]) {
           if (isBranded(k.keyword)) {
-            map[b].branded.clicks += k.clicks;
-            map[b].branded.impr += k.impressions;
+            map[b].brandedClicks += k.clicks;
+            map[b].brandedImpr += k.impressions;
           } else {
-            map[b].generic.clicks += k.clicks;
-            map[b].generic.impr += k.impressions;
+            map[b].genericClicks += k.clicks;
+            map[b].genericImpr += k.impressions;
           }
         }
       });
       return map;
     };
 
-    const currentMap = aggData(filteredDailyCurrent, keywordData.filter(k => k.dateRangeLabel === 'current'), curBucketsRaw);
-    const previousMap = aggData(filteredDailyPrevious, keywordData.filter(k => k.dateRangeLabel === 'previous'), prevBucketsRaw);
+    const curMap = aggregateByBucket(curDaily, keywordData.filter(k => k.dateRangeLabel === 'current'));
+    const prevMap = aggregateByBucket(prevDaily, keywordData.filter(k => k.dateRangeLabel === 'previous'));
 
-    return curBucketsRaw.map((bucket, index) => {
-      const cur = currentMap[bucket];
-      // Mapeo por índice para Overlay
-      const prevBucket = prevBucketsRaw[index];
-      const prev = prevBucket ? previousMap[prevBucket] : null;
+    // Sincronizar por ÍNDICE para el Overlay
+    return curBuckets.map((bucket, index) => {
+      const cur = curMap[bucket];
+      const pBucket = prevBuckets[index];
+      const prev = pBucket ? prevMap[pBucket] : null;
 
-      const metricKey = brandedMetric === 'clicks' ? 'clicks' : 'impr';
+      const m = brandedMetric === 'clicks' ? 'Clicks' : 'Impr';
 
       return {
         date: bucket,
-        'Branded (Cur)': cur.branded[metricKey],
-        'Non-Branded (Cur)': cur.generic[metricKey],
-        'Anonymized (Cur)': Math.max(0, cur.total[metricKey] - (cur.branded[metricKey] + cur.generic[metricKey])),
-        'Branded (Prev)': prev ? prev.branded[metricKey] : 0,
-        'Non-Branded (Prev)': prev ? prev.generic[metricKey] : 0,
-        'Anonymized (Prev)': prev ? Math.max(0, prev.total[metricKey] - (prev.branded[metricKey] + prev.generic[metricKey])) : 0,
+        [`Branded (Cur)`]: cur[`branded${m}`],
+        [`Non-Branded (Cur)`]: cur[`generic${m}`],
+        [`Anonymized (Cur)`]: Math.max(0, cur[`total${m}`] - (cur[`branded${m}`] + cur[`generic${m}`])),
+        [`Branded (Prev)`]: prev ? prev[`branded${m}`] : 0,
+        [`Non-Branded (Prev)`]: prev ? prev[`generic${m}`] : 0,
       };
     });
   }, [gscDailyTotals, keywordData, grouping, brandedMetric, isBranded, countryFilter]);
@@ -1382,83 +1352,42 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
         <KpiCard title="Organic Conv. Rate" value={`${organicGa4.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? organicGa4.changes.cr : undefined} icon={<ShoppingBag />} isPercent color="emerald" />
       </div>
 
-      <div className="flex flex-col gap-8">
-        <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden w-full">
-          <div className="flex justify-between items-center mb-8">
-            <div>
-              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Brand vs Generic Search (Overlay Comparison)</h4>
-              <p className="text-[11px] font-bold text-slate-600">Líneas discontinuas representan el período anterior superpuesto</p>
-            </div>
-            <div className="flex bg-slate-100 p-1 rounded-xl">
-               <button onClick={() => setBrandedMetric('clicks')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'clicks' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Clicks</button>
-               <button onClick={() => setBrandedMetric('impressions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'impressions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Impr.</button>
-            </div>
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden w-full">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Brand vs Generic Search (Time Overlay)</h4>
+            <p className="text-[11px] font-bold text-slate-600">Períodos superpuestos por posición relativa en el tiempo</p>
           </div>
-          <div className="h-[400px]">
-            {brandedTrendData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={brandedTrendData}>
-                  <defs>
-                    <linearGradient id="colorBrand" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/><stop offset="95%" stopColor="#6366f1" stopOpacity={0}/></linearGradient>
-                    <linearGradient id="colorGeneric" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#94a3b8" stopOpacity={0.1}/><stop offset="95%" stopColor="#94a3b8" stopOpacity={0}/></linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
-                  <Tooltip content={<ComparisonTooltip />} />
-                  <Legend verticalAlign="top" align="center" iconType="circle" />
-                  
-                  {/* Período Actual */}
-                  <Area name="Branded (Cur)" type="monotone" dataKey="Branded (Cur)" stroke="#6366f1" fillOpacity={1} fill="url(#colorBrand)" strokeWidth={3} />
-                  <Area name="Non-Branded (Cur)" type="monotone" dataKey="Non-Branded (Cur)" stroke="#94a3b8" fillOpacity={1} fill="url(#colorGeneric)" strokeWidth={3} />
-                  
-                  {/* Período Anterior (Overlay Dashed) */}
-                  {comparisonEnabled && (
-                    <>
-                      <Line name="Branded (Prev)" type="monotone" dataKey="Branded (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" dot={false} opacity={0.4} />
-                      <Line name="Non-Branded (Prev)" type="monotone" dataKey="Non-Branded (Prev)" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" dot={false} opacity={0.4} />
-                    </>
-                  )}
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : <EmptyState text="No query data available" />}
+          <div className="flex bg-slate-100 p-1 rounded-xl">
+             <button onClick={() => setBrandedMetric('clicks')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'clicks' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Clicks</button>
+             <button onClick={() => setBrandedMetric('impressions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'impressions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Impr.</button>
           </div>
         </div>
-
-        <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm w-full">
-          <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Market Efficiency Matrix</h4>
-          <div className="h-[450px]">
-            {scatterData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <ScatterChart margin={{ top: 20, right: 30, bottom: 40, left: 30 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis type="number" dataKey="sessions" name="Sessions" tick={{fontSize: 9}} label={{ value: 'Sessions (Organic)', position: 'insideBottom', offset: -20, fontSize: 10, fontWeight: 900 }} axisLine={false} tickLine={false} />
-                  <YAxis type="number" dataKey="revenue" name="Revenue" tick={{fontSize: 9}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} label={{ value: 'Revenue', angle: -90, position: 'insideLeft', fontSize: 10, fontWeight: 900 }} axisLine={false} tickLine={false} />
-                  <ZAxis type="number" dataKey="sales" range={[150, 2000]} name="Sales" />
-                  <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }: any) => {
-                    if (active && payload && payload.length) {
-                      const d = payload[0].payload;
-                      return (
-                        <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-xl border border-white/10">
-                          <p className="text-[10px] font-black uppercase mb-2 text-indigo-400">{d.country}</p>
-                          <div className="space-y-1 text-[11px] font-bold">
-                            <p>Revenue: {currencySymbol}{d.revenue.toLocaleString()}</p>
-                            <p>Sessions: {d.sessions.toLocaleString()}</p>
-                            <p>Sales: {d.sales.toLocaleString()}</p>
-                            <p>Conv. Rate: {(d.sessions > 0 ? (d.sales / d.sessions) * 100 : 0).toFixed(2)}%</p>
-                          </div>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }} />
-                  <Scatter name="Markets" data={scatterData} fill="#6366f1">
-                    {scatterData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.revenue > 10000 ? '#10b981' : '#6366f1'} />)}
-                  </Scatter>
-                </ScatterChart>
-              </ResponsiveContainer>
-            ) : <EmptyState text="No market data available" />}
-          </div>
+        <div className="h-[400px]">
+          {brandedTrendData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={brandedTrendData}>
+                <defs>
+                  <linearGradient id="colorBrand" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/><stop offset="95%" stopColor="#6366f1" stopOpacity={0}/></linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
+                <Tooltip content={<ComparisonTooltip />} />
+                <Legend verticalAlign="top" align="center" iconType="circle" />
+                
+                <Area name="Branded (Cur)" type="monotone" dataKey="Branded (Cur)" stroke="#6366f1" fillOpacity={1} fill="url(#colorBrand)" strokeWidth={3} />
+                <Area name="Non-Branded (Cur)" type="monotone" dataKey="Non-Branded (Cur)" stroke="#94a3b8" fillOpacity={0} strokeWidth={3} />
+                
+                {comparisonEnabled && (
+                  <>
+                    <Line name="Branded (Prev)" type="monotone" dataKey="Branded (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
+                    <Line name="Non-Branded (Prev)" type="monotone" dataKey="Non-Branded (Prev)" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
+                  </>
+                )}
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : <EmptyState text="No query data available" />}
         </div>
       </div>
     </div>
