@@ -1,7 +1,6 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key, PieChart as PieIcon, Check
+  BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key, PieChart as PieIcon, Check, ChevronUp, Link as LinkIcon
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Legend, LineChart, Line, ScatterChart, Scatter, ZAxis, Cell, PieChart, Pie
@@ -489,14 +488,14 @@ const App: React.FC = () => {
       const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
       
       const fetchOneRange = async (start: string, end: string, label: 'current' | 'previous') => {
-        // Incluimos país en la dimensión para poder filtrar por país después
+        // Obtenemos el máximo de queries permitidas con dimensiones QUERY y PAGE (Landing)
         const respGranular = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             startDate: start,
             endDate: end,
-            dimensions: ['query', 'date', 'country'],
+            dimensions: ['query', 'page', 'date', 'country'],
             rowLimit: 25000 
           })
         });
@@ -515,7 +514,6 @@ const App: React.FC = () => {
         });
         const dataTotals = await respTotals.json();
         
-        // El total del sitio sigue siendo útil como referencia absoluta
         const totalAggregated = (dataTotals.rows || []).reduce((acc: any, row: any) => ({
           clicks: acc.clicks + row.clicks,
           impressions: acc.impressions + row.impressions,
@@ -531,13 +529,14 @@ const App: React.FC = () => {
 
         const mapped = (dataGranular.rows || []).map((row: any) => ({
             keyword: row.keys[0] || '',
-            date: row.keys[1] || '',
-            country: normalizeCountry(row.keys[2]),
+            landingPage: row.keys[1] || '',
+            date: row.keys[2] || '',
+            country: normalizeCountry(row.keys[3]),
             dateRangeLabel: label,
             clicks: row.clicks || 0,
             impressions: row.impressions || 0,
             ctr: (row.ctr || 0) * 100,
-            landingPage: '', sessions: 0, conversionRate: 0, revenue: 0, sales: 0, addToCarts: 0, checkouts: 0, queryType: 'Non-Branded' as QueryType
+            sessions: 0, conversionRate: 0, revenue: 0, sales: 0, addToCarts: 0, checkouts: 0, queryType: 'Non-Branded' as QueryType
         }));
 
         return { mapped, totals: totalAggregated, dailyTotals };
@@ -865,7 +864,6 @@ const App: React.FC = () => {
                       <button onClick={handleConnectGa4} className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Connect GA4</button>
                     ) : (
                       <div className="space-y-1.5">
-                        {/* FIX: Use e.target.value instead of target.value */}
                         <input type="text" placeholder="Search..." value={ga4Search} onChange={e => setGa4Search(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-lg text-[9px] px-2 py-1.5 outline-none focus:ring-1 ring-indigo-500" />
                         <select className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 outline-none" value={ga4Auth?.property?.id || ''} onChange={e => setGa4Auth({...ga4Auth, property: availableProperties.find(p => p.id === e.target.value) || null})}>
                           {filteredProperties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -1258,7 +1256,6 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
     if (!gscTotals) return { current: { clicks: 0, impressions: 0, ctr: 0 }, changes: { clicks: 0, impressions: 0, ctr: 0 } };
     
     const getRangeStats = (label: 'current' | 'previous') => {
-      // Usamos el listado granular que ya tiene el país inyectado
       const visibleItems = keywordData.filter(k => k.dateRangeLabel === label);
       
       const brandedSum = visibleItems.filter(k => isBranded(k.keyword))
@@ -1267,8 +1264,6 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
       const nonBrandedSumVisible = visibleItems.filter(k => !isBranded(k.keyword))
         .reduce((acc, k) => ({ clicks: acc.clicks + k.clicks, impressions: acc.impressions + k.impressions }), { clicks: 0, impressions: 0 });
 
-      // Si hay un país seleccionado, el total absoluto del sitio ya no nos sirve,
-      // usamos el total acumulado de las queries visibles para ese país (o todas si es 'All')
       const totalSumForCurrentScope = visibleItems.reduce((acc, k) => ({ 
         clicks: acc.clicks + k.clicks, 
         impressions: acc.impressions + k.impressions 
@@ -1280,12 +1275,10 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
         return nonBrandedSumVisible;
       }
 
-      // Si no hay filtro de query pero sí de país, el total debe ser la suma de todo lo que hay en ese país
       if (countryFilter !== 'All') {
         return totalSumForCurrentScope;
       }
       
-      // Si estamos en 'All Countries' y 'All Queries', usamos el total real del sitio (con anonimizados)
       return label === 'current' ? gscTotals.current : gscTotals.previous;
     };
 
@@ -1313,7 +1306,6 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
       return dateStr;
     };
 
-    // Aplicamos filtro de país a los totales diarios de GSC
     const filteredDailyTotals = gscDailyTotals.filter(t => countryFilter === 'All' || t.country === countryFilter);
 
     const bucketsCurrent = Array.from(new Set(filteredDailyTotals.filter(t => t.label === 'current').map(t => getBucket(t.date)))).sort();
@@ -1536,49 +1528,139 @@ const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, compa
   isLoading: boolean;
   comparisonEnabled: boolean;
 }) => {
-  const filtered = useMemo(() => keywords.filter(k => k.keyword.toLowerCase().includes(searchTerm.toLowerCase())), [keywords, searchTerm]);
+  const [expandedUrls, setExpandedUrls] = useState<Set<string>>(new Set());
+
+  const toggleUrl = (url: string) => {
+    const next = new Set(expandedUrls);
+    if (next.has(url)) next.delete(url);
+    else next.add(url);
+    setExpandedUrls(next);
+  };
+
+  const groupedByUrl = useMemo(() => {
+    const filtered = keywords.filter(k => 
+      k.keyword.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      k.landingPage.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const map: Record<string, { 
+      url: string; 
+      clicks: number; 
+      impressions: number; 
+      queries: KeywordData[] 
+    }> = {};
+
+    filtered.forEach(k => {
+      const url = k.landingPage || 'Unknown';
+      if (!map[url]) {
+        map[url] = { url, clicks: 0, impressions: 0, queries: [] };
+      }
+      if (k.dateRangeLabel === 'current') {
+        map[url].clicks += k.clicks;
+        map[url].impressions += k.impressions;
+        map[url].queries.push(k);
+      }
+    });
+
+    return Object.values(map)
+      .map(page => ({
+        ...page,
+        ctr: page.impressions > 0 ? (page.clicks / page.impressions) * 100 : 0,
+        // Ordenamos las queries de cada página por clicks descendente y nos quedamos con las top 20
+        topQueries: page.queries.sort((a, b) => b.clicks - a.clicks).slice(0, 20)
+      }))
+      .sort((a, b) => b.clicks - a.clicks);
+  }, [keywords, searchTerm]);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-           <div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">URL & Keyword Precision Analysis</h4><p className="text-[11px] font-bold text-slate-600">Performance granular view from Search Console</p></div>
+           <div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">URL & Keyword Precision Analysis</h4><p className="text-[11px] font-bold text-slate-600">Jerarquía por URL y sus Top 20 Queries correspondientes</p></div>
            <div className="relative w-full md:w-80">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input type="text" placeholder="Search keyword or URL..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-1 ring-indigo-500 transition-all" />
+              <input type="text" placeholder="Filtrar por URL o Keyword..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-1 ring-indigo-500 transition-all" />
            </div>
         </div>
         
         <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left">
+          <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-slate-100"><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Keyword</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Query Type</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Clicks</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Impr.</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">CTR</th><th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Primary Landing Page</th></tr>
+              <tr className="border-b border-slate-100 bg-slate-50/50">
+                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 w-10"></th>
+                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Landing Page (URL)</th>
+                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Clicks</th>
+                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Impr.</th>
+                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">CTR</th>
+              </tr>
             </thead>
             <tbody>
-              {filtered.filter(k => k.dateRangeLabel === 'current').slice(0, 50).map((k, i) => {
-                const prev = keywords.find(pk => pk.dateRangeLabel === 'previous' && pk.keyword === k.keyword);
-                const clickDiff = prev && prev.clicks > 0 ? ((k.clicks - prev.clicks) / prev.clicks) * 100 : 0;
-
-                return (
-                  <tr key={i} className="group hover:bg-slate-50/50 transition-colors border-b border-slate-50">
-                    <td className="py-4 px-4"><div className="flex items-center gap-3"><span className="text-[11px] font-bold text-slate-900">{k.keyword}</span><div className="opacity-0 group-hover:opacity-100 transition-opacity"><ExternalLink className="w-3 h-3 text-indigo-400 cursor-pointer" /></div></div></td>
-                    <td className="py-4 px-4"><span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-tight ${k.queryType === 'Branded' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>{k.queryType}</span></td>
-                    <td className="py-4 px-4 text-right">
-                       <div className="text-[11px] font-black text-slate-900">{k.clicks.toLocaleString()}</div>
-                       {comparisonEnabled && prev && (
-                         <div className={`text-[8px] font-black ${clickDiff >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{clickDiff >= 0 ? '+' : ''}{clickDiff.toFixed(1)}%</div>
-                       )}
+              {groupedByUrl.length > 0 ? groupedByUrl.map((page, i) => (
+                <React.Fragment key={page.url}>
+                  <tr 
+                    onClick={() => toggleUrl(page.url)}
+                    className="group cursor-pointer hover:bg-slate-50/50 transition-colors border-b border-slate-50"
+                  >
+                    <td className="py-5 px-4">
+                      {expandedUrls.has(page.url) ? <ChevronUp className="w-4 h-4 text-indigo-500" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
                     </td>
-                    <td className="py-4 px-4 text-right font-bold text-slate-600 text-[11px]">{k.impressions.toLocaleString()}</td>
-                    <td className="py-4 px-4 text-right">
-                       <div className="text-[11px] font-black text-slate-900">{k.ctr.toFixed(2)}%</div>
-                       <div className="w-16 h-1 bg-slate-100 rounded-full mt-1.5 ml-auto overflow-hidden"><div className="h-full bg-sky-500" style={{ width: `${Math.min(k.ctr * 5, 100)}%` }} /></div>
+                    <td className="py-5 px-4 max-w-md">
+                      <div className="flex items-center gap-3">
+                        <LinkIcon className="w-3 h-3 text-slate-300 flex-shrink-0" />
+                        <span className="text-[11px] font-black text-slate-800 truncate block">{page.url}</span>
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity"><ExternalLink className="w-3 h-3 text-indigo-400" /></div>
+                      </div>
                     </td>
-                    <td className="py-4 px-4"><div className="flex items-center gap-2 group/link"><span className="text-[10px] font-medium text-slate-400 truncate max-w-[200px]">{k.landingPage || 'Query View'}</span><ChevronRight className="w-3 h-3 text-slate-300 group-hover/link:translate-x-1 transition-transform" /></div></td>
+                    <td className="py-5 px-4 text-right">
+                       <div className="text-[11px] font-black text-slate-900">{page.clicks.toLocaleString()}</div>
+                    </td>
+                    <td className="py-5 px-4 text-right font-bold text-slate-600 text-[11px]">{page.impressions.toLocaleString()}</td>
+                    <td className="py-5 px-4 text-right">
+                       <div className="text-[11px] font-black text-slate-900">{page.ctr.toFixed(2)}%</div>
+                       <div className="w-16 h-1 bg-slate-100 rounded-full mt-1.5 ml-auto overflow-hidden"><div className="h-full bg-indigo-500" style={{ width: `${Math.min(page.ctr * 5, 100)}%` }} /></div>
+                    </td>
                   </tr>
-                );
-              })}
-              {filtered.length === 0 && (<tr><td colSpan={6} className="py-20 text-center"><div className="flex flex-col items-center gap-4"><Search className="w-10 h-10 text-slate-200" /><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No matching search terms found</p></div></td></tr>)}
+                  {expandedUrls.has(page.url) && (
+                    <tr>
+                      <td colSpan={5} className="bg-slate-50/50 p-0 overflow-hidden">
+                        <div className="animate-in slide-in-from-top-2 duration-200">
+                          <table className="w-full ml-10 border-l-2 border-indigo-100 my-4">
+                            <thead>
+                              <tr className="border-b border-indigo-50/50">
+                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-6">Top Queries (Limit 20)</th>
+                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4">Type</th>
+                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Clicks</th>
+                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Impr.</th>
+                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">CTR</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {page.topQueries.map((q, idx) => (
+                                <tr key={idx} className="hover:bg-indigo-50/30 border-b border-indigo-50/10">
+                                  <td className="py-3 px-6"><span className="text-[10px] font-bold text-slate-700">{q.keyword}</span></td>
+                                  <td className="py-3 px-4"><span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tight ${q.queryType === 'Branded' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>{q.queryType}</span></td>
+                                  <td className="py-3 px-4 text-right"><span className="text-[10px] font-black text-slate-900">{q.clicks.toLocaleString()}</span></td>
+                                  <td className="py-3 px-4 text-right font-bold text-slate-500 text-[10px]">{q.impressions.toLocaleString()}</td>
+                                  <td className="py-3 px-4 text-right font-black text-slate-900 text-[10px]">{q.ctr.toFixed(2)}%</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              )) : (
+                <tr>
+                  <td colSpan={5} className="py-20 text-center">
+                    <div className="flex flex-col items-center gap-4">
+                      <Search className="w-10 h-10 text-slate-200" />
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No matching search terms found</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
