@@ -279,6 +279,7 @@ const App: React.FC = () => {
   
   const [realDailyData, setRealDailyData] = useState<DailyData[]>([]);
   const [realKeywordData, setRealKeywordData] = useState<KeywordData[]>([]);
+  const [gscDailyTotals, setGscDailyTotals] = useState<any[]>([]);
   const [gscTotals, setGscTotals] = useState<{current: any, previous: any} | null>(null);
   
   const [isLoadingGa4, setIsLoadingGa4] = useState(false);
@@ -487,6 +488,7 @@ const App: React.FC = () => {
       const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
       
       const fetchOneRange = async (start: string, end: string, label: 'current' | 'previous') => {
+        // High limit for maximum query detail
         const respGranular = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
@@ -494,12 +496,13 @@ const App: React.FC = () => {
             startDate: start,
             endDate: end,
             dimensions: ['query', 'page', 'country', 'date'],
-            rowLimit: 25000
+            rowLimit: 25000 
           })
         });
         const dataGranular = await respGranular.json();
         if (dataGranular.error) throw new Error(dataGranular.error.message);
 
+        // Fetch site-level absolute totals (100% accurate)
         const respTotals = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
@@ -515,6 +518,13 @@ const App: React.FC = () => {
           impressions: acc.impressions + row.impressions,
         }), { clicks: 0, impressions: 0 });
 
+        const dailyTotals = (dataTotals.rows || []).map((row: any) => ({
+          date: row.keys[0],
+          clicks: row.clicks,
+          impressions: row.impressions,
+          label
+        }));
+
         const mapped = (dataGranular.rows || []).map((row: any) => ({
             keyword: row.keys[0] || '',
             landingPage: row.keys[1] || '',
@@ -528,25 +538,29 @@ const App: React.FC = () => {
             sessions: 0, conversionRate: 0, revenue: 0, sales: 0, addToCarts: 0, checkouts: 0
         }));
 
-        return { mapped, totals: totalAggregated };
+        return { mapped, totals: totalAggregated, dailyTotals };
       };
 
-      let combined: KeywordData[] = [];
+      let combinedKeywords: KeywordData[] = [];
+      let combinedDailyTotals: any[] = [];
       let currentTotals = { clicks: 0, impressions: 0 };
       let previousTotals = { clicks: 0, impressions: 0 };
 
       const curData = await fetchOneRange(filters.dateRange.start, filters.dateRange.end, 'current');
-      combined = curData.mapped;
+      combinedKeywords = curData.mapped;
+      combinedDailyTotals = curData.dailyTotals;
       currentTotals = curData.totals;
 
       if (filters.comparison.enabled) {
         const comp = getComparisonDates();
         const prevData = await fetchOneRange(comp.start, comp.end, 'previous');
-        combined = [...combined, ...prevData.mapped];
+        combinedKeywords = [...combinedKeywords, ...prevData.mapped];
+        combinedDailyTotals = [...combinedDailyTotals, ...prevData.dailyTotals];
         previousTotals = prevData.totals;
       }
       
-      setRealKeywordData(combined);
+      setRealKeywordData(combinedKeywords);
+      setGscDailyTotals(combinedDailyTotals);
       setGscTotals({ current: currentTotals, previous: previousTotals });
     } catch (err: any) {
       console.error(err);
@@ -964,7 +978,7 @@ const App: React.FC = () => {
 
         <div className="w-full">
           {activeTab === DashboardTab.ORGANIC_VS_PAID && <OrganicVsPaidView stats={channelStats} data={filteredDailyData} comparisonEnabled={filters.comparison.enabled} grouping={grouping} setGrouping={setGrouping} currencySymbol={currencySymbol} />}
-          {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={filteredKeywordData} gscTotals={gscTotals} aggregate={aggregate} comparisonEnabled={filters.comparison.enabled} currencySymbol={currencySymbol} grouping={grouping} isBranded={isBranded} />}
+          {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={filteredKeywordData} gscDailyTotals={gscDailyTotals} gscTotals={gscTotals} aggregate={aggregate} comparisonEnabled={filters.comparison.enabled} currencySymbol={currencySymbol} grouping={grouping} isBranded={isBranded} />}
           {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && <SeoDeepDiveView keywords={filteredKeywordData} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isLoading={isAnythingLoading} comparisonEnabled={filters.comparison.enabled} />}
         </div>
 
@@ -1218,9 +1232,10 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
   );
 };
 
-const SeoMarketplaceView = ({ data, keywordData, gscTotals, aggregate, comparisonEnabled, currencySymbol, grouping, isBranded }: {
+const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggregate, comparisonEnabled, currencySymbol, grouping, isBranded }: {
   data: DailyData[];
   keywordData: KeywordData[];
+  gscDailyTotals: any[];
   gscTotals: any;
   aggregate: (data: DailyData[]) => any;
   comparisonEnabled: boolean;
@@ -1233,7 +1248,7 @@ const SeoMarketplaceView = ({ data, keywordData, gscTotals, aggregate, compariso
   // SEO Metrics from GA4
   const organicGa4 = useMemo(() => aggregate(data.filter((d: any) => d.channel?.toLowerCase().includes('organic'))), [data, aggregate]);
   
-  // GSC Stats using totals from API for 100% accuracy (Site Total - includes all queries/URLs)
+  // GSC Site Stats for 100% accurate KPIs
   const gscStats = useMemo(() => {
     if (!gscTotals) return { current: { clicks: 0, impressions: 0, ctr: 0 }, changes: { clicks: 0, impressions: 0, ctr: 0 } };
     const cur = gscTotals.current;
@@ -1249,63 +1264,68 @@ const SeoMarketplaceView = ({ data, keywordData, gscTotals, aggregate, compariso
     };
   }, [gscTotals]);
 
-  // Brand vs Generic chart data based on query dimensions
+  // Brand vs Generic chart data based on site totals to ensure 100% accurate visibility
   const brandedTrendData = useMemo(() => {
-    if (!keywordData.length) return [];
+    if (!gscDailyTotals.length) return [];
     
-    const curRaw = keywordData.filter(k => k.dateRangeLabel === 'current');
-    const prevRaw = keywordData.filter(k => k.dateRangeLabel === 'previous');
-
-    const getBucket = (k: KeywordData) => {
-      if (grouping === 'weekly') return formatDate(getStartOfWeek(new Date(k.date || '')));
-      if (grouping === 'monthly') return `${(k.date || '').slice(0, 7)}-01`;
-      return k.date || '';
+    const getBucket = (dateStr: string) => {
+      if (grouping === 'weekly') return formatDate(getStartOfWeek(new Date(dateStr)));
+      if (grouping === 'monthly') return `${dateStr.slice(0, 7)}-01`;
+      return dateStr;
     };
 
-    const buckets = Array.from(new Set(curRaw.map(getBucket))).sort();
-    
-    const aggregateRange = (items: KeywordData[]) => {
+    const bucketsCurrent = Array.from(new Set(gscDailyTotals.filter(t => t.label === 'current').map(t => getBucket(t.date)))).sort();
+
+    const aggSiteTotals = (items: any[]) => {
       const grouped: Record<string, any> = {};
-      items.forEach(k => {
-        const key = getBucket(k);
-        if (!grouped[key]) grouped[key] = [];
-        grouped[key].push(k);
+      items.forEach(t => {
+        const key = getBucket(t.date);
+        if (!grouped[key]) grouped[key] = { clicks: 0, impressions: 0 };
+        grouped[key].clicks += t.clicks;
+        grouped[key].impressions += t.impressions;
       });
       return grouped;
     };
 
-    const curGrouped = aggregateRange(curRaw);
-    const prevGrouped = aggregateRange(prevRaw);
-    const prevBuckets = Object.keys(prevGrouped).sort();
+    const aggQueries = (items: KeywordData[]) => {
+      const grouped: Record<string, any> = {};
+      items.forEach(k => {
+        const key = getBucket(k.date || '');
+        if (!grouped[key]) grouped[key] = { brandedClicks: 0, brandedImpr: 0 };
+        if (isBranded(k.keyword)) {
+          grouped[key].brandedClicks += k.clicks;
+          grouped[key].brandedImpr += k.impressions;
+        }
+      });
+      return grouped;
+    };
 
-    return buckets.map((bucket, index) => {
-      const curItems = curGrouped[bucket] || [];
+    const curSite = aggSiteTotals(gscDailyTotals.filter(t => t.label === 'current'));
+    const prevSite = aggSiteTotals(gscDailyTotals.filter(t => t.label === 'previous'));
+    const curQueries = aggQueries(keywordData.filter(k => k.dateRangeLabel === 'current'));
+    const prevQueries = aggQueries(keywordData.filter(k => k.dateRangeLabel === 'previous'));
+    
+    const prevBuckets = Object.keys(prevSite).sort();
+
+    return bucketsCurrent.map((bucket, index) => {
+      const siteCur = curSite[bucket] || { clicks: 0, impressions: 0 };
+      const qCur = curQueries[bucket] || { brandedClicks: 0, brandedImpr: 0 };
+      
       const prevBucket = prevBuckets[index];
-      const prevItems = prevBucket ? prevGrouped[prevBucket] : [];
+      const sitePrev = prevBucket ? prevSite[prevBucket] : { clicks: 0, impressions: 0 };
+      const qPrev = prevBucket ? prevQueries[prevBucket] : { brandedClicks: 0, brandedImpr: 0 };
 
-      const sum = (items: KeywordData[]) => items.reduce((acc, k) => {
-        // Apply Regex Logic for categorization
-        const branded = isBranded(k.keyword);
-        return {
-          brandedClicks: acc.brandedClicks + (branded ? k.clicks : 0),
-          nonBrandedClicks: acc.nonBrandedClicks + (!branded ? k.clicks : 0),
-          brandedImpr: acc.brandedImpr + (branded ? k.impressions : 0),
-          nonBrandedImpr: acc.nonBrandedImpr + (!branded ? k.impressions : 0)
-        };
-      }, { brandedClicks: 0, nonBrandedClicks: 0, brandedImpr: 0, nonBrandedImpr: 0 });
-
-      const curSum = sum(curItems);
-      const prevSum = sum(prevItems);
-
+      // Calculate visibility by subtracting known branded from site total
+      // This ensures 100% of traffic is captured, and anonymized/generic falls into Non-Branded
       return {
         date: bucket,
-        'Branded (Cur)': brandedMetric === 'clicks' ? curSum.brandedClicks : curSum.brandedImpr,
-        'Non-Branded (Cur)': brandedMetric === 'clicks' ? curSum.nonBrandedClicks : curSum.nonBrandedImpr,
-        'Branded (Prev)': brandedMetric === 'clicks' ? prevSum.brandedClicks : prevSum.brandedImpr,
-        'Non-Branded (Prev)': brandedMetric === 'clicks' ? prevSum.nonBrandedClicks : prevSum.nonBrandedImpr,
+        'Branded (Cur)': brandedMetric === 'clicks' ? qCur.brandedClicks : qCur.brandedImpr,
+        'Non-Branded (Cur)': brandedMetric === 'clicks' ? Math.max(0, siteCur.clicks - qCur.brandedClicks) : Math.max(0, siteCur.impressions - qCur.brandedImpr),
+        'Branded (Prev)': brandedMetric === 'clicks' ? qPrev.brandedClicks : qPrev.brandedImpr,
+        'Non-Branded (Prev)': brandedMetric === 'clicks' ? Math.max(0, sitePrev.clicks - qPrev.brandedClicks) : Math.max(0, sitePrev.impressions - qPrev.brandedImpr),
       };
     });
-  }, [keywordData, grouping, brandedMetric, isBranded]);
+  }, [gscDailyTotals, keywordData, grouping, brandedMetric, isBranded]);
 
   const scatterData = useMemo(() => {
     const map: Record<string, { country: string; sessions: number; sales: number; revenue: number }> = {};
@@ -1376,7 +1396,7 @@ const SeoMarketplaceView = ({ data, keywordData, gscTotals, aggregate, compariso
           <div className="flex justify-between items-center mb-8">
             <div>
               <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Brand vs Generic Search</h4>
-              <p className="text-[11px] font-bold text-slate-600">Keyword-based distribution (by Queries)</p>
+              <p className="text-[11px] font-bold text-slate-600">Calculated from Site Totals - Matches Regex = Branded</p>
             </div>
             <div className="flex bg-slate-100 p-1 rounded-xl">
                <button onClick={() => setBrandedMetric('clicks')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'clicks' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Clicks</button>
