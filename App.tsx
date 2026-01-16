@@ -1035,7 +1035,6 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
   const chartData = useMemo(() => {
     if (!data.length) return [];
     
-    // 1. Filtrar y ordenar periodos por separado
     const curRaw = data.filter(d => d.dateRangeLabel === 'current').sort((a,b) => a.date.localeCompare(b.date));
     const prevRaw = data.filter(d => d.dateRangeLabel === 'previous').sort((a,b) => a.date.localeCompare(b.date));
 
@@ -1045,56 +1044,79 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
       return d.date;
     };
 
-    // 2. Agrupar ambos por su bucket temporal real
-    const aggregateByBucket = (items: DailyData[]) => {
-      const grouped: Record<string, DailyData[]> = {};
-      items.forEach(d => {
-        const key = getBucket(d);
-        if (!grouped[key]) grouped[key] = [];
-        grouped[key].push(d);
-      });
-      return grouped;
-    };
+    const curGrouped: Record<string, any[]> = {};
+    curRaw.forEach(d => {
+      const key = getBucket(d);
+      if (!curGrouped[key]) curGrouped[key] = [];
+      curGrouped[key].push(d);
+    });
 
-    const curGrouped = aggregateByBucket(curRaw);
-    const prevGrouped = aggregateByBucket(prevRaw);
+    const prevGrouped: Record<string, any[]> = {};
+    prevRaw.forEach(d => {
+      const key = getBucket(d);
+      if (!prevGrouped[key]) prevGrouped[key] = [];
+      prevGrouped[key].push(d);
+    });
 
-    const curKeys = Object.keys(curGrouped).sort();
-    const prevKeys = Object.keys(prevGrouped).sort();
+    const curBuckets = Object.keys(curGrouped).sort();
+    const prevBuckets = Object.keys(prevGrouped).sort();
 
-    // 3. LA CLAVE: Mapeamos SOLO las fechas actuales, y traemos el pasado por posición (index)
-    return curKeys.map((bucket, index) => {
-      const curDataPoints = curGrouped[bucket] || [];
-      const prevBucket = prevKeys[index];
-      const prevDataPoints = prevBucket ? prevGrouped[prevBucket] : [];
+    return curBuckets.map((bucket, index) => {
+      const curItems = curGrouped[bucket] || [];
+      // Sincronización por índice para el Overlay
+      const prevBucket = prevBuckets[index];
+      const prevItems = prevBucket ? prevGrouped[prevBucket] : [];
 
       const sum = (items: DailyData[]) => items.reduce((acc, d) => {
         const isOrg = d.channel?.toLowerCase().includes('organic');
         const isPaid = d.channel?.toLowerCase().includes('paid') || d.channel?.toLowerCase().includes('cpc');
+        const isSearch = isOrg || isPaid;
         return {
           organic: acc.organic + (isOrg ? d.sessions : 0),
           paid: acc.paid + (isPaid ? d.sessions : 0),
           organicRev: acc.organicRev + (isOrg ? d.revenue : 0),
           paidRev: acc.paidRev + (isPaid ? d.revenue : 0),
+          search: acc.search + (isSearch ? d.sessions : 0),
+          others: acc.others + (!isSearch ? d.sessions : 0),
+          searchRev: acc.searchRev + (isSearch ? d.revenue : 0),
+          othersRev: acc.othersRev + (!isSearch ? d.revenue : 0)
         };
-      }, { organic: 0, paid: 0, organicRev: 0, paidRev: 0 });
+      }, { organic: 0, paid: 0, organicRev: 0, paidRev: 0, search: 0, others: 0, searchRev: 0, othersRev: 0 });
 
-      const curSum = sum(curDataPoints);
-      const prevSum = sum(prevDataPoints);
+      const curSum = sum(curItems);
+      const prevSum = sum(prevItems);
 
       return {
-        date: bucket, // El eje X SIEMPRE usa la fecha actual
+        date: bucket,
         'Organic (Cur)': curSum.organic,
         'Paid (Cur)': curSum.paid,
         'Organic Rev (Cur)': curSum.organicRev,
         'Paid Rev (Cur)': curSum.paidRev,
+        'Search Weight (Cur)': weightMetric === 'sessions' ? curSum.search : curSum.searchRev,
+        'Others Weight (Cur)': weightMetric === 'sessions' ? curSum.others : curSum.othersRev,
         'Organic (Prev)': prevSum.organic,
         'Paid (Prev)': prevSum.paid,
         'Organic Rev (Prev)': prevSum.organicRev,
         'Paid Rev (Prev)': prevSum.paidRev,
+        'Search Weight (Prev)': weightMetric === 'sessions' ? prevSum.search : prevSum.searchRev,
+        'Others Weight (Prev)': weightMetric === 'sessions' ? prevSum.others : prevSum.othersRev,
       };
     });
   }, [data, grouping, weightMetric]);
+
+  const organicFunnelData = useMemo(() => [
+    { stage: 'Sessions', value: stats.organic.current.sessions },
+    { stage: 'Add to Basket', value: stats.organic.current.addToCarts },
+    { stage: 'Checkout', value: stats.organic.current.checkouts },
+    { stage: 'Sale', value: stats.organic.current.sales },
+  ], [stats.organic]);
+
+  const paidFunnelData = useMemo(() => [
+    { stage: 'Sessions', value: stats.paid.current.sessions },
+    { stage: 'Add to Basket', value: stats.paid.current.addToCarts },
+    { stage: 'Checkout', value: stats.paid.current.checkouts },
+    { stage: 'Sale', value: stats.paid.current.sales },
+  ], [stats.paid]);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
@@ -1103,10 +1125,10 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
           <div key={ch.type} className="space-y-4">
             <div className="flex items-center gap-3 px-2"><div className={`w-7 h-7 bg-${ch.color}-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px]`}>{ch.type}</div><h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{ch.label} Performance</h4></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <KpiCard title="Sessions" value={ch.s.current.sessions} comparison={comparisonEnabled ? ch.s.changes.sessions : undefined} icon={<TrendingUp />} color={ch.color} />
+              <KpiCard title="Sessions" value={ch.s.current.sessions} comparison={comparisonEnabled ? ch.s.changes.sessions : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sessions : undefined} icon={<TrendingUp />} color={ch.color} />
               <KpiCard title="Conv. Rate" value={`${ch.s.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? ch.s.changes.cr : undefined} icon={<Percent />} isPercent color={ch.color} />
-              <KpiCard title="Revenue" value={`${currencySymbol}${ch.s.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? ch.s.changes.revenue : undefined} icon={<Tag />} prefix={currencySymbol} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
-              <KpiCard title="Sales" value={ch.s.current.sales} comparison={comparisonEnabled ? ch.s.changes.sales : undefined} icon={<ShoppingBag />} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
+              <KpiCard title="Revenue" value={`${currencySymbol}${ch.s.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? ch.s.changes.revenue : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<Tag />} prefix={currencySymbol} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
+              <KpiCard title="Sales" value={ch.s.current.sales} comparison={comparisonEnabled ? ch.s.changes.sales : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<ShoppingBag />} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
             </div>
           </div>
         ))}
@@ -1123,18 +1145,10 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
                 <Tooltip content={<ComparisonTooltip />} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
-                
-                {/* Hoy: Sólido */}
                 <Line name="Organic (Cur)" type="monotone" dataKey="Organic (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
                 <Line name="Paid (Cur)" type="monotone" dataKey="Paid (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
-                
-                {/* Pasado: Dotted Overlay */}
-                {comparisonEnabled && (
-                  <>
-                    <Line name="Organic (Prev)" type="monotone" dataKey="Organic (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" dot={false} opacity={0.3} />
-                    <Line name="Paid (Prev)" type="monotone" dataKey="Paid (Prev)" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={false} opacity={0.3} />
-                  </>
-                )}
+                {comparisonEnabled && <Line name="Organic (Prev)" type="monotone" dataKey="Organic (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="4 4" dot={false} opacity={0.3} />}
+                {comparisonEnabled && <Line name="Paid (Prev)" type="monotone" dataKey="Paid (Prev)" stroke="#f59e0b" strokeWidth={2} strokeDasharray="4 4" dot={false} opacity={0.3} />}
               </LineChart>
             </ResponsiveContainer>
           ) : <EmptyState text="No data available to chart" />}
@@ -1155,46 +1169,132 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} />
                 <Tooltip content={<ComparisonTooltip currency currencySymbol={currencySymbol} />} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
-                
-                <Line name="Organic Rev (Cur)" type="monotone" dataKey="Organic Rev (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} />
-                <Line name="Paid Rev (Cur)" type="monotone" dataKey="Paid Rev (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} />
-                
-                {comparisonEnabled && (
-                  <>
-                    <Line name="Organic Rev (Prev)" type="monotone" dataKey="Organic Rev (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" dot={false} opacity={0.3} />
-                    <Line name="Paid Rev (Prev)" type="monotone" dataKey="Paid Rev (Prev)" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={false} opacity={0.3} />
-                  </>
-                )}
+                <Line name="Organic Rev (Cur)" type="monotone" dataKey="Organic Rev (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                <Line name="Paid Rev (Cur)" type="monotone" dataKey="Paid Rev (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                {comparisonEnabled && <Line name="Organic Rev (Prev)" type="monotone" dataKey="Organic Rev (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="4 4" dot={false} opacity={0.3} />}
+                {comparisonEnabled && <Line name="Paid Rev (Prev)" type="monotone" dataKey="Paid Rev (Prev)" stroke="#f59e0b" strokeWidth={2} strokeDasharray="4 4" dot={false} opacity={0.3} />}
               </LineChart>
             </ResponsiveContainer>
           ) : <EmptyState text="No revenue data available to chart" />}
         </div>
       </div>
-      
-      {/* Resto de componentes de funnel igual */}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <EcommerceFunnel title="Organic Search Funnel" data={useMemo(() => [
-          { stage: 'Sessions', value: stats.organic.current.sessions },
-          { stage: 'Add to Basket', value: stats.organic.current.addToCarts },
-          { stage: 'Checkout', value: stats.organic.current.checkouts },
-          { stage: 'Sale', value: stats.organic.current.sales },
-        ], [stats.organic])} color="indigo" />
-        <EcommerceFunnel title="Paid Search Funnel" data={useMemo(() => [
-          { stage: 'Sessions', value: stats.paid.current.sessions },
-          { stage: 'Add to Basket', value: stats.paid.current.addToCarts },
-          { stage: 'Checkout', value: stats.paid.current.checkouts },
-          { stage: 'Sale', value: stats.paid.current.sales },
-        ], [stats.paid])} color="amber" />
+        <EcommerceFunnel title="Organic Search Funnel" data={organicFunnelData} color="indigo" />
+        <EcommerceFunnel title="Paid Search Funnel" data={paidFunnelData} color="amber" />
+      </div>
+
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+          <div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Search Weight Analysis (Overlay Comparison)</h4><p className="text-[11px] font-bold text-slate-600">Total Search vs All Other Channels</p></div>
+          <div className="flex bg-slate-100 p-1 rounded-xl">
+            <button onClick={() => setWeightMetric('sessions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'sessions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Sessions</button>
+            <button onClick={() => setWeightMetric('revenue')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'revenue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Revenue</button>
+          </div>
+        </div>
+        <div className="h-[400px]">
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => weightMetric === 'revenue' ? `${currencySymbol}${val.toLocaleString()}` : val.toLocaleString()} />
+                <Tooltip content={<ComparisonTooltip currency={weightMetric === 'revenue'} currencySymbol={currencySymbol} />} />
+                <Legend verticalAlign="top" align="center" iconType="circle" />
+                <Line name="Search Weight (Cur)" type="monotone" dataKey="Search Weight (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                <Line name="Others Weight (Cur)" type="monotone" dataKey="Others Weight (Cur)" stroke="#94a3b8" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                {comparisonEnabled && <Line name="Search Weight (Prev)" type="monotone" dataKey="Search Weight (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="4 4" dot={false} opacity={0.3} />}
+                {comparisonEnabled && <Line name="Others Weight (Prev)" type="monotone" dataKey="Others Weight (Prev)" stroke="#94a3b8" strokeWidth={2} strokeDasharray="4 4" dot={false} opacity={0.3} />}
+              </LineChart>
+            </ResponsiveContainer>
+          ) : <EmptyState text="No data available for weight analysis" />}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <KpiCard 
+          title="Search Share (Sessions)" 
+          value={`${stats.shares.sessions.current.toFixed(1)}%`} 
+          comparison={comparisonEnabled ? stats.shares.sessions.change : undefined} 
+          icon={<PieIcon />} 
+          isPercent 
+          color="violet" 
+        />
+        <KpiCard 
+          title="Search Share (Revenue)" 
+          value={`${stats.shares.revenue.current.toFixed(1)}%`} 
+          comparison={comparisonEnabled ? stats.shares.revenue.change : undefined} 
+          icon={<ShoppingBag />} 
+          isPercent 
+          color="violet" 
+        />
       </div>
     </div>
   );
 };
 
-const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggregate, comparisonEnabled, currencySymbol, grouping, isBranded, queryTypeFilter, countryFilter }: any) => {
+const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggregate, comparisonEnabled, currencySymbol, grouping, isBranded, queryTypeFilter, countryFilter }: {
+  data: DailyData[];
+  keywordData: KeywordData[];
+  gscDailyTotals: any[];
+  gscTotals: any;
+  aggregate: (data: DailyData[]) => any;
+  comparisonEnabled: boolean;
+  currencySymbol: string;
+  grouping: 'daily' | 'weekly' | 'monthly';
+  isBranded: (text: string) => boolean;
+  queryTypeFilter: QueryType | 'All';
+  countryFilter: string;
+}) => {
   const [brandedMetric, setBrandedMetric] = useState<'clicks' | 'impressions'>('clicks');
   
   const organicGa4 = useMemo(() => aggregate(data.filter((d: any) => d.channel?.toLowerCase().includes('organic'))), [data, aggregate]);
   
+  const gscStats = useMemo(() => {
+    if (!gscTotals) return { current: { clicks: 0, impressions: 0, ctr: 0 }, changes: { clicks: 0, impressions: 0, ctr: 0 } };
+    
+    const getRangeStats = (label: 'current' | 'previous') => {
+      const visibleItems = keywordData.filter(k => k.dateRangeLabel === label);
+      
+      const brandedSum = visibleItems.filter(k => isBranded(k.keyword))
+        .reduce((acc, k) => ({ clicks: acc.clicks + k.clicks, impressions: acc.impressions + k.impressions }), { clicks: 0, impressions: 0 });
+
+      const nonBrandedSumVisible = visibleItems.filter(k => !isBranded(k.keyword))
+        .reduce((acc, k) => ({ clicks: acc.clicks + k.clicks, impressions: acc.impressions + k.impressions }), { clicks: 0, impressions: 0 });
+
+      const totalSumForCurrentScope = visibleItems.reduce((acc, k) => ({ 
+        clicks: acc.clicks + k.clicks, 
+        impressions: acc.impressions + k.impressions 
+      }), { clicks: 0, impressions: 0 });
+
+      if (queryTypeFilter === 'Branded') {
+        return brandedSum;
+      } else if (queryTypeFilter === 'Non-Branded') {
+        return nonBrandedSumVisible;
+      }
+
+      if (countryFilter !== 'All') {
+        return totalSumForCurrentScope;
+      }
+      
+      return label === 'current' ? gscTotals.current : gscTotals.previous;
+    };
+
+    const cur = getRangeStats('current');
+    const prev = getRangeStats('previous');
+    
+    const getChange = (c: number, p: number) => p === 0 ? 0 : ((c - p) / p) * 100;
+    
+    return {
+      current: { ...cur, ctr: cur.impressions > 0 ? (cur.clicks / cur.impressions) * 100 : 0 },
+      changes: {
+        clicks: getChange(cur.clicks, prev.clicks),
+        impressions: getChange(cur.impressions, prev.impressions),
+        ctr: getChange(cur.clicks / (cur.impressions || 1), prev.clicks / (prev.impressions || 1))
+      }
+    };
+  }, [gscTotals, keywordData, queryTypeFilter, countryFilter, isBranded]);
+
   const brandedTrendData = useMemo(() => {
     if (!gscDailyTotals.length) return [];
     
@@ -1204,118 +1304,192 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
       return dateStr;
     };
 
-    // Separar datos actuales y previos alineados por índice
-    const curDaily = gscDailyTotals.filter((t: any) => t.label === 'current' && (countryFilter === 'All' || t.country === countryFilter)).sort((a,b) => a.date.localeCompare(b.date));
-    const prevDaily = gscDailyTotals.filter((t: any) => t.label === 'previous' && (countryFilter === 'All' || t.country === countryFilter)).sort((a,b) => a.date.localeCompare(b.date));
+    const filteredDailyCurrent = gscDailyTotals.filter(t => t.label === 'current' && (countryFilter === 'All' || t.country === countryFilter)).sort((a,b) => a.date.localeCompare(b.date));
+    const filteredDailyPrevious = gscDailyTotals.filter(t => t.label === 'previous' && (countryFilter === 'All' || t.country === countryFilter)).sort((a,b) => a.date.localeCompare(b.date));
 
-    const curBuckets = Array.from(new Set(curDaily.map((t: any) => getBucket(t.date)))).sort();
-    const prevBuckets = Array.from(new Set(prevDaily.map((t: any) => getBucket(t.date)))).sort();
+    const curBucketsRaw = Array.from(new Set(filteredDailyCurrent.map(t => getBucket(t.date)))).sort();
+    const prevBucketsRaw = Array.from(new Set(filteredDailyPrevious.map(t => getBucket(t.date)))).sort();
 
-    const agg = (items: any[], keywords: KeywordData[]) => {
+    const aggData = (dailyTotals: any[], keywords: KeywordData[], buckets: string[]) => {
       const map: Record<string, any> = {};
-      items.forEach(t => {
+      buckets.forEach(b => map[b] = { total: { clicks: 0, impr: 0 }, branded: { clicks: 0, impr: 0 }, generic: { clicks: 0, impr: 0 } });
+
+      dailyTotals.forEach(t => {
         const b = getBucket(t.date);
-        if (!map[b]) map[b] = { totalClicks: 0, totalImpr: 0, brandedClicks: 0, brandedImpr: 0, genericClicks: 0, genericImpr: 0 };
-        map[b].totalClicks += t.clicks;
-        map[b].totalImpr += t.impressions;
+        if (map[b]) {
+          map[b].total.clicks += t.clicks;
+          map[b].total.impr += t.impressions;
+        }
       });
+
       keywords.forEach(k => {
         const b = getBucket(k.date || '');
         if (map[b]) {
           if (isBranded(k.keyword)) {
-            map[b].brandedClicks += k.clicks;
-            map[b].brandedImpr += k.impressions;
+            map[b].branded.clicks += k.clicks;
+            map[b].branded.impr += k.impressions;
           } else {
-            map[b].genericClicks += k.clicks;
-            map[b].genericImpr += k.impressions;
+            map[b].generic.clicks += k.clicks;
+            map[b].generic.impr += k.impressions;
           }
         }
       });
       return map;
     };
 
-    const curMap = agg(curDaily, keywordData.filter((k: any) => k.dateRangeLabel === 'current'));
-    const prevMap = agg(prevDaily, keywordData.filter((k: any) => k.dateRangeLabel === 'previous'));
+    const currentMap = aggData(filteredDailyCurrent, keywordData.filter(k => k.dateRangeLabel === 'current'), curBucketsRaw);
+    const previousMap = aggData(filteredDailyPrevious, keywordData.filter(k => k.dateRangeLabel === 'previous'), prevBucketsRaw);
 
-    return curBuckets.map((bucket, index) => {
-      // Fix: Cast 'bucket' and 'pBucket' to string to avoid "Type 'unknown' cannot be used as an index type" error
-      const cur = curMap[bucket as string];
-      const pBucket = prevBuckets[index];
-      const prev = pBucket ? prevMap[pBucket as string] : null;
+    return curBucketsRaw.map((bucket, index) => {
+      const cur = currentMap[bucket];
+      // Mapeo por índice para Overlay
+      const prevBucket = prevBucketsRaw[index];
+      const prev = prevBucket ? previousMap[prevBucket] : null;
 
-      const m = brandedMetric === 'clicks' ? 'Clicks' : 'Impr';
+      const metricKey = brandedMetric === 'clicks' ? 'clicks' : 'impr';
 
       return {
         date: bucket,
-        [`Branded (Cur)`]: cur[`branded${m}`],
-        [`Non-Branded (Cur)`]: cur[`generic${m}`],
-        [`Anonymized (Cur)`]: Math.max(0, cur[`total${m}`] - (cur[`branded${m}`] + cur[`generic${m}`])),
-        [`Branded (Prev)`]: prev ? prev[`branded${m}`] : 0,
-        [`Non-Branded (Prev)`]: prev ? prev[`generic${m}`] : 0,
+        'Branded (Cur)': cur.branded[metricKey],
+        'Non-Branded (Cur)': cur.generic[metricKey],
+        'Anonymized (Cur)': Math.max(0, cur.total[metricKey] - (cur.branded[metricKey] + cur.generic[metricKey])),
+        'Branded (Prev)': prev ? prev.branded[metricKey] : 0,
+        'Non-Branded (Prev)': prev ? prev.generic[metricKey] : 0,
+        'Anonymized (Prev)': prev ? Math.max(0, prev.total[metricKey] - (prev.branded[metricKey] + prev.generic[metricKey])) : 0,
       };
     });
   }, [gscDailyTotals, keywordData, grouping, brandedMetric, isBranded, countryFilter]);
 
+  const scatterData = useMemo(() => {
+    const map: Record<string, { country: string; sessions: number; sales: number; revenue: number }> = {};
+    data.filter((d: any) => d.dateRangeLabel === 'current' && d.channel?.toLowerCase().includes('organic')).forEach((d: any) => { 
+      if (!map[d.country]) map[d.country] = { country: d.country, sessions: 0, sales: 0, revenue: 0 }; 
+      map[d.country].sessions += d.sessions; 
+      map[d.country].sales += d.sales; 
+      map[d.country].revenue += d.revenue; 
+    });
+    return Object.values(map);
+  }, [data]);
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-        <KpiCard title="GSC Clicks" value={organicGa4.current.clicks || 0} comparison={comparisonEnabled ? organicGa4.changes.clicks : undefined} icon={<MousePointer2 />} color="sky" />
-        <KpiCard title="GSC Avg. CTR" value={`${(organicGa4.current.ctr || 0).toFixed(2)}%`} comparison={comparisonEnabled ? organicGa4.changes.ctr : undefined} icon={<Percent />} isPercent color="sky" />
+        <KpiCard title="GSC Clicks" value={gscStats.current.clicks} comparison={comparisonEnabled ? gscStats.changes.clicks : undefined} icon={<MousePointer2 />} color="sky" />
+        <KpiCard title="GSC Impressions" value={gscStats.current.impressions} comparison={comparisonEnabled ? gscStats.changes.impressions : undefined} icon={<Eye />} color="sky" />
+        <KpiCard title="GSC Avg. CTR" value={`${gscStats.current.ctr.toFixed(2)}%`} comparison={comparisonEnabled ? gscStats.changes.ctr : undefined} icon={<Percent />} isPercent color="sky" />
         <KpiCard title="Organic Sessions" value={organicGa4.current.sessions} comparison={comparisonEnabled ? organicGa4.changes.sessions : undefined} icon={<TrendingUp />} color="indigo" />
         <KpiCard title="Organic Revenue" value={`${currencySymbol}${organicGa4.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} icon={<Tag />} prefix={currencySymbol} color="emerald" />
+        <KpiCard title="Organic Conv. Rate" value={`${organicGa4.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? organicGa4.changes.cr : undefined} icon={<ShoppingBag />} isPercent color="emerald" />
       </div>
 
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden w-full">
-        <div className="flex justify-between items-center mb-8">
-          <div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Brand vs Generic (Overlay Comparison)</h4><p className="text-[11px] font-bold text-slate-600">Líneas punteadas indican el pasado alineado día a día</p></div>
-          <div className="flex bg-slate-100 p-1 rounded-xl">
-             <button onClick={() => setBrandedMetric('clicks')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'clicks' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Clicks</button>
-             <button onClick={() => setBrandedMetric('impressions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'impressions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Impr.</button>
+      <div className="flex flex-col gap-8">
+        <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden w-full">
+          <div className="flex justify-between items-center mb-8">
+            <div>
+              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Brand vs Generic Search (Overlay Comparison)</h4>
+              <p className="text-[11px] font-bold text-slate-600">Líneas discontinuas representan el período anterior superpuesto</p>
+            </div>
+            <div className="flex bg-slate-100 p-1 rounded-xl">
+               <button onClick={() => setBrandedMetric('clicks')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'clicks' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Clicks</button>
+               <button onClick={() => setBrandedMetric('impressions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'impressions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Impr.</button>
+            </div>
+          </div>
+          <div className="h-[400px]">
+            {brandedTrendData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={brandedTrendData}>
+                  <defs>
+                    <linearGradient id="colorBrand" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/><stop offset="95%" stopColor="#6366f1" stopOpacity={0}/></linearGradient>
+                    <linearGradient id="colorGeneric" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#94a3b8" stopOpacity={0.1}/><stop offset="95%" stopColor="#94a3b8" stopOpacity={0}/></linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
+                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
+                  <Tooltip content={<ComparisonTooltip />} />
+                  <Legend verticalAlign="top" align="center" iconType="circle" />
+                  
+                  {/* Período Actual */}
+                  <Area name="Branded (Cur)" type="monotone" dataKey="Branded (Cur)" stroke="#6366f1" fillOpacity={1} fill="url(#colorBrand)" strokeWidth={3} />
+                  <Area name="Non-Branded (Cur)" type="monotone" dataKey="Non-Branded (Cur)" stroke="#94a3b8" fillOpacity={1} fill="url(#colorGeneric)" strokeWidth={3} />
+                  
+                  {/* Período Anterior (Overlay Dashed) */}
+                  {comparisonEnabled && (
+                    <>
+                      <Line name="Branded (Prev)" type="monotone" dataKey="Branded (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" dot={false} opacity={0.4} />
+                      <Line name="Non-Branded (Prev)" type="monotone" dataKey="Non-Branded (Prev)" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" dot={false} opacity={0.4} />
+                    </>
+                  )}
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : <EmptyState text="No query data available" />}
           </div>
         </div>
-        <div className="h-[400px]">
-          {brandedTrendData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={brandedTrendData}>
-                <defs>
-                  <linearGradient id="colorBrand" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/><stop offset="95%" stopColor="#6366f1" stopOpacity={0}/></linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
-                <Tooltip content={<ComparisonTooltip />} />
-                <Legend verticalAlign="top" align="center" iconType="circle" />
-                
-                <Area name="Branded (Cur)" type="monotone" dataKey="Branded (Cur)" stroke="#6366f1" fillOpacity={1} fill="url(#colorBrand)" strokeWidth={3} />
-                <Area name="Non-Branded (Cur)" type="monotone" dataKey="Non-Branded (Cur)" stroke="#94a3b8" fillOpacity={0} strokeWidth={3} />
-                
-                {comparisonEnabled && (
-                  <>
-                    <Line name="Branded (Prev)" type="monotone" dataKey="Branded (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
-                    <Line name="Non-Branded (Prev)" type="monotone" dataKey="Non-Branded (Prev)" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
-                  </>
-                )}
-              </AreaChart>
-            </ResponsiveContainer>
-          ) : <EmptyState text="No data available" />}
+
+        <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm w-full">
+          <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Market Efficiency Matrix</h4>
+          <div className="h-[450px]">
+            {scatterData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <ScatterChart margin={{ top: 20, right: 30, bottom: 40, left: 30 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis type="number" dataKey="sessions" name="Sessions" tick={{fontSize: 9}} label={{ value: 'Sessions (Organic)', position: 'insideBottom', offset: -20, fontSize: 10, fontWeight: 900 }} axisLine={false} tickLine={false} />
+                  <YAxis type="number" dataKey="revenue" name="Revenue" tick={{fontSize: 9}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} label={{ value: 'Revenue', angle: -90, position: 'insideLeft', fontSize: 10, fontWeight: 900 }} axisLine={false} tickLine={false} />
+                  <ZAxis type="number" dataKey="sales" range={[150, 2000]} name="Sales" />
+                  <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }: any) => {
+                    if (active && payload && payload.length) {
+                      const d = payload[0].payload;
+                      return (
+                        <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-xl border border-white/10">
+                          <p className="text-[10px] font-black uppercase mb-2 text-indigo-400">{d.country}</p>
+                          <div className="space-y-1 text-[11px] font-bold">
+                            <p>Revenue: {currencySymbol}{d.revenue.toLocaleString()}</p>
+                            <p>Sessions: {d.sessions.toLocaleString()}</p>
+                            <p>Sales: {d.sales.toLocaleString()}</p>
+                            <p>Conv. Rate: {(d.sessions > 0 ? (d.sales / d.sessions) * 100 : 0).toFixed(2)}%</p>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }} />
+                  <Scatter name="Markets" data={scatterData} fill="#6366f1">
+                    {scatterData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.revenue > 10000 ? '#10b981' : '#6366f1'} />)}
+                  </Scatter>
+                </ScatterChart>
+              </ResponsiveContainer>
+            ) : <EmptyState text="No market data available" />}
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, comparisonEnabled }: any) => {
+const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, comparisonEnabled }: {
+  keywords: KeywordData[];
+  searchTerm: string;
+  setSearchTerm: (s: string) => void;
+  isLoading: boolean;
+  comparisonEnabled: boolean;
+}) => {
   const [expandedUrls, setExpandedUrls] = useState<Set<string>>(new Set());
+
   const toggleUrl = (url: string) => {
     const next = new Set(expandedUrls);
-    if (next.has(url)) next.delete(url); else next.add(url);
+    if (next.has(url)) next.delete(url);
+    else next.add(url);
     setExpandedUrls(next);
   };
 
-  const grouped = useMemo(() => {
-    const filtered = keywords.filter((k: any) => k.keyword.toLowerCase().includes(searchTerm.toLowerCase()) || k.landingPage.toLowerCase().includes(searchTerm.toLowerCase()));
-    const map: Record<string, any> = {};
-    filtered.forEach((k: any) => {
+  const groupedByUrl = useMemo(() => {
+    const filtered = keywords.filter(k => 
+      k.keyword.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      k.landingPage.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const map: Record<string, { url: string; clicks: number; impressions: number; queries: KeywordData[] }> = {};
+
+    filtered.forEach(k => {
       const url = k.landingPage || 'Unknown';
       if (!map[url]) map[url] = { url, clicks: 0, impressions: 0, queries: [] };
       if (k.dateRangeLabel === 'current') {
@@ -1324,41 +1498,89 @@ const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, compa
         map[url].queries.push(k);
       }
     });
-    return Object.values(map).map((p: any) => ({ ...p, ctr: p.impressions > 0 ? (p.clicks/p.impressions)*100 : 0, topQueries: p.queries.sort((a:any, b:any) => b.clicks - a.clicks).slice(0, 20) })).sort((a,b) => b.clicks - a.clicks);
+
+    return Object.values(map)
+      .map(page => ({
+        ...page,
+        ctr: page.impressions > 0 ? (page.clicks / page.impressions) * 100 : 0,
+        topQueries: page.queries.sort((a, b) => b.clicks - a.clicks).slice(0, 20)
+      }))
+      .sort((a, b) => b.clicks - a.clicks);
   }, [keywords, searchTerm]);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
-        <div className="flex justify-between items-center mb-8">
-           <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">URL & Keyword Deep Analysis</h4>
-           <div className="relative w-80"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><input type="text" placeholder="Search URL or Keyword..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none" /></div>
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+           <div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">URL & Keyword Precision Analysis</h4><p className="text-[11px] font-bold text-slate-600">Jerarquía por URL y sus Top 20 Queries correspondientes</p></div>
+           <div className="relative w-full md:w-80">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input type="text" placeholder="Filtrar por URL o Keyword..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-1 ring-indigo-500 transition-all" />
+           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead><tr className="border-b border-slate-100"><th className="p-4 w-10"></th><th className="p-4 text-[9px] font-black text-slate-400 uppercase">Landing Page (URL)</th><th className="p-4 text-[9px] font-black text-slate-400 uppercase text-right">Clicks</th><th className="p-4 text-[9px] font-black text-slate-400 uppercase text-right">Impr.</th><th className="p-4 text-[9px] font-black text-slate-400 uppercase text-right">CTR</th></tr></thead>
+        
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50/50">
+                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 w-10"></th>
+                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Landing Page (URL)</th>
+                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Clicks</th>
+                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Impr.</th>
+                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">CTR</th>
+              </tr>
+            </thead>
             <tbody>
-              {grouped.map((page: any) => (
+              {groupedByUrl.length > 0 ? groupedByUrl.map((page, i) => (
                 <React.Fragment key={page.url}>
-                  <tr onClick={() => toggleUrl(page.url)} className="cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-50">
-                    <td className="p-4">{expandedUrls.has(page.url) ? <ChevronUp className="w-4 h-4 text-indigo-600" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}</td>
-                    <td className="p-4 max-w-md truncate font-black text-[11px] text-slate-800">{page.url}</td>
-                    <td className="p-4 text-right font-black text-[11px]">{page.clicks.toLocaleString()}</td>
-                    <td className="p-4 text-right text-slate-500 font-bold text-[10px]">{page.impressions.toLocaleString()}</td>
-                    <td className="p-4 text-right font-black text-[11px] text-indigo-600">{page.ctr.toFixed(2)}%</td>
+                  <tr onClick={() => toggleUrl(page.url)} className="group cursor-pointer hover:bg-slate-50/50 transition-colors border-b border-slate-50">
+                    <td className="py-5 px-4">{expandedUrls.has(page.url) ? <ChevronUp className="w-4 h-4 text-indigo-500" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}</td>
+                    <td className="py-5 px-4 max-w-md"><div className="flex items-center gap-3"><LinkIcon className="w-3 h-3 text-slate-300 flex-shrink-0" /><span className="text-[11px] font-black text-slate-800 truncate block">{page.url}</span><div className="opacity-0 group-hover:opacity-100 transition-opacity"><ExternalLink className="w-3 h-3 text-indigo-400" /></div></div></td>
+                    <td className="py-5 px-4 text-right"><div className="text-[11px] font-black text-slate-900">{page.clicks.toLocaleString()}</div></td>
+                    <td className="py-5 px-4 text-right font-bold text-slate-600 text-[11px]">{page.impressions.toLocaleString()}</td>
+                    <td className="py-5 px-4 text-right"><div className="text-[11px] font-black text-slate-900">{page.ctr.toFixed(2)}%</div><div className="w-16 h-1 bg-slate-100 rounded-full mt-1.5 ml-auto overflow-hidden"><div className="h-full bg-indigo-500" style={{ width: `${Math.min(page.ctr * 5, 100)}%` }} /></div></td>
                   </tr>
                   {expandedUrls.has(page.url) && (
-                    <tr><td colSpan={5} className="bg-slate-50/50 p-4">
-                      <table className="w-full ml-10 border-l-2 border-indigo-100">
-                        <thead><tr className="border-b border-indigo-50"><th className="p-2 text-[8px] font-black text-slate-400 uppercase text-left">Query</th><th className="p-2 text-[8px] font-black text-slate-400 uppercase">Type</th><th className="p-2 text-[8px] font-black text-slate-400 uppercase text-right">Clicks</th><th className="p-2 text-[8px] font-black text-slate-400 uppercase text-right">CTR</th></tr></thead>
-                        <tbody>{page.topQueries.map((q:any, idx:number) => (
-                          <tr key={idx} className="border-b border-indigo-50/20"><td className="p-2 font-bold text-[10px] text-slate-700">{q.keyword}</td><td className="p-2"><span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase ${q.queryType === 'Branded' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200'}`}>{q.queryType}</span></td><td className="p-2 text-right font-black text-[10px]">{q.clicks.toLocaleString()}</td><td className="p-2 text-right text-[10px] font-bold">{q.ctr.toFixed(2)}%</td></tr>
-                        ))}</tbody>
-                      </table>
-                    </td></tr>
+                    <tr>
+                      <td colSpan={5} className="bg-slate-50/50 p-0 overflow-hidden">
+                        <div className="animate-in slide-in-from-top-2 duration-200">
+                          <table className="w-full ml-10 border-l-2 border-indigo-100 my-4">
+                            <thead>
+                              <tr className="border-b border-indigo-50/50">
+                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-6">Top Queries (Limit 20)</th>
+                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4">Type</th>
+                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Clicks</th>
+                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Impr.</th>
+                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">CTR</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {page.topQueries.map((q, idx) => (
+                                <tr key={idx} className="hover:bg-indigo-50/30 border-b border-indigo-50/10">
+                                  <td className="py-3 px-6"><span className="text-[10px] font-bold text-slate-700">{q.keyword}</span></td>
+                                  <td className="py-3 px-4"><span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tight ${q.queryType === 'Branded' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>{q.queryType}</span></td>
+                                  <td className="py-3 px-4 text-right"><span className="text-[10px] font-black text-slate-900">{q.clicks.toLocaleString()}</span></td>
+                                  <td className="py-3 px-4 text-right font-bold text-slate-500 text-[10px]">{q.impressions.toLocaleString()}</td>
+                                  <td className="py-3 px-4 text-right font-black text-slate-900 text-[10px]">{q.ctr.toFixed(2)}%</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
                   )}
                 </React.Fragment>
-              ))}
+              )) : (
+                <tr>
+                  <td colSpan={5} className="py-20 text-center">
+                    <div className="flex flex-col items-center gap-4">
+                      <Search className="w-10 h-10 text-slate-200" />
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No matching search terms found</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -1368,14 +1590,17 @@ const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, compa
 };
 
 const SidebarLink = ({ active, onClick, icon, label }: any) => (
-  <button onClick={onClick} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-200 group ${active ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}>
-    <div className={`p-1.5 rounded-lg ${active ? 'bg-white/20' : 'bg-transparent'}`}>{React.cloneElement(icon, { size: 18 })}</div>
+  <button onClick={onClick} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-200 group ${active ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}>
+    <div className={`p-1.5 rounded-lg transition-colors ${active ? 'bg-white/20' : 'bg-transparent group-hover:bg-white/10'}`}>{React.cloneElement(icon, { size: 18 })}</div>
     <span className="text-[11px] font-black uppercase tracking-widest">{label}</span>
   </button>
 );
 
 const EmptyState = ({ text }: { text: string }) => (
-  <div className="w-full h-full flex flex-col items-center justify-center gap-4 opacity-40 py-20"><HardDrive className="w-10 h-10 text-slate-300" /><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{text}</p></div>
+  <div className="w-full h-full flex flex-col items-center justify-center gap-4 opacity-40">
+    <HardDrive className="w-10 h-10 text-slate-300" />
+    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{text}</p>
+  </div>
 );
 
 export default App;
