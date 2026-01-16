@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key, PieChart as PieIcon, Check
@@ -488,31 +489,33 @@ const App: React.FC = () => {
       const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
       
       const fetchOneRange = async (start: string, end: string, label: 'current' | 'previous') => {
-        // Obtenemos el máximo de queries permitidas para categorización exacta
+        // Incluimos país en la dimensión para poder filtrar por país después
         const respGranular = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             startDate: start,
             endDate: end,
-            dimensions: ['query', 'date'],
+            dimensions: ['query', 'date', 'country'],
             rowLimit: 25000 
           })
         });
         const dataGranular = await respGranular.json();
         if (dataGranular.error) throw new Error(dataGranular.error.message);
 
-        // Obtenemos los totales ABSOLUTOS del sitio (100% de clicks/impresiones del sitio)
+        // Obtenemos los totales del sitio por fecha y país para que el gráfico de tendencias reaccione al filtro
         const respTotals = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             startDate: start,
             endDate: end,
-            dimensions: ['date'],
+            dimensions: ['date', 'country'],
           })
         });
         const dataTotals = await respTotals.json();
+        
+        // El total del sitio sigue siendo útil como referencia absoluta
         const totalAggregated = (dataTotals.rows || []).reduce((acc: any, row: any) => ({
           clicks: acc.clicks + row.clicks,
           impressions: acc.impressions + row.impressions,
@@ -520,6 +523,7 @@ const App: React.FC = () => {
 
         const dailyTotals = (dataTotals.rows || []).map((row: any) => ({
           date: row.keys[0],
+          country: normalizeCountry(row.keys[1]),
           clicks: row.clicks,
           impressions: row.impressions,
           label
@@ -527,15 +531,13 @@ const App: React.FC = () => {
 
         const mapped = (dataGranular.rows || []).map((row: any) => ({
             keyword: row.keys[0] || '',
-            landingPage: '',
-            country: 'All',
-            queryType: 'Non-Branded' as QueryType,
             date: row.keys[1] || '',
+            country: normalizeCountry(row.keys[2]),
             dateRangeLabel: label,
             clicks: row.clicks || 0,
             impressions: row.impressions || 0,
             ctr: (row.ctr || 0) * 100,
-            sessions: 0, conversionRate: 0, revenue: 0, sales: 0, addToCarts: 0, checkouts: 0
+            landingPage: '', sessions: 0, conversionRate: 0, revenue: 0, sales: 0, addToCarts: 0, checkouts: 0, queryType: 'Non-Branded' as QueryType
         }));
 
         return { mapped, totals: totalAggregated, dailyTotals };
@@ -863,6 +865,7 @@ const App: React.FC = () => {
                       <button onClick={handleConnectGa4} className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Connect GA4</button>
                     ) : (
                       <div className="space-y-1.5">
+                        {/* FIX: Use e.target.value instead of target.value */}
                         <input type="text" placeholder="Search..." value={ga4Search} onChange={e => setGa4Search(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-lg text-[9px] px-2 py-1.5 outline-none focus:ring-1 ring-indigo-500" />
                         <select className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 outline-none" value={ga4Auth?.property?.id || ''} onChange={e => setGa4Auth({...ga4Auth, property: availableProperties.find(p => p.id === e.target.value) || null})}>
                           {filteredProperties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -978,7 +981,7 @@ const App: React.FC = () => {
 
         <div className="w-full">
           {activeTab === DashboardTab.ORGANIC_VS_PAID && <OrganicVsPaidView stats={channelStats} data={filteredDailyData} comparisonEnabled={filters.comparison.enabled} grouping={grouping} setGrouping={setGrouping} currencySymbol={currencySymbol} />}
-          {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={realKeywordData} gscDailyTotals={gscDailyTotals} gscTotals={gscTotals} aggregate={aggregate} comparisonEnabled={filters.comparison.enabled} currencySymbol={currencySymbol} grouping={grouping} isBranded={isBranded} queryTypeFilter={filters.queryType} />}
+          {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={filteredKeywordData} gscDailyTotals={gscDailyTotals} gscTotals={gscTotals} aggregate={aggregate} comparisonEnabled={filters.comparison.enabled} currencySymbol={currencySymbol} grouping={grouping} isBranded={isBranded} queryTypeFilter={filters.queryType} countryFilter={filters.country} />}
           {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && <SeoDeepDiveView keywords={filteredKeywordData} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isLoading={isAnythingLoading} comparisonEnabled={filters.comparison.enabled} />}
         </div>
 
@@ -1232,7 +1235,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
   );
 };
 
-const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggregate, comparisonEnabled, currencySymbol, grouping, isBranded, queryTypeFilter }: {
+const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggregate, comparisonEnabled, currencySymbol, grouping, isBranded, queryTypeFilter, countryFilter }: {
   data: DailyData[];
   keywordData: KeywordData[];
   gscDailyTotals: any[];
@@ -1243,18 +1246,19 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
   grouping: 'daily' | 'weekly' | 'monthly';
   isBranded: (text: string) => boolean;
   queryTypeFilter: QueryType | 'All';
+  countryFilter: string;
 }) => {
   const [brandedMetric, setBrandedMetric] = useState<'clicks' | 'impressions'>('clicks');
   
   // GA4 Organic Metrics
   const organicGa4 = useMemo(() => aggregate(data.filter((d: any) => d.channel?.toLowerCase().includes('organic'))), [data, aggregate]);
   
-  // GSC Metrics que REACCIONAN al filtro Branded/Non-Branded
-  // Para que Non-Branded cuadre con GSC, sumamos solo las queries visibles que NO coinciden con el regex
+  // GSC Metrics que REACCIONAN al filtro de País y Branded/Non-Branded
   const gscStats = useMemo(() => {
     if (!gscTotals) return { current: { clicks: 0, impressions: 0, ctr: 0 }, changes: { clicks: 0, impressions: 0, ctr: 0 } };
     
-    const getRangeStats = (label: 'current' | 'previous', absTotal: any) => {
+    const getRangeStats = (label: 'current' | 'previous') => {
+      // Usamos el listado granular que ya tiene el país inyectado
       const visibleItems = keywordData.filter(k => k.dateRangeLabel === label);
       
       const brandedSum = visibleItems.filter(k => isBranded(k.keyword))
@@ -1263,17 +1267,30 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
       const nonBrandedSumVisible = visibleItems.filter(k => !isBranded(k.keyword))
         .reduce((acc, k) => ({ clicks: acc.clicks + k.clicks, impressions: acc.impressions + k.impressions }), { clicks: 0, impressions: 0 });
 
+      // Si hay un país seleccionado, el total absoluto del sitio ya no nos sirve,
+      // usamos el total acumulado de las queries visibles para ese país (o todas si es 'All')
+      const totalSumForCurrentScope = visibleItems.reduce((acc, k) => ({ 
+        clicks: acc.clicks + k.clicks, 
+        impressions: acc.impressions + k.impressions 
+      }), { clicks: 0, impressions: 0 });
+
       if (queryTypeFilter === 'Branded') {
         return brandedSum;
       } else if (queryTypeFilter === 'Non-Branded') {
-        // Ahora usamos solo las queries visibles que NO cumplen el regex (coincide con el filtro de GSC)
         return nonBrandedSumVisible;
       }
-      return absTotal; // Caso "All" muestra el 100% real del sitio
+
+      // Si no hay filtro de query pero sí de país, el total debe ser la suma de todo lo que hay en ese país
+      if (countryFilter !== 'All') {
+        return totalSumForCurrentScope;
+      }
+      
+      // Si estamos en 'All Countries' y 'All Queries', usamos el total real del sitio (con anonimizados)
+      return label === 'current' ? gscTotals.current : gscTotals.previous;
     };
 
-    const cur = getRangeStats('current', gscTotals.current);
-    const prev = getRangeStats('previous', gscTotals.previous);
+    const cur = getRangeStats('current');
+    const prev = getRangeStats('previous');
     
     const getChange = (c: number, p: number) => p === 0 ? 0 : ((c - p) / p) * 100;
     
@@ -1285,7 +1302,7 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
         ctr: getChange(cur.clicks / (cur.impressions || 1), prev.clicks / (prev.impressions || 1))
       }
     };
-  }, [gscTotals, keywordData, queryTypeFilter, isBranded]);
+  }, [gscTotals, keywordData, queryTypeFilter, countryFilter, isBranded]);
 
   const brandedTrendData = useMemo(() => {
     if (!gscDailyTotals.length) return [];
@@ -1296,7 +1313,10 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
       return dateStr;
     };
 
-    const bucketsCurrent = Array.from(new Set(gscDailyTotals.filter(t => t.label === 'current').map(t => getBucket(t.date)))).sort();
+    // Aplicamos filtro de país a los totales diarios de GSC
+    const filteredDailyTotals = gscDailyTotals.filter(t => countryFilter === 'All' || t.country === countryFilter);
+
+    const bucketsCurrent = Array.from(new Set(filteredDailyTotals.filter(t => t.label === 'current').map(t => getBucket(t.date)))).sort();
 
     const aggSiteTotals = (items: any[]) => {
       const grouped: Record<string, any> = {};
@@ -1325,8 +1345,8 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
       return grouped;
     };
 
-    const curSite = aggSiteTotals(gscDailyTotals.filter(t => t.label === 'current'));
-    const prevSite = aggSiteTotals(gscDailyTotals.filter(t => t.label === 'previous'));
+    const curSite = aggSiteTotals(filteredDailyTotals.filter(t => t.label === 'current'));
+    const prevSite = aggSiteTotals(filteredDailyTotals.filter(t => t.label === 'previous'));
     const curVisible = aggVisibleQueries(keywordData.filter(k => k.dateRangeLabel === 'current'));
     const prevVisible = aggVisibleQueries(keywordData.filter(k => k.dateRangeLabel === 'previous'));
     
@@ -1340,10 +1360,6 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
       const sitePrev = prevBucket ? prevSite[prevBucket] : { clicks: 0, impressions: 0 };
       const visPrev = prevBucket ? prevVisible[prevBucket] : { brandedClicks: 0, brandedImpr: 0, genericClicks: 0, genericImpr: 0 };
 
-      // Lógica de visualización:
-      // Branded = Suma de queries branded
-      // Non-Branded = Suma de queries que no coinciden (Coincide con GSC)
-      // Anonymized/Other = Total sitio - (Suma todas las queries visibles)
       return {
         date: bucket,
         'Branded (Cur)': brandedMetric === 'clicks' ? visCur.brandedClicks : visCur.brandedImpr,
@@ -1355,7 +1371,7 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
         'Non-Branded (Prev)': brandedMetric === 'clicks' ? visPrev.genericClicks : visPrev.genericImpr,
       };
     });
-  }, [gscDailyTotals, keywordData, grouping, brandedMetric, isBranded]);
+  }, [gscDailyTotals, keywordData, grouping, brandedMetric, isBranded, countryFilter]);
 
   const scatterData = useMemo(() => {
     const map: Record<string, { country: string; sessions: number; sales: number; revenue: number }> = {};
