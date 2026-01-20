@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key, PieChart as PieIcon, Check, ChevronUp, Link as LinkIcon
+  BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key, PieChart as PieIcon, Check, ChevronUp, Link as LinkIcon, History
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Legend, LineChart, Line, ScatterChart, Scatter, ZAxis, Cell, PieChart, Pie
@@ -209,7 +209,7 @@ const DateRangeSelector: React.FC<{
   );
 };
 
-const ComparisonTooltip = ({ active, payload, label, currency = false, currencySymbol = '£' }: any) => {
+const ComparisonTooltip = ({ active, payload, label, currency = false, currencySymbol = '£', percent = false }: any) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10 min-w-[200px]">
@@ -230,7 +230,7 @@ const ComparisonTooltip = ({ active, payload, label, currency = false, currencyS
                 </div>
                 <div className="flex justify-between items-baseline gap-4 ml-4">
                   <span className="text-[11px] font-bold">
-                    {currency ? `${currencySymbol}${curVal.toLocaleString()}` : curVal.toLocaleString()}
+                    {currency ? `${currencySymbol}${curVal.toLocaleString()}` : percent ? `${curVal.toFixed(1)}%` : curVal.toLocaleString()}
                   </span>
                   {prevVal !== null && (
                     <div className={`flex items-center text-[9px] font-black ${diff >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -241,7 +241,7 @@ const ComparisonTooltip = ({ active, payload, label, currency = false, currencyS
                 {prevVal !== null && (
                   <div className="flex justify-between text-[8px] text-slate-500 ml-4 font-medium uppercase italic">
                     <span>Previous:</span>
-                    <span>{currency ? `${currencySymbol}${prevVal.toLocaleString()}` : prevVal.toLocaleString()}</span>
+                    <span>{currency ? `${currencySymbol}${prevVal.toLocaleString()}` : percent ? `${prevVal.toFixed(1)}%` : prevVal.toLocaleString()}</span>
                   </div>
                 )}
               </div>
@@ -564,6 +564,7 @@ const App: React.FC = () => {
         const comp = getComparisonDates();
         const prevData = await fetchOneRange(comp.start, comp.end, 'previous');
         combinedKeywords = [...combinedKeywords, ...prevData.mapped];
+        // Fixed: Use prevData instead of undefined prevDailyTotals
         combinedDailyTotals = [...combinedDailyTotals, ...prevData.dailyTotals];
         previousTotals = prevData.totals;
       }
@@ -1032,7 +1033,6 @@ const EcommerceFunnel = ({ title, data, color }: any) => {
   );
 };
 
-// New Section for Share of Search Analysis
 const ShareOfSearchAnalysis = ({ stats, currencySymbol }: { stats: any, currencySymbol: string }) => {
   const sessionShare = useMemo(() => {
     const searchVal = stats.organic.current.sessions + stats.paid.current.sessions;
@@ -1173,8 +1173,10 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
           paid: acc.paid + (isPaid ? d.sessions : 0),
           organicRev: acc.organicRev + (isOrg ? d.revenue : 0),
           paidRev: acc.paidRev + (isPaid ? d.revenue : 0),
+          totalSessions: acc.totalSessions + d.sessions,
+          totalRevenue: acc.totalRevenue + d.revenue,
         };
-      }, { organic: 0, paid: 0, organicRev: 0, paidRev: 0 });
+      }, { organic: 0, paid: 0, organicRev: 0, paidRev: 0, totalSessions: 0, totalRevenue: 0 });
 
       const curSum = sum(curDataPoints);
       const prevSum = sum(prevDataPoints);
@@ -1189,6 +1191,10 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
         'Paid (Prev)': prevSum.paid,
         'Organic Rev (Prev)': prevSum.organicRev,
         'Paid Rev (Prev)': prevSum.paidRev,
+        'Search Share Sessions (Cur)': curSum.totalSessions > 0 ? ((curSum.organic + curSum.paid) / curSum.totalSessions) * 100 : 0,
+        'Search Share Revenue (Cur)': curSum.totalRevenue > 0 ? ((curSum.organicRev + curSum.paidRev) / curSum.totalRevenue) * 100 : 0,
+        'Search Share Sessions (Prev)': prevSum.totalSessions > 0 ? ((curSum.organic + curSum.paid) / curSum.totalSessions) * 100 : 0,
+        'Search Share Revenue (Prev)': prevSum.totalRevenue > 0 ? ((prevSum.organicRev + prevSum.paidRev) / prevSum.totalRevenue) * 100 : 0,
       };
     });
   }, [data, grouping]);
@@ -1303,6 +1309,56 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
           <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Global Search Share (Market Dominance)</h4>
         </div>
         <ShareOfSearchAnalysis stats={stats} currencySymbol={currencySymbol} />
+      </div>
+
+      {/* NEW: Time Overlay Search Share Trend Chart */}
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm mt-8 overflow-hidden">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+          <div>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Global Search Share Trend (Time Overlay)</h4>
+            <p className="text-[11px] font-bold text-slate-600">Porcentaje de peso de búsqueda sobre el total de canales por período</p>
+          </div>
+          <div className="flex bg-slate-100 p-1 rounded-xl">
+             <button onClick={() => setWeightMetric('sessions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'sessions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Sessions %</button>
+             <button onClick={() => setWeightMetric('revenue')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'revenue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Revenue %</button>
+          </div>
+        </div>
+        <div className="h-[350px]">
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${val.toFixed(1)}%`} />
+                <Tooltip content={<ComparisonTooltip percent />} />
+                <Legend verticalAlign="top" align="center" iconType="circle" />
+                
+                <Line 
+                  name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Cur)`} 
+                  type="monotone" 
+                  dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Cur)' : 'Search Share Revenue (Cur)'} 
+                  stroke="#8b5cf6" 
+                  strokeWidth={3} 
+                  dot={false} 
+                  activeDot={{ r: 6 }} 
+                />
+                
+                {comparisonEnabled && (
+                  <Line 
+                    name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Prev)`} 
+                    type="monotone" 
+                    dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Prev)' : 'Search Share Revenue (Prev)'} 
+                    stroke="#8b5cf6" 
+                    strokeWidth={2} 
+                    strokeDasharray="5 5" 
+                    opacity={0.3} 
+                    dot={false} 
+                  />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          ) : <EmptyState text="No share data available to chart" />}
+        </div>
       </div>
     </div>
   );
