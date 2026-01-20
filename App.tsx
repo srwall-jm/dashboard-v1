@@ -254,7 +254,6 @@ const ComparisonTooltip = ({ active, payload, label, currency = false, currencyS
   return null;
 };
 
-/* Fix: Define SidebarLink component which was missing */
 const SidebarLink: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string }> = ({ active, onClick, icon, label }) => (
   <button
     onClick={onClick}
@@ -267,7 +266,6 @@ const SidebarLink: React.FC<{ active: boolean; onClick: () => void; icon: React.
   </button>
 );
 
-/* Fix: Define EmptyState component which was missing */
 const EmptyState: React.FC<{ text: string }> = ({ text }) => (
   <div className="flex flex-col items-center justify-center h-full py-12 text-center">
     <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-4">
@@ -277,7 +275,6 @@ const EmptyState: React.FC<{ text: string }> = ({ text }) => (
   </div>
 );
 
-/* Fix: Define SeoDeepDiveView component which was missing */
 const SeoDeepDiveView: React.FC<{ 
   keywords: KeywordData[]; 
   searchTerm: string; 
@@ -1330,7 +1327,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
               <KpiCard title="Sessions" value={ch.s.current.sessions} comparison={comparisonEnabled ? ch.s.changes.sessions : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sessions : undefined} icon={<TrendingUp />} color={ch.color} />
               <KpiCard title="Conv. Rate" value={`${ch.s.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? ch.s.changes.cr : undefined} icon={<Percent />} isPercent color={ch.color} />
               <KpiCard title="Revenue" value={`${currencySymbol}${ch.s.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? ch.s.changes.revenue : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<Tag />} prefix={currencySymbol} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
-              <KpiCard title="Sessions" value={ch.s.current.sales} comparison={comparisonEnabled ? ch.s.changes.sales : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<ShoppingBag />} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
+              <KpiCard title="Sales" value={ch.s.current.sales} comparison={comparisonEnabled ? ch.s.changes.sales : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<ShoppingBag />} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
             </div>
           </div>
         ))}
@@ -1751,16 +1748,7 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
         <KpiCard title="Organic Conv. Rate" value={`${organicGa4.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? organicGa4.changes.cr : undefined} icon={<ShoppingBag />} isPercent color="emerald" />
       </div>
 
-      <div className="mt-8 space-y-4">
-        <div className="flex items-center gap-3 px-2">
-          <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px] shadow-lg shadow-indigo-600/20">
-            <Globe size={14} />
-          </div>
-          <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Market Distribution & Efficiency Analysis</h4>
-        </div>
-        <CountryShareAnalysis data={countryPerformanceData} currencySymbol={currencySymbol} />
-      </div>
-
+      {/* Brand vs Generic Search (Time Overlay) moved ABOVE Market Distribution */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden w-full mt-8">
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -1798,6 +1786,17 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
             </ResponsiveContainer>
           ) : <EmptyState text="No query data available" />}
         </div>
+      </div>
+
+      {/* Country Performance & Efficiency Section moved BELOW Brand vs Generic */}
+      <div className="mt-8 space-y-4">
+        <div className="flex items-center gap-3 px-2">
+          <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px] shadow-lg shadow-indigo-600/20">
+            <Globe size={14} />
+          </div>
+          <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Market Distribution & Efficiency Analysis</h4>
+        </div>
+        <CountryShareAnalysis data={countryPerformanceData} currencySymbol={currencySymbol} />
       </div>
 
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm mt-8">
