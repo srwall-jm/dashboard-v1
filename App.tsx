@@ -257,21 +257,21 @@ const ComparisonTooltip = ({ active, payload, label, currency = false, currencyS
 const SidebarLink: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string }> = ({ active, onClick, icon, label }) => (
   <button
     onClick={onClick}
-    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${
-      active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'
+    className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-200 group ${
+      active ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'
     }`}
   >
-    <span className={`${active ? 'text-white' : 'text-slate-500'} transition-colors`}>{icon}</span>
-    {label}
+    <div className={`p-1.5 rounded-lg transition-colors ${active ? 'bg-white/20' : 'bg-transparent group-hover:bg-white/10'}`}>
+      {React.cloneElement(icon as React.ReactElement, { size: 18 })}
+    </div>
+    <span className="text-[11px] font-black uppercase tracking-widest">{label}</span>
   </button>
 );
 
 const EmptyState: React.FC<{ text: string }> = ({ text }) => (
-  <div className="flex flex-col items-center justify-center h-full py-12 text-center">
-    <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-      <Info className="w-6 h-6 text-slate-300" />
-    </div>
-    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{text}</p>
+  <div className="w-full h-full flex flex-col items-center justify-center gap-4 opacity-40">
+    <HardDrive className="w-10 h-10 text-slate-300" />
+    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{text}</p>
   </div>
 );
 
@@ -282,77 +282,171 @@ const SeoDeepDiveView: React.FC<{
   isLoading: boolean;
   comparisonEnabled: boolean;
 }> = ({ keywords, searchTerm, setSearchTerm, isLoading, comparisonEnabled }) => {
-  const filtered = useMemo(() => {
-    return keywords.filter(k => 
+  const [expandedUrls, setExpandedUrls] = useState<Set<string>>(new Set());
+
+  const toggleUrl = (url: string) => {
+    const next = new Set(expandedUrls);
+    if (next.has(url)) {
+      next.delete(url);
+    } else {
+      next.add(url);
+    }
+    setExpandedUrls(next);
+  };
+
+  const groupedByUrl = useMemo(() => {
+    const filtered = keywords.filter(k => 
       k.keyword.toLowerCase().includes(searchTerm.toLowerCase()) || 
       k.landingPage.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    const map: Record<string, { url: string; clicks: number; impressions: number; queries: KeywordData[] }> = {};
+
+    filtered.forEach(k => {
+      const url = k.landingPage || 'Unknown';
+      if (!map[url]) {
+        map[url] = { url, clicks: 0, impressions: 0, queries: [] };
+      }
+      
+      // We only aggregate 'current' data for the main list metrics
+      if (k.dateRangeLabel === 'current') {
+        map[url].clicks += k.clicks;
+        map[url].impressions += k.impressions;
+        map[url].queries.push(k);
+      }
+    });
+
+    return Object.values(map)
+      .map(page => ({
+        ...page,
+        ctr: page.impressions > 0 ? (page.clicks / page.impressions) * 100 : 0,
+        // Sort queries by clicks descending and limit
+        topQueries: page.queries.sort((a, b) => b.clicks - a.clicks).slice(0, 20)
+      }))
+      .sort((a, b) => b.clicks - a.clicks);
   }, [keywords, searchTerm]);
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-6">
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Keyword & URL Performance</h4>
-            <p className="text-[11px] font-bold text-slate-600">Deep dive into specific search queries and landing pages</p>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">URL & Keyword Precision Analysis</h4>
+            <p className="text-[11px] font-bold text-slate-600">Jerarquía por URL y sus Top 20 Queries correspondientes (hasta 50,000 registros procesados)</p>
           </div>
           <div className="relative w-full md:w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input 
               type="text" 
-              placeholder="Search keyword or URL..." 
+              placeholder="Filtrar por URL o Keyword..." 
               value={searchTerm} 
               onChange={e => setSearchTerm(e.target.value)} 
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none focus:ring-1 ring-indigo-500 transition-all"
+              className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-1 ring-indigo-500 transition-all"
             />
           </div>
         </div>
 
         <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left">
+          <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-slate-100">
-                <th className="px-4 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Keyword</th>
-                <th className="px-4 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Landing Page</th>
-                <th className="px-4 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Clicks</th>
-                <th className="px-4 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Impr.</th>
-                <th className="px-4 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">CTR</th>
-                <th className="px-4 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Type</th>
+              <tr className="border-b border-slate-100 bg-slate-50/50">
+                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 w-10"></th>
+                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Landing Page (URL)</th>
+                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Clicks</th>
+                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Impr.</th>
+                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">CTR</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.slice(0, 50).map((k, i) => (
-                <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group">
-                  <td className="px-4 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-[11px] font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{k.keyword}</span>
-                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{k.country}</span>
+              {groupedByUrl.length > 0 ? groupedByUrl.map((page, i) => (
+                <React.Fragment key={page.url}>
+                  <tr 
+                    onClick={() => toggleUrl(page.url)}
+                    className="group cursor-pointer hover:bg-slate-50/50 transition-colors border-b border-slate-50"
+                  >
+                    <td className="py-5 px-4 text-center">
+                      {expandedUrls.has(page.url) ? 
+                        <ChevronUp className="w-4 h-4 text-indigo-500" /> : 
+                        <ChevronDown className="w-4 h-4 text-slate-400" />
+                      }
+                    </td>
+                    <td className="py-5 px-4 max-w-md">
+                      <div className="flex items-center gap-3">
+                        <LinkIcon className="w-3 h-3 text-slate-300 flex-shrink-0" />
+                        <span className="text-[11px] font-black text-slate-800 truncate block">{page.url}</span>
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                          <ExternalLink className="w-3 h-3 text-indigo-400" />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-5 px-4 text-right">
+                      <div className="text-[11px] font-black text-slate-900">{page.clicks.toLocaleString()}</div>
+                    </td>
+                    <td className="py-5 px-4 text-right font-bold text-slate-600 text-[11px]">
+                      {page.impressions.toLocaleString()}
+                    </td>
+                    <td className="py-5 px-4 text-right">
+                      <div className="text-[11px] font-black text-slate-900">{page.ctr.toFixed(2)}%</div>
+                      <div className="w-16 h-1 bg-slate-100 rounded-full mt-1.5 ml-auto overflow-hidden">
+                        <div className="h-full bg-indigo-500" style={{ width: `${Math.min(page.ctr * 5, 100)}%` }} />
+                      </div>
+                    </td>
+                  </tr>
+                  {expandedUrls.has(page.url) && (
+                    <tr>
+                      <td colSpan={5} className="bg-slate-50/50 p-0 overflow-hidden">
+                        <div className="animate-in slide-in-from-top-2 duration-200">
+                          <table className="w-full ml-10 border-l-2 border-indigo-100 my-4">
+                            <thead>
+                              <tr className="border-b border-indigo-50/50">
+                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-6">Top Queries (Limit 20)</th>
+                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4">Type</th>
+                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Clicks</th>
+                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Impr.</th>
+                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">CTR</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {page.topQueries.map((q, idx) => (
+                                <tr key={idx} className="hover:bg-indigo-50/30 border-b border-indigo-50/10">
+                                  <td className="py-3 px-6">
+                                    <span className="text-[10px] font-bold text-slate-700">{q.keyword}</span>
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tight ${q.queryType === 'Branded' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>
+                                      {q.queryType}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 text-right">
+                                    <span className="text-[10px] font-black text-slate-900">{q.clicks.toLocaleString()}</span>
+                                  </td>
+                                  <td className="py-3 px-4 text-right font-bold text-slate-500 text-[10px]">
+                                    {q.impressions.toLocaleString()}
+                                  </td>
+                                  <td className="py-3 px-4 text-right font-black text-slate-900 text-[10px]">
+                                    {q.ctr.toFixed(2)}%
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              )) : (
+                <tr>
+                  <td colSpan={5} className="py-20 text-center">
+                    <div className="flex flex-col items-center gap-4">
+                      <Search className="w-10 h-10 text-slate-200" />
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No matching search terms found</p>
                     </div>
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] font-medium text-slate-500 max-w-[200px] truncate">{k.landingPage}</span>
-                      <ExternalLink className="w-2.5 h-2.5 text-slate-300" />
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 font-bold text-[11px]">{k.clicks.toLocaleString()}</td>
-                  <td className="px-4 py-4 font-bold text-[11px] text-slate-500">{k.impressions.toLocaleString()}</td>
-                  <td className="px-4 py-4">
-                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${k.ctr > 5 ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-600'}`}>
-                      {k.ctr.toFixed(1)}%
-                    </span>
-                  </td>
-                  <td className="px-4 py-4">
-                    <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${k.queryType === 'Branded' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
-                      {k.queryType}
-                    </span>
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
-          {filtered.length === 0 && <EmptyState text="No results found for your search" />}
         </div>
       </div>
     </div>
