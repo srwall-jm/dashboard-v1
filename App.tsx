@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key, PieChart as PieIcon, Check, ChevronUp, Link as LinkIcon
@@ -488,7 +489,6 @@ const App: React.FC = () => {
       const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
       
       const fetchOneRange = async (start: string, end: string, label: 'current' | 'previous') => {
-        // Obtenemos los totales agregados para este periodo
         const respTotals = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
@@ -512,8 +512,6 @@ const App: React.FC = () => {
           label
         }));
 
-        // PAGINACIÓN PARA LLEGAR A 50,000 FILAS
-        // Hacemos 2 llamadas de 25,000 para obtener las 50,000 solicitadas
         const rowLimit = 25000;
         let allGranularRows: any[] = [];
         
@@ -534,7 +532,6 @@ const App: React.FC = () => {
           if (dataGranular.rows) {
             allGranularRows = [...allGranularRows, ...dataGranular.rows];
           }
-          // Si devuelve menos de 25k, es que no hay más datos, paramos el loop
           if (!dataGranular.rows || dataGranular.rows.length < rowLimit) break;
         }
 
@@ -1035,6 +1032,96 @@ const EcommerceFunnel = ({ title, data, color }: any) => {
   );
 };
 
+// New Section for Share of Search Analysis
+const ShareOfSearchAnalysis = ({ stats, currencySymbol }: { stats: any, currencySymbol: string }) => {
+  const sessionShare = useMemo(() => {
+    const searchVal = stats.organic.current.sessions + stats.paid.current.sessions;
+    const othersVal = Math.max(0, stats.total.current.sessions - searchVal);
+    const totalVal = stats.total.current.sessions || 1;
+    return [
+      { name: 'Search (Org + Paid)', value: searchVal, percent: (searchVal / totalVal) * 100 },
+      { name: 'Other Channels', value: othersVal, percent: (othersVal / totalVal) * 100 }
+    ];
+  }, [stats]);
+
+  const revenueShare = useMemo(() => {
+    const searchVal = stats.organic.current.revenue + stats.paid.current.revenue;
+    const othersVal = Math.max(0, stats.total.current.revenue - searchVal);
+    const totalVal = stats.total.current.revenue || 1;
+    return [
+      { name: 'Search (Org + Paid)', value: searchVal, percent: (searchVal / totalVal) * 100 },
+      { name: 'Other Channels', value: othersVal, percent: (othersVal / totalVal) * 100 }
+    ];
+  }, [stats]);
+
+  const COLORS = ['#6366f1', '#94a3b8']; // Indigo for Search, Slate for Others
+
+  const renderDonut = (data: any[], title: string, metric: string, isCurrency = false) => (
+    <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm flex flex-col items-center h-full">
+      <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-6 self-start">{title}</h4>
+      <div className="w-full h-[220px] relative">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              cx="50%"
+              cy="50%"
+              innerRadius={60}
+              outerRadius={80}
+              paddingAngle={5}
+              dataKey="value"
+              stroke="none"
+            >
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip 
+              content={({ active, payload }: any) => {
+                if (active && payload && payload.length) {
+                  const d = payload[0].payload;
+                  return (
+                    <div className="bg-slate-900 text-white p-3 rounded-xl border border-white/10 shadow-xl">
+                      <p className="text-[9px] font-black uppercase tracking-widest mb-1">{d.name}</p>
+                      <p className="text-[11px] font-bold">
+                        {isCurrency ? `${currencySymbol}${d.value.toLocaleString()}` : d.value.toLocaleString()} {metric}
+                      </p>
+                      <p className="text-[9px] text-slate-400">{d.percent.toFixed(1)}% weight</p>
+                    </div>
+                  );
+                }
+                return null;
+              }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <span className="text-xl font-black text-slate-900">{data[0].percent.toFixed(1)}%</span>
+          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Search Share</span>
+        </div>
+      </div>
+      <div className="w-full space-y-3 mt-4">
+        {data.map((item, i) => (
+          <div key={i} className="flex justify-between items-center text-[10px] font-bold">
+            <div className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[i] }} />
+              <span className="text-slate-600">{item.name}</span>
+            </div>
+            <span className="text-slate-900">{isCurrency ? `${currencySymbol}${item.value.toLocaleString()}` : item.value.toLocaleString()}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full mt-8">
+      {renderDonut(sessionShare, 'Share of Total Sessions', 'Sessions')}
+      {renderDonut(revenueShare, 'Share of Total Revenue', 'Revenue', true)}
+    </div>
+  );
+};
+
 const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGrouping, currencySymbol }: {
   stats: any;
   data: DailyData[];
@@ -1048,7 +1135,6 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
   const chartData = useMemo(() => {
     if (!data.length) return [];
     
-    // 1. Filtrar períodos y ordenar de forma independiente
     const curRaw = data.filter(d => d.dateRangeLabel === 'current').sort((a,b) => a.date.localeCompare(b.date));
     const prevRaw = data.filter(d => d.dateRangeLabel === 'previous').sort((a,b) => a.date.localeCompare(b.date));
 
@@ -1058,7 +1144,6 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
       return d.date;
     };
 
-    // 2. Función para agregar datos por cubo (bucket) de forma determinista
     const aggregateByBucket = (items: DailyData[]) => {
       const grouped: Record<string, DailyData[]> = {};
       items.forEach(d => {
@@ -1072,15 +1157,11 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
     const curGrouped = aggregateByBucket(curRaw);
     const prevGrouped = aggregateByBucket(prevRaw);
 
-    // Listas ordenadas de cubos para mapeo por índice
     const curKeys = Object.keys(curGrouped).sort();
     const prevKeys = Object.keys(prevGrouped).sort();
 
-    // 3. Sincronización por ÍNDICE RELATIVO para forzar el Overlay
-    // Mapeamos sobre curKeys para que el eje X use las fechas actuales
     return curKeys.map((bucket, index) => {
       const curDataPoints = curGrouped[bucket] || [];
-      // Aquí está el truco: buscar el cubo del pasado en la misma posición que el del presente
       const prevBucket = prevKeys[index]; 
       const prevDataPoints = prevBucket ? prevGrouped[prevBucket] : [];
 
@@ -1099,7 +1180,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
       const prevSum = sum(prevDataPoints);
 
       return {
-        date: bucket, // Eje X basado siempre en la fecha actual del cubo
+        date: bucket,
         'Organic (Cur)': curSum.organic,
         'Paid (Cur)': curSum.paid,
         'Organic Rev (Cur)': curSum.organicRev,
@@ -1162,11 +1243,9 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
                 <Tooltip content={<ComparisonTooltip />} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
                 
-                {/* Período Actual */}
                 <Line name="Organic (Cur)" type="monotone" dataKey="Organic (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
                 <Line name="Paid (Cur)" type="monotone" dataKey="Paid (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
                 
-                {/* Período Anterior Superpuesto */}
                 {comparisonEnabled && (
                   <>
                     <Line name="Organic (Prev)" type="monotone" dataKey="Organic (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
@@ -1214,6 +1293,16 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <EcommerceFunnel title="Organic Search Funnel" data={organicFunnelData} color="indigo" />
         <EcommerceFunnel title="Paid Search Funnel" data={paidFunnelData} color="amber" />
+      </div>
+
+      <div className="mt-8 space-y-4">
+        <div className="flex items-center gap-3 px-2">
+          <div className="w-7 h-7 bg-violet-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px] shadow-lg shadow-violet-600/20">
+            <PieIcon size={14} />
+          </div>
+          <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Global Search Share (Market Dominance)</h4>
+        </div>
+        <ShareOfSearchAnalysis stats={stats} currencySymbol={currencySymbol} />
       </div>
     </div>
   );
@@ -1290,7 +1379,6 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
       return dateStr;
     };
 
-    // Separar y ordenar actual vs previo
     const curDaily = gscDailyTotals.filter(t => t.label === 'current' && (countryFilter === 'All' || t.country === countryFilter)).sort((a,b) => a.date.localeCompare(b.date));
     const prevDaily = gscDailyTotals.filter(t => t.label === 'previous' && (countryFilter === 'All' || t.country === countryFilter)).sort((a,b) => a.date.localeCompare(b.date));
 
@@ -1323,7 +1411,6 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
     const curMap = aggregateByBucket(curDaily, keywordData.filter(k => k.dateRangeLabel === 'current'));
     const prevMap = aggregateByBucket(prevDaily, keywordData.filter(k => k.dateRangeLabel === 'previous'));
 
-    // Sincronizar por ÍNDICE para el Overlay
     return curBuckets.map((bucket, index) => {
       const cur = curMap[bucket];
       const pBucket = prevBuckets[index];
