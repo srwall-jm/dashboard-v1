@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key, PieChart as PieIcon, Check, ChevronUp, Link as LinkIcon, History
+  BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key, PieChart as PieIcon, Check, ChevronUp, Link as LinkIcon, History, Trophy
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Legend, LineChart, Line, ScatterChart, Scatter, ZAxis, Cell, PieChart, Pie
@@ -252,6 +252,114 @@ const ComparisonTooltip = ({ active, payload, label, currency = false, currencyS
     );
   }
   return null;
+};
+
+/* Fix: Define SidebarLink component which was missing */
+const SidebarLink: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string }> = ({ active, onClick, icon, label }) => (
+  <button
+    onClick={onClick}
+    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${
+      active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'
+    }`}
+  >
+    <span className={`${active ? 'text-white' : 'text-slate-500'} transition-colors`}>{icon}</span>
+    {label}
+  </button>
+);
+
+/* Fix: Define EmptyState component which was missing */
+const EmptyState: React.FC<{ text: string }> = ({ text }) => (
+  <div className="flex flex-col items-center justify-center h-full py-12 text-center">
+    <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+      <Info className="w-6 h-6 text-slate-300" />
+    </div>
+    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{text}</p>
+  </div>
+);
+
+/* Fix: Define SeoDeepDiveView component which was missing */
+const SeoDeepDiveView: React.FC<{ 
+  keywords: KeywordData[]; 
+  searchTerm: string; 
+  setSearchTerm: (s: string) => void; 
+  isLoading: boolean;
+  comparisonEnabled: boolean;
+}> = ({ keywords, searchTerm, setSearchTerm, isLoading, comparisonEnabled }) => {
+  const filtered = useMemo(() => {
+    return keywords.filter(k => 
+      k.keyword.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      k.landingPage.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [keywords, searchTerm]);
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-6">
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+          <div>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Keyword & URL Performance</h4>
+            <p className="text-[11px] font-bold text-slate-600">Deep dive into specific search queries and landing pages</p>
+          </div>
+          <div className="relative w-full md:w-80">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Search keyword or URL..." 
+              value={searchTerm} 
+              onChange={e => setSearchTerm(e.target.value)} 
+              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none focus:ring-1 ring-indigo-500 transition-all"
+            />
+          </div>
+        </div>
+
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-slate-100">
+                <th className="px-4 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Keyword</th>
+                <th className="px-4 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Landing Page</th>
+                <th className="px-4 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Clicks</th>
+                <th className="px-4 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Impr.</th>
+                <th className="px-4 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">CTR</th>
+                <th className="px-4 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Type</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.slice(0, 50).map((k, i) => (
+                <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group">
+                  <td className="px-4 py-4">
+                    <div className="flex flex-col">
+                      <span className="text-[11px] font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{k.keyword}</span>
+                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{k.country}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] font-medium text-slate-500 max-w-[200px] truncate">{k.landingPage}</span>
+                      <ExternalLink className="w-2.5 h-2.5 text-slate-300" />
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 font-bold text-[11px]">{k.clicks.toLocaleString()}</td>
+                  <td className="px-4 py-4 font-bold text-[11px] text-slate-500">{k.impressions.toLocaleString()}</td>
+                  <td className="px-4 py-4">
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${k.ctr > 5 ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-600'}`}>
+                      {k.ctr.toFixed(1)}%
+                    </span>
+                  </td>
+                  <td className="px-4 py-4">
+                    <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${k.queryType === 'Branded' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
+                      {k.queryType}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filtered.length === 0 && <EmptyState text="No results found for your search" />}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const App: React.FC = () => {
@@ -564,7 +672,6 @@ const App: React.FC = () => {
         const comp = getComparisonDates();
         const prevData = await fetchOneRange(comp.start, comp.end, 'previous');
         combinedKeywords = [...combinedKeywords, ...prevData.mapped];
-        // Fixed: Use prevData instead of undefined prevDailyTotals
         combinedDailyTotals = [...combinedDailyTotals, ...prevData.dailyTotals];
         previousTotals = prevData.totals;
       }
@@ -1193,7 +1300,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
         'Paid Rev (Prev)': prevSum.paidRev,
         'Search Share Sessions (Cur)': curSum.totalSessions > 0 ? ((curSum.organic + curSum.paid) / curSum.totalSessions) * 100 : 0,
         'Search Share Revenue (Cur)': curSum.totalRevenue > 0 ? ((curSum.organicRev + curSum.paidRev) / curSum.totalRevenue) * 100 : 0,
-        'Search Share Sessions (Prev)': prevSum.totalSessions > 0 ? ((curSum.organic + curSum.paid) / curSum.totalSessions) * 100 : 0,
+        'Search Share Sessions (Prev)': prevSum.totalSessions > 0 ? ((prevSum.organic + prevSum.paid) / prevSum.totalSessions) * 100 : 0,
         'Search Share Revenue (Prev)': prevSum.totalRevenue > 0 ? ((prevSum.organicRev + prevSum.paidRev) / prevSum.totalRevenue) * 100 : 0,
       };
     });
@@ -1223,7 +1330,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
               <KpiCard title="Sessions" value={ch.s.current.sessions} comparison={comparisonEnabled ? ch.s.changes.sessions : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sessions : undefined} icon={<TrendingUp />} color={ch.color} />
               <KpiCard title="Conv. Rate" value={`${ch.s.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? ch.s.changes.cr : undefined} icon={<Percent />} isPercent color={ch.color} />
               <KpiCard title="Revenue" value={`${currencySymbol}${ch.s.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? ch.s.changes.revenue : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<Tag />} prefix={currencySymbol} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
-              <KpiCard title="Sales" value={ch.s.current.sales} comparison={comparisonEnabled ? ch.s.changes.sales : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<ShoppingBag />} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
+              <KpiCard title="Sessions" value={ch.s.current.sales} comparison={comparisonEnabled ? ch.s.changes.sales : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<ShoppingBag />} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
             </div>
           </div>
         ))}
@@ -1311,7 +1418,6 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
         <ShareOfSearchAnalysis stats={stats} currencySymbol={currencySymbol} />
       </div>
 
-      {/* NEW: Time Overlay Search Share Trend Chart */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm mt-8 overflow-hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
@@ -1360,6 +1466,143 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
           ) : <EmptyState text="No share data available to chart" />}
         </div>
       </div>
+    </div>
+  );
+};
+
+const CountryShareAnalysis = ({ data, currencySymbol }: { data: any[], currencySymbol: string }) => {
+  const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#f97316', '#3b82f6'];
+
+  const totalSessions = useMemo(() => data.reduce((acc, curr) => acc + curr.traffic, 0) || 1, [data]);
+  const totalRevenue = useMemo(() => data.reduce((acc, curr) => acc + curr.revenue, 0) || 1, [data]);
+
+  const sessionShare = useMemo(() => data.map((d, i) => ({ 
+    ...d, 
+    value: d.traffic, 
+    percent: (d.traffic / totalSessions) * 100,
+    color: COLORS[i % COLORS.length]
+  })).sort((a,b) => b.value - a.value), [data, totalSessions]);
+
+  const revenueShare = useMemo(() => data.map((d, i) => ({ 
+    ...d, 
+    value: d.revenue, 
+    percent: (d.revenue / totalRevenue) * 100,
+    color: COLORS[i % COLORS.length]
+  })).sort((a,b) => b.value - a.value), [data, totalRevenue]);
+
+  const efficiencyRank = useMemo(() => data.map((d, i) => ({
+    name: d.country,
+    efficiency: d.revenue / d.traffic,
+    color: COLORS[i % COLORS.length]
+  })).sort((a,b) => b.efficiency - a.efficiency), [data]);
+
+  const renderDonut = (shareData: any[], title: string, metric: string, isCurrency = false) => (
+    <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm h-full flex flex-col">
+      <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-6">{title}</h4>
+      <div className="flex-1 h-[250px] relative">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={shareData}
+              cx="50%"
+              cy="50%"
+              innerRadius={70}
+              outerRadius={95}
+              paddingAngle={2}
+              dataKey="value"
+              stroke="none"
+            >
+              {shareData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.color} />
+              ))}
+            </Pie>
+            <Tooltip 
+              content={({ active, payload }: any) => {
+                if (active && payload && payload.length) {
+                  const d = payload[0].payload;
+                  return (
+                    <div className="bg-slate-900 text-white p-3 rounded-xl border border-white/10 shadow-xl">
+                      <p className="text-[9px] font-black uppercase tracking-widest mb-1">{d.country}</p>
+                      <p className="text-[11px] font-bold">
+                        {isCurrency ? `${currencySymbol}${d.value.toLocaleString()}` : d.value.toLocaleString()} {metric}
+                      </p>
+                      <p className="text-[9px] text-slate-400">{d.percent.toFixed(1)}% contribution</p>
+                    </div>
+                  );
+                }
+                return null;
+              }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Market</span>
+          <span className="text-sm font-black text-slate-900">Distribution</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-6 border-t border-slate-50 pt-6">
+        {shareData.slice(0, 8).map((item, i) => (
+          <div key={i} className="flex items-center justify-between text-[9px] font-bold">
+            <div className="flex items-center gap-1.5 truncate mr-2">
+              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
+              <span className="text-slate-600 truncate">{item.country}</span>
+            </div>
+            <span className="text-slate-900 flex-shrink-0">{item.percent.toFixed(1)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
+       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {renderDonut(sessionShare, 'Volume Contribution (Sessions)', 'Sessions')}
+          {renderDonut(revenueShare, 'Value Contribution (Revenue)', 'Revenue', true)}
+       </div>
+
+       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+          <div className="flex justify-between items-center mb-8">
+            <div>
+              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Country Efficiency Leaderboard</h4>
+              <p className="text-[11px] font-bold text-slate-600">Ingreso promedio generado por cada sesión orgánica por país</p>
+            </div>
+            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+              <Trophy size={16} />
+            </div>
+          </div>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart layout="vertical" data={efficiencyRank} margin={{ left: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                <XAxis type="number" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val}`} />
+                <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 800, fill: '#1e293b'}} />
+                <Tooltip 
+                  cursor={{fill: 'transparent'}}
+                  content={({ active, payload }: any) => {
+                    if (active && payload && payload.length) {
+                      const d = payload[0].payload;
+                      return (
+                        <div className="bg-slate-900 text-white p-3 rounded-xl border border-white/10 shadow-xl">
+                          <p className="text-[9px] font-black uppercase tracking-widest mb-1">{d.name}</p>
+                          <p className="text-[11px] font-bold text-emerald-400">
+                            {currencySymbol}{d.efficiency.toFixed(2)} per session
+                          </p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Bar dataKey="efficiency" radius={[0, 12, 12, 0]} barSize={24}>
+                  {efficiencyRank.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.efficiency > (totalRevenue / totalSessions) ? '#10b981' : '#6366f1'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+       </div>
     </div>
   );
 };
@@ -1485,6 +1728,18 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
     });
   }, [gscDailyTotals, keywordData, grouping, brandedMetric, isBranded, countryFilter]);
 
+  const countryPerformanceData = useMemo(() => {
+    const map: Record<string, { country: string; traffic: number; revenue: number; sales: number }> = {};
+    data.filter((d: any) => d.dateRangeLabel === 'current' && d.channel?.toLowerCase().includes('organic'))
+      .forEach((d: any) => { 
+        if (!map[d.country]) map[d.country] = { country: d.country, traffic: 0, revenue: 0, sales: 0 }; 
+        map[d.country].traffic += d.sessions; 
+        map[d.country].revenue += d.revenue;
+        map[d.country].sales += d.sales;
+      });
+    return Object.values(map).filter(item => item.traffic > 0);
+  }, [data]);
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -1496,7 +1751,17 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
         <KpiCard title="Organic Conv. Rate" value={`${organicGa4.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? organicGa4.changes.cr : undefined} icon={<ShoppingBag />} isPercent color="emerald" />
       </div>
 
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden w-full">
+      <div className="mt-8 space-y-4">
+        <div className="flex items-center gap-3 px-2">
+          <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px] shadow-lg shadow-indigo-600/20">
+            <Globe size={14} />
+          </div>
+          <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Market Distribution & Efficiency Analysis</h4>
+        </div>
+        <CountryShareAnalysis data={countryPerformanceData} currencySymbol={currencySymbol} />
+      </div>
+
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden w-full mt-8">
         <div className="flex justify-between items-center mb-8">
           <div>
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Brand vs Generic Search (Time Overlay)</h4>
@@ -1534,146 +1799,50 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
           ) : <EmptyState text="No query data available" />}
         </div>
       </div>
-    </div>
-  );
-};
 
-const SeoDeepDiveView = ({ keywords, searchTerm, setSearchTerm, isLoading, comparisonEnabled }: {
-  keywords: KeywordData[];
-  searchTerm: string;
-  setSearchTerm: (s: string) => void;
-  isLoading: boolean;
-  comparisonEnabled: boolean;
-}) => {
-  const [expandedUrls, setExpandedUrls] = useState<Set<string>>(new Set());
-
-  const toggleUrl = (url: string) => {
-    const next = new Set(expandedUrls);
-    if (next.has(url)) next.delete(url);
-    else next.add(url);
-    setExpandedUrls(next);
-  };
-
-  const groupedByUrl = useMemo(() => {
-    const filtered = keywords.filter(k => 
-      k.keyword.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      k.landingPage.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    const map: Record<string, { url: string; clicks: number; impressions: number; queries: KeywordData[] }> = {};
-
-    filtered.forEach(k => {
-      const url = k.landingPage || 'Unknown';
-      if (!map[url]) map[url] = { url, clicks: 0, impressions: 0, queries: [] };
-      if (k.dateRangeLabel === 'current') {
-        map[url].clicks += k.clicks;
-        map[url].impressions += k.impressions;
-        map[url].queries.push(k);
-      }
-    });
-
-    return Object.values(map)
-      .map(page => ({
-        ...page,
-        ctr: page.impressions > 0 ? (page.clicks / page.impressions) * 100 : 0,
-        topQueries: page.queries.sort((a, b) => b.clicks - a.clicks).slice(0, 20)
-      }))
-      .sort((a, b) => b.clicks - a.clicks);
-  }, [keywords, searchTerm]);
-
-  return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-           <div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">URL & Keyword Precision Analysis</h4><p className="text-[11px] font-bold text-slate-600">Jerarquía por URL y sus Top 20 Queries correspondientes (hasta 50,000 registros procesados)</p></div>
-           <div className="relative w-full md:w-80">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input type="text" placeholder="Filtrar por URL o Keyword..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-1 ring-indigo-500 transition-all" />
-           </div>
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm mt-8">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Market Efficiency Analysis (Current Period)</h4>
+            <p className="text-[11px] font-bold text-slate-600">Traffic vs Revenue | Size = Revenue Contribution</p>
+          </div>
         </div>
-        
-        <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/50">
-                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 w-10"></th>
-                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Landing Page (URL)</th>
-                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Clicks</th>
-                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Impr.</th>
-                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">CTR</th>
-              </tr>
-            </thead>
-            <tbody>
-              {groupedByUrl.length > 0 ? groupedByUrl.map((page, i) => (
-                <React.Fragment key={page.url}>
-                  <tr onClick={() => toggleUrl(page.url)} className="group cursor-pointer hover:bg-slate-50/50 transition-colors border-b border-slate-50">
-                    <td className="py-5 px-4">{expandedUrls.has(page.url) ? <ChevronUp className="w-4 h-4 text-indigo-500" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}</td>
-                    <td className="py-5 px-4 max-w-md"><div className="flex items-center gap-3"><LinkIcon className="w-3 h-3 text-slate-300 flex-shrink-0" /><span className="text-[11px] font-black text-slate-800 truncate block">{page.url}</span><div className="opacity-0 group-hover:opacity-100 transition-opacity"><ExternalLink className="w-3 h-3 text-indigo-400" /></div></div></td>
-                    <td className="py-5 px-4 text-right"><div className="text-[11px] font-black text-slate-900">{page.clicks.toLocaleString()}</div></td>
-                    <td className="py-5 px-4 text-right font-bold text-slate-600 text-[11px]">{page.impressions.toLocaleString()}</td>
-                    <td className="py-5 px-4 text-right"><div className="text-[11px] font-black text-slate-900">{page.ctr.toFixed(2)}%</div><div className="w-16 h-1 bg-slate-100 rounded-full mt-1.5 ml-auto overflow-hidden"><div className="h-full bg-indigo-500" style={{ width: `${Math.min(page.ctr * 5, 100)}%` }} /></div></td>
-                  </tr>
-                  {expandedUrls.has(page.url) && (
-                    <tr>
-                      <td colSpan={5} className="bg-slate-50/50 p-0 overflow-hidden">
-                        <div className="animate-in slide-in-from-top-2 duration-200">
-                          <table className="w-full ml-10 border-l-2 border-indigo-100 my-4">
-                            <thead>
-                              <tr className="border-b border-indigo-50/50">
-                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-6">Top Queries (Limit 20)</th>
-                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4">Type</th>
-                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Clicks</th>
-                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Impr.</th>
-                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">CTR</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {page.topQueries.map((q, idx) => (
-                                <tr key={idx} className="hover:bg-indigo-50/30 border-b border-indigo-50/10">
-                                  <td className="py-3 px-6"><span className="text-[10px] font-bold text-slate-700">{q.keyword}</span></td>
-                                  <td className="py-3 px-4"><span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tight ${q.queryType === 'Branded' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>{q.queryType}</span></td>
-                                  <td className="py-3 px-4 text-right"><span className="text-[10px] font-black text-slate-900">{q.clicks.toLocaleString()}</span></td>
-                                  <td className="py-3 px-4 text-right font-bold text-slate-500 text-[10px]">{q.impressions.toLocaleString()}</td>
-                                  <td className="py-3 px-4 text-right font-black text-slate-900 text-[10px]">{q.ctr.toFixed(2)}%</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+        <div className="h-[450px]">
+          {countryPerformanceData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis type="number" dataKey="traffic" name="Traffic" unit=" sess." axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
+                <YAxis type="number" dataKey="revenue" name="Revenue" unit={` ${currencySymbol}`} axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} />
+                <ZAxis type="number" dataKey="revenue" range={[100, 2000]} name="Market Value" unit={` ${currencySymbol}`} />
+                <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }: any) => { 
+                  if (active && payload && payload.length) { 
+                    const d = payload[0].payload; 
+                    return (
+                      <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10">
+                        <p className="text-[10px] font-black uppercase tracking-widest mb-2 border-b border-white/10 pb-2">{d.country}</p>
+                        <div className="space-y-1">
+                          <p className="text-[9px] flex justify-between gap-4"><span>Traffic:</span> <span className="font-bold">{d.traffic.toLocaleString()} sess.</span></p>
+                          <p className="text-[9px] flex justify-between gap-4"><span>Revenue:</span> <span className="font-bold text-emerald-400">{currencySymbol}{d.revenue.toLocaleString()}</span></p>
+                          <p className="text-[9px] flex justify-between gap-4"><span>Efficiency:</span> <span className="font-bold text-indigo-400">{currencySymbol}{(d.revenue / d.traffic).toFixed(2)}/sess.</span></p>
                         </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              )) : (
-                <tr>
-                  <td colSpan={5} className="py-20 text-center">
-                    <div className="flex flex-col items-center gap-4">
-                      <Search className="w-10 h-10 text-slate-200" />
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No matching search terms found</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                      </div>
+                    ); 
+                  } 
+                  return null; 
+                }} />
+                <Scatter name="Organic Markets" data={countryPerformanceData}>
+                  {countryPerformanceData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.revenue > 10000 ? '#10b981' : entry.revenue > 5000 ? '#6366f1' : '#f59e0b'} fillOpacity={0.6} strokeWidth={2} stroke={entry.revenue > 10000 ? '#059669' : entry.revenue > 5000 ? '#4f46e5' : '#d97706'} />
+                  ))}
+                </Scatter>
+              </ScatterChart>
+            </ResponsiveContainer>
+          ) : <EmptyState text="Not enough organic data for the Scatter Plot..." />}
         </div>
       </div>
     </div>
   );
 };
-
-const SidebarLink = ({ active, onClick, icon, label }: any) => (
-  <button onClick={onClick} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-200 group ${active ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}>
-    <div className={`p-1.5 rounded-lg transition-colors ${active ? 'bg-white/20' : 'bg-transparent group-hover:bg-white/10'}`}>{React.cloneElement(icon, { size: 18 })}</div>
-    <span className="text-[11px] font-black uppercase tracking-widest">{label}</span>
-  </button>
-);
-
-const EmptyState = ({ text }: { text: string }) => (
-  <div className="w-full h-full flex flex-col items-center justify-center gap-4 opacity-40">
-    <HardDrive className="w-10 h-10 text-slate-300" />
-    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{text}</p>
-  </div>
-);
 
 export default App;
