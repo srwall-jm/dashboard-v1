@@ -284,11 +284,21 @@ const DateRangeSelector: React.FC<{
   );
 };
 
-const ComparisonTooltip = ({ active, payload, label, currency = false, currencySymbol = '£', percent = false }: any) => {
+const const ComparisonTooltip = ({ active, payload, label, currency = false, currencySymbol = '£', percent = false }: any) => {
   if (active && payload && payload.length) {
+    // Extraemos las fechas reales que guardaremos en el payload
+    const dataPoint = payload[0].payload;
+    const currentDate = dataPoint.fullDateCurrent;
+    const prevDate = dataPoint.fullDatePrevious;
+
     return (
-      <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10 min-w-[200px]">
-        <p className="text-[10px] font-black uppercase tracking-widest mb-3 text-slate-400 border-b border-white/5 pb-2">{label}</p>
+      <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10 min-w-[220px]">
+        {/* Cabecera con las dos fechas que se comparan */}
+        <div className="mb-3 border-b border-white/10 pb-2">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Current: <span className="text-white">{currentDate}</span></p>
+          {prevDate && <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">Previous: <span className="text-white">{prevDate}</span></p>}
+        </div>
+
         <div className="space-y-3">
           {payload.map((entry: any, index: number) => {
             if (entry.name.includes('(Prev)')) return null; 
@@ -315,7 +325,7 @@ const ComparisonTooltip = ({ active, payload, label, currency = false, currencyS
                 </div>
                 {prevVal !== null && (
                   <div className="flex justify-between text-[8px] text-slate-500 ml-4 font-medium uppercase italic">
-                    <span>Previous:</span>
+                    <span>Prev Period:</span>
                     <span>{currency ? `${currencySymbol}${prevVal.toLocaleString()}` : percent ? `${prevVal.toFixed(1)}%` : prevVal.toLocaleString()}</span>
                   </div>
                 )}
@@ -1513,9 +1523,11 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
   const chartData = useMemo(() => {
     if (!data.length) return [];
     
+    // 1. Separar y ordenar datos
     const curRaw = data.filter(d => d.dateRangeLabel === 'current').sort((a,b) => a.date.localeCompare(b.date));
     const prevRaw = data.filter(d => d.dateRangeLabel === 'previous').sort((a,b) => a.date.localeCompare(b.date));
 
+    // 2. Función auxiliar para agrupar (por día, semana o mes)
     const getBucket = (d: DailyData) => {
       if (grouping === 'weekly') return formatDate(getStartOfWeek(new Date(d.date)));
       if (grouping === 'monthly') return `${d.date.slice(0, 7)}-01`;
@@ -1529,19 +1541,21 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
         if (!grouped[key]) grouped[key] = [];
         grouped[key].push(d);
       });
-      return grouped;
+      // Devolvemos las claves ordenadas para garantizar cronología
+      return { map: grouped, keys: Object.keys(grouped).sort() };
     };
 
     const curGrouped = aggregateByBucket(curRaw);
     const prevGrouped = aggregateByBucket(prevRaw);
 
-    const curKeys = Object.keys(curGrouped).sort();
-    const prevKeys = Object.keys(prevGrouped).sort();
+    // 3. Crear el Overlay: Iteramos sobre las claves del periodo ACTUAL
+    // Usamos el índice (i) para buscar la clave correspondiente en el periodo ANTERIOR.
+    // Esto fuerza a que el día 1 se compare con el día 1, independientemente de la fecha real.
+    return curGrouped.keys.map((currentDateKey, index) => {
+      const prevDateKey = prevGrouped.keys[index]; // Obtenemos la fecha equivalente por posición
 
-    return curKeys.map((bucket, index) => {
-      const curDataPoints = curGrouped[bucket] || [];
-      const prevBucket = prevKeys[index]; 
-      const prevDataPoints = prevBucket ? prevGrouped[prevBucket] : [];
+      const curDataPoints = curGrouped.map[currentDateKey] || [];
+      const prevDataPoints = prevDateKey ? prevGrouped.map[prevDateKey] : [];
 
       const sum = (items: DailyData[]) => items.reduce((acc, d) => {
         const isOrg = d.channel?.toLowerCase().includes('organic');
@@ -1559,16 +1573,30 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
       const curSum = sum(curDataPoints);
       const prevSum = sum(prevDataPoints);
 
+      // Formateamos la etiqueta del Eje X para que sea legible (ej. "Oct 01")
+      // Esta será la etiqueta visual, pero el gráfico pinta por posición.
+      const dateObj = new Date(currentDateKey);
+      const xLabel = grouping === 'monthly' 
+        ? dateObj.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
+        : dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
       return {
-        date: bucket,
+        // Campos de control
+        date: xLabel, // Lo que se ve en el eje X
+        fullDateCurrent: currentDateKey, // Para el tooltip
+        fullDatePrevious: prevDateKey || 'N/A', // Para el tooltip
+        
+        // Métricas
         'Organic (Cur)': curSum.organic,
         'Paid (Cur)': curSum.paid,
         'Organic Rev (Cur)': curSum.organicRev,
         'Paid Rev (Cur)': curSum.paidRev,
-        'Organic (Prev)': prevSum.organic,
+        
+        'Organic (Prev)': prevSum.organic, // Recharts pintará esto en la misma X que Organic (Cur)
         'Paid (Prev)': prevSum.paid,
         'Organic Rev (Prev)': prevSum.organicRev,
         'Paid Rev (Prev)': prevSum.paidRev,
+        
         'Search Share Sessions (Cur)': curSum.totalSessions > 0 ? ((curSum.organic + curSum.paid) / curSum.totalSessions) * 100 : 0,
         'Search Share Revenue (Cur)': curSum.totalRevenue > 0 ? ((curSum.organicRev + curSum.paidRev) / curSum.totalRevenue) * 100 : 0,
         'Search Share Sessions (Prev)': prevSum.totalSessions > 0 ? ((prevSum.organic + prevSum.paid) / prevSum.totalSessions) * 100 : 0,
