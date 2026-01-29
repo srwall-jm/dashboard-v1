@@ -1525,6 +1525,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
   const chartData = useMemo(() => {
     if (!data.length) return [];
     
+    // 1. Filter and sort data chronologically for each period
     const curRaw = data
       .filter(d => d.dateRangeLabel === 'current')
       .sort((a,b) => a.date.localeCompare(b.date));
@@ -1533,53 +1534,88 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
       .filter(d => d.dateRangeLabel === 'previous')
       .sort((a,b) => a.date.localeCompare(b.date));
 
+    // 2. Helper function to group data into buckets (Day, Week, Month)
+    // This aggregates multiple entries for the same date/bucket (e.g. splitting by channel)
     const createBuckets = (rawData: DailyData[]) => {
        const byDate: Record<string, any> = {};
+       
        rawData.forEach(d => {
-         if (!byDate[d.date]) byDate[d.date] = { date: d.date, org: 0, paid: 0, orgRev: 0, paidRev: 0, totalSess: 0, totalRev: 0 };
+         // Determine bucket key based on grouping preference
+         let key = d.date;
+         if (grouping === 'weekly') key = formatDate(getStartOfWeek(new Date(d.date)));
+         if (grouping === 'monthly') key = `${d.date.slice(0, 7)}-01`;
+
+         if (!byDate[key]) {
+            byDate[key] = { 
+                date: key, // This is the bucket identifier (e.g., specific day, start of week, start of month)
+                org: 0, paid: 0, orgRev: 0, paidRev: 0, totalSess: 0, totalRev: 0 
+            };
+         }
          
          const isOrg = d.channel?.toLowerCase().includes('organic');
          const isPaid = d.channel?.toLowerCase().includes('paid') || d.channel?.toLowerCase().includes('cpc');
          
-         if (isOrg) { byDate[d.date].org += d.sessions; byDate[d.date].orgRev += d.revenue; }
-         if (isPaid) { byDate[d.date].paid += d.sessions; byDate[d.date].paidRev += d.revenue; }
+         if (isOrg) { 
+             byDate[key].org += d.sessions; 
+             byDate[key].orgRev += d.revenue; 
+         }
+         if (isPaid) { 
+             byDate[key].paid += d.sessions; 
+             byDate[key].paidRev += d.revenue; 
+         }
          
-         byDate[d.date].totalSess += d.sessions;
-         byDate[d.date].totalRev += d.revenue;
+         byDate[key].totalSess += d.sessions;
+         byDate[key].totalRev += d.revenue;
        });
+
+       // Return array sorted by date ensures Day 1 is always first
        return Object.values(byDate).sort((a:any, b:any) => a.date.localeCompare(b.date));
     };
 
     const curBuckets = createBuckets(curRaw);
     const prevBuckets = createBuckets(prevRaw);
     
-    const maxDays = Math.max(curBuckets.length, prevBuckets.length);
+    // 3. Merge buckets by INDEX to create the overlay effect
+    // We iterate up to the max length of days/weeks/months available
+    const maxLen = Math.max(curBuckets.length, prevBuckets.length);
     const finalChartData = [];
 
-    for (let i = 0; i < maxDays; i++) {
+    for (let i = 0; i < maxLen; i++) {
       const c = curBuckets[i] || {};
       const p = prevBuckets[i] || {};
 
-      let xLabel = `Day ${i + 1}`;
-      if (c.date) {
-         const dateObj = new Date(c.date);
+      // Create a display label for the X-Axis
+      // We use the current period's date if available, otherwise a generic label
+      let xLabel = `Period ${i + 1}`;
+      
+      const refDate = c.date || p.date;
+      if (refDate) {
+         const dateObj = new Date(refDate);
          xLabel = grouping === 'monthly' 
            ? dateObj.toLocaleDateString('en-US', { month: 'short' })
            : dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       }
 
       finalChartData.push({
-        date: xLabel,
+        date: xLabel, // Visual label for X-Axis
+        
+        // Metadata for tooltips (real dates)
         fullDateCurrent: c.date || 'N/A',
         fullDatePrevious: p.date || 'N/A',
+
+        // Metrics for Current Period
         'Organic (Cur)': c.org || 0,
         'Paid (Cur)': c.paid || 0,
         'Organic Rev (Cur)': c.orgRev || 0,
         'Paid Rev (Cur)': c.paidRev || 0,
+
+        // Metrics for Previous Period
         'Organic (Prev)': p.org || 0,
         'Paid (Prev)': p.paid || 0,
         'Organic Rev (Prev)': p.orgRev || 0,
         'Paid Rev (Prev)': p.paidRev || 0,
+
+        // Calculated Shares
         'Search Share Sessions (Cur)': c.totalSess > 0 ? ((c.org + c.paid) / c.totalSess) * 100 : 0,
         'Search Share Revenue (Cur)': c.totalRev > 0 ? ((c.orgRev + c.paidRev) / c.totalRev) * 100 : 0,
         'Search Share Sessions (Prev)': p.totalSess > 0 ? ((p.org + p.paid) / p.totalSess) * 100 : 0,
@@ -1639,8 +1675,10 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
                 <Tooltip content={<ComparisonTooltip />} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
+                
                 <Line name="Organic (Cur)" type="monotone" dataKey="Organic (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
                 <Line name="Paid (Cur)" type="monotone" dataKey="Paid (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                
                 {comparisonEnabled && (
                   <>
                     <Line name="Organic (Prev)" type="monotone" dataKey="Organic (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
@@ -1669,8 +1707,10 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} />
                 <Tooltip content={<ComparisonTooltip currency currencySymbol={currencySymbol} />} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
+                
                 <Line name="Organic Rev (Cur)" type="monotone" dataKey="Organic Rev (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} />
                 <Line name="Paid Rev (Cur)" type="monotone" dataKey="Paid Rev (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} />
+                
                 {comparisonEnabled && (
                   <>
                     <Line name="Organic Rev (Prev)" type="monotone" dataKey="Organic Rev (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
