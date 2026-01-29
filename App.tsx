@@ -1542,7 +1542,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
       .filter(d => d.dateRangeLabel === 'previous')
       .sort((a,b) => a.date.localeCompare(b.date));
 
-    // 2. Función para agrupar todo un periodo en buckets (Día 1, Día 2...)
+    // 2. Función para agrupar todo un periodo en buckets
     const createBuckets = (rawData: DailyData[]) => {
        const byDate: Record<string, any> = {};
        rawData.forEach(d => {
@@ -1570,7 +1570,6 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
       const c = curBuckets[i] || {};
       const p = prevBuckets[i] || {};
 
-      // Formatear fecha para el Eje X
       let xLabel = `Day ${i + 1}`;
       if (c.date) {
          const dateObj = new Date(c.date);
@@ -1604,14 +1603,6 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
     return finalChartData;
   }, [data, grouping]);
 
-  // ... (Resto del return del componente igual que antes: kpis, charts, tables)
-  // Asegúrate de copiar el return completo que tenías en tu código original, 
-  // ya que aquí solo he corregido la lógica de chartData.
-  
-  // (Para brevedad, aquí iría el return que empieza con <div className="space-y-8... )
-  // SI NECESITAS EL COMPONENTE ENTERO DÍMELO, PERO LA CLAVE ERA LIMPIAR 'chartData'
-  
-  // -- Pego aquí el return para que no tengas dudas al copiar --
   const organicFunnelData = useMemo(() => [
     { stage: 'Sessions', value: stats.organic.current.sessions },
     { stage: 'Add to Basket', value: stats.organic.current.addToCarts },
@@ -1708,6 +1699,90 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
           ) : <EmptyState text="No revenue data available to chart" />}
         </div>
       </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        <CountryPerformanceTable 
+          title="Organic performance by country" 
+          data={data} 
+          type="Organic" 
+          currencySymbol={currencySymbol} 
+          comparisonEnabled={comparisonEnabled} 
+        />
+        <CountryPerformanceTable 
+          title="Paid performance by country" 
+          data={data} 
+          type="Paid" 
+          currencySymbol={currencySymbol} 
+          comparisonEnabled={comparisonEnabled} 
+        />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <EcommerceFunnel title="Organic Search Funnel" data={organicFunnelData} color="indigo" />
+        <EcommerceFunnel title="Paid Search Funnel" data={paidFunnelData} color="amber" />
+      </div>
+
+      <div className="mt-8 space-y-4">
+        <div className="flex items-center gap-3 px-2">
+          <div className="w-7 h-7 bg-violet-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px] shadow-lg shadow-violet-600/20">
+            <PieIcon size={14} />
+          </div>
+          <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Global Search Share (Market Dominance)</h4>
+        </div>
+        <ShareOfSearchAnalysis stats={stats} currencySymbol={currencySymbol} />
+      </div>
+
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm mt-8 overflow-hidden">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+          <div>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Global Search Share Trend (Time Overlay)</h4>
+            <p className="text-[11px] font-bold text-slate-600">Porcentaje de peso de búsqueda sobre el total de canales por período</p>
+          </div>
+          <div className="flex bg-slate-100 p-1 rounded-xl">
+             <button onClick={() => setWeightMetric('sessions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'sessions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Sessions %</button>
+             <button onClick={() => setWeightMetric('revenue')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'revenue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Revenue %</button>
+          </div>
+        </div>
+        <div className="h-[350px]">
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${val.toFixed(1)}%`} />
+                <Tooltip content={<ComparisonTooltip percent />} />
+                <Legend verticalAlign="top" align="center" iconType="circle" />
+                
+                <Line 
+                  name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Cur)`} 
+                  type="monotone" 
+                  dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Cur)' : 'Search Share Revenue (Cur)'} 
+                  stroke="#8b5cf6" 
+                  strokeWidth={3} 
+                  dot={false} 
+                  activeDot={{ r: 6 }} 
+                />
+                
+                {comparisonEnabled && (
+                  <Line 
+                    name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Prev)`} 
+                    type="monotone" 
+                    dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Prev)' : 'Search Share Revenue (Prev)'} 
+                    stroke="#8b5cf6" 
+                    strokeWidth={2} 
+                    strokeDasharray="5 5" 
+                    opacity={0.3} 
+                    dot={false} 
+                  />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          ) : <EmptyState text="No share data available to chart" />}
+        </div>
+      </div>
+    </div>
+  );
+};
 
       {/* PERFORMANCE TABLES BY COUNTRY */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
