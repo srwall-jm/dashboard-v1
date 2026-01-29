@@ -695,12 +695,19 @@ const App: React.FC = () => {
         dateRanges.push({ startDate: comp.start, endDate: comp.end });
       }
 
+      // Dentro de fetchGa4Data...
       const ga4ReportResp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           dateRanges,
-          dimensions: [{ name: 'date' }, { name: filters.ga4Dimension }, { name: 'country' }, { name: 'landingPage' }],
+          dimensions: [
+            { name: 'date' }, 
+            { name: filters.ga4Dimension }, 
+            { name: 'country' }, 
+            { name: 'landingPage' },
+            { name: 'dateRange' } // <--- AÑADE ESTO AQUÍ
+          ],
           metrics: [
             { name: 'sessions' }, 
             { name: 'totalRevenue' }, 
@@ -1497,86 +1504,111 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
 const chartData = useMemo(() => {
     if (!data.length) return [];
     
-    // 1. Separar y ordenar datos
-    const curRaw = data.filter(d => d.dateRangeLabel === 'current').sort((a,b) => a.date.localeCompare(b.date));
-    const prevRaw = data.filter(d => d.dateRangeLabel === 'previous').sort((a,b) => a.date.localeCompare(b.date));
+    // 1. Filtramos y ordenamos cronológicamente cada periodo por separado
+    const curRaw = data
+      .filter(d => d.dateRangeLabel === 'current')
+      .sort((a,b) => a.date.localeCompare(b.date));
+      
+    const prevRaw = data
+      .filter(d => d.dateRangeLabel === 'previous')
+      .sort((a,b) => a.date.localeCompare(b.date));
 
-    // 2. Función auxiliar para agrupar (por día, semana o mes)
-    const getBucket = (d: DailyData) => {
-      if (grouping === 'weekly') return formatDate(getStartOfWeek(new Date(d.date)));
-      if (grouping === 'monthly') return `${d.date.slice(0, 7)}-01`;
-      return d.date;
-    };
+    // 2. Definimos la longitud del bucle basada en el periodo más largo
+    // Esto evita errores si un mes tiene 31 días y el anterior 30
+    const maxLength = Math.max(curRaw.length, prevRaw.length);
+    const result = [];
 
-    const aggregateByBucket = (items: DailyData[]) => {
-      const grouped: Record<string, DailyData[]> = {};
-      items.forEach(d => {
-        const key = getBucket(d);
-        if (!grouped[key]) grouped[key] = [];
-        grouped[key].push(d);
-      });
-      // Devolvemos las claves ordenadas para garantizar cronología
-      return { map: grouped, keys: Object.keys(grouped).sort() };
-    };
+    for (let i = 0; i < maxLength; i++) {
+      // Tomamos el dato en la posición i (Día 1, Día 2, etc.)
+      const cur = curRaw[i] || null;
+      const prev = prevRaw[i] || null;
 
-    const curGrouped = aggregateByBucket(curRaw);
-    const prevGrouped = aggregateByBucket(prevRaw);
-
-    // 3. Crear el Overlay: Iteramos sobre las claves del periodo ACTUAL
-    // Usamos el índice (i) para buscar la clave correspondiente en el periodo ANTERIOR.
-    // Esto fuerza a que el día 1 se compare con el día 1, independientemente de la fecha real.
-    return curGrouped.keys.map((currentDateKey, index) => {
-      const prevDateKey = prevGrouped.keys[index]; // Obtenemos la fecha equivalente por posición
-
-      const curDataPoints = curGrouped.map[currentDateKey] || [];
-      const prevDataPoints = prevDateKey ? prevGrouped.map[prevDateKey] : [];
-
-      const sum = (items: DailyData[]) => items.reduce((acc, d) => {
-        const isOrg = d.channel?.toLowerCase().includes('organic');
-        const isPaid = d.channel?.toLowerCase().includes('paid') || d.channel?.toLowerCase().includes('cpc');
-        return {
-          organic: acc.organic + (isOrg ? d.sessions : 0),
-          paid: acc.paid + (isPaid ? d.sessions : 0),
-          organicRev: acc.organicRev + (isOrg ? d.revenue : 0),
-          paidRev: acc.paidRev + (isPaid ? d.revenue : 0),
-          totalSessions: acc.totalSessions + d.sessions,
-          totalRevenue: acc.totalRevenue + d.revenue,
-        };
-      }, { organic: 0, paid: 0, organicRev: 0, paidRev: 0, totalSessions: 0, totalRevenue: 0 });
-
-      const curSum = sum(curDataPoints);
-      const prevSum = sum(prevDataPoints);
-
-      // Formateamos la etiqueta del Eje X para que sea legible (ej. "Oct 01")
-      // Esta será la etiqueta visual, pero el gráfico pinta por posición.
-      const dateObj = new Date(currentDateKey);
-      const xLabel = grouping === 'monthly' 
-        ? dateObj.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
-        : dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
-      return {
-        // Campos de control
-        date: xLabel, // Lo que se ve en el eje X
-        fullDateCurrent: currentDateKey, // Para el tooltip
-        fullDatePrevious: prevDateKey || 'N/A', // Para el tooltip
-        
-        // Métricas
-        'Organic (Cur)': curSum.organic,
-        'Paid (Cur)': curSum.paid,
-        'Organic Rev (Cur)': curSum.organicRev,
-        'Paid Rev (Cur)': curSum.paidRev,
-        
-        'Organic (Prev)': prevSum.organic, // Recharts pintará esto en la misma X que Organic (Cur)
-        'Paid (Prev)': prevSum.paid,
-        'Organic Rev (Prev)': prevSum.organicRev,
-        'Paid Rev (Prev)': prevSum.paidRev,
-        
-        'Search Share Sessions (Cur)': curSum.totalSessions > 0 ? ((curSum.organic + curSum.paid) / curSum.totalSessions) * 100 : 0,
-        'Search Share Revenue (Cur)': curSum.totalRevenue > 0 ? ((curSum.organicRev + curSum.paidRev) / curSum.totalRevenue) * 100 : 0,
-        'Search Share Sessions (Prev)': prevSum.totalSessions > 0 ? ((prevSum.organic + prevSum.paid) / prevSum.totalSessions) * 100 : 0,
-        'Search Share Revenue (Prev)': prevSum.totalRevenue > 0 ? ((prevSum.organicRev + prevSum.paidRev) / prevSum.totalRevenue) * 100 : 0,
+      // Calculamos métricas (si no hay dato ese día, es 0)
+      const getMetric = (d: DailyData | null, channelStr: string) => {
+        if (!d) return { sessions: 0, revenue: 0 };
+        const isMatch = d.channel?.toLowerCase().includes(channelStr) || 
+                       (channelStr === 'paid' && d.channel?.toLowerCase().includes('cpc'));
+        return isMatch ? { sessions: d.sessions, revenue: d.revenue } : { sessions: 0, revenue: 0 };
       };
-    });
+
+      // Sumar si hubiera múltiples filas por día (aunque curRaw debería ser único por fecha si ya está agregado, 
+      // pero por seguridad recalculamos si tu data viene desagregada por canal)
+      // NOTA: Como curRaw ya viene filtrado, asumimos que puede haber múltiples filas por día (orgánico, paid, etc)
+      // Para simplificar el "Overlay" real, lo ideal es agrupar primero por día. 
+      // Pero como tu 'curRaw' actual viene de 'data' que tiene filas por canal, haremos un agrupado rápido aquí:
+      
+      // -- MEJORA DE AGRUPADO --
+      // Para que el overlay funcione perfecto, necesitamos agrupar primero por "Día N del periodo".
+      // Vamos a asumir que 'curRaw' y 'prevRaw' necesitan ser reducidos primero a arrays únicos por fecha.
+      // Sin embargo, para mantener el código simple y funcional con tu estructura actual:
+      
+      // Usaremos un enfoque de "Buckets" mejorado para Overlay:
+    }
+
+    // --- ENFOQUE FINAL OPTIMIZADO PARA OVERLAY ---
+    
+    // A. Función para agrupar todo un periodo en buckets (Día 1, Día 2...)
+    const createBuckets = (rawData: DailyData[]) => {
+       // Primero agrupamos por fecha real para sumar canales
+       const byDate: Record<string, any> = {};
+       rawData.forEach(d => {
+         if (!byDate[d.date]) byDate[d.date] = { date: d.date, org: 0, paid: 0, orgRev: 0, paidRev: 0, totalSess: 0, totalRev: 0 };
+         
+         const isOrg = d.channel?.toLowerCase().includes('organic');
+         const isPaid = d.channel?.toLowerCase().includes('paid') || d.channel?.toLowerCase().includes('cpc');
+         
+         if (isOrg) { byDate[d.date].org += d.sessions; byDate[d.date].orgRev += d.revenue; }
+         if (isPaid) { byDate[d.date].paid += d.sessions; byDate[d.date].paidRev += d.revenue; }
+         
+         byDate[d.date].totalSess += d.sessions;
+         byDate[d.date].totalRev += d.revenue;
+       });
+       // Devolvemos array ordenado por fecha
+       return Object.values(byDate).sort((a:any, b:any) => a.date.localeCompare(b.date));
+    };
+
+    const curBuckets = createBuckets(curRaw);
+    const prevBuckets = createBuckets(prevRaw);
+    
+    const maxDays = Math.max(curBuckets.length, prevBuckets.length);
+    const finalChartData = [];
+
+    for (let i = 0; i < maxDays; i++) {
+      const c = curBuckets[i] || {};
+      const p = prevBuckets[i] || {};
+
+      // Formatear fecha para el Eje X (visual)
+      let xLabel = `Day ${i + 1}`;
+      if (c.date) {
+         const dateObj = new Date(c.date);
+         xLabel = grouping === 'monthly' 
+           ? dateObj.toLocaleDateString('en-US', { month: 'short' })
+           : dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      }
+
+      finalChartData.push({
+        date: xLabel, // Etiqueta visual (ej: "Dec 1")
+        fullDateCurrent: c.date || 'N/A',
+        fullDatePrevious: p.date || 'N/A',
+
+        'Organic (Cur)': c.org || 0,
+        'Paid (Cur)': c.paid || 0,
+        'Organic Rev (Cur)': c.orgRev || 0,
+        'Paid Rev (Cur)': c.paidRev || 0,
+
+        'Organic (Prev)': p.org || 0,
+        'Paid (Prev)': p.paid || 0,
+        'Organic Rev (Prev)': p.orgRev || 0,
+        'Paid Rev (Prev)': p.paidRev || 0,
+
+        'Search Share Sessions (Cur)': c.totalSess > 0 ? ((c.org + c.paid) / c.totalSess) * 100 : 0,
+        'Search Share Revenue (Cur)': c.totalRev > 0 ? ((c.orgRev + c.paidRev) / c.totalRev) * 100 : 0,
+        'Search Share Sessions (Prev)': p.totalSess > 0 ? ((p.org + p.paid) / p.totalSess) * 100 : 0,
+        'Search Share Revenue (Prev)': p.totalRev > 0 ? ((p.orgRev + p.paidRev) / p.totalRev) * 100 : 0,
+      });
+    }
+
+    return finalChartData;
   }, [data, grouping]);
 
 
