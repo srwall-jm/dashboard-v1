@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key, PieChart as PieIcon, Check, ChevronUp, Link as LinkIcon, History, Trophy
@@ -31,12 +30,17 @@ const COUNTRY_CODE_TO_NAME: Record<string, string> = {
   'ph': 'Philippines', 'sg': 'Singapore', 'sa': 'Saudi Arabia', 'ae': 'United Arab Emirates',
   'eg': 'Egypt', 'ma': 'Morocco', 'il': 'Israel', 'ua': 'Ukraine', 'cz': 'Czech Republic',
   'ro': 'Romania', 'hu': 'Hungary', 'nz': 'New Zealand', 'ba': 'Bosnia and Herzegovina',
+  'bih': 'Bosnia and Herzegovina',
+  'usa': 'United States',
+  'esp': 'Spain',
+  'gbr': 'United Kingdom',
 };
 
 const normalizeCountry = (val: string): string => {
   if (!val) return 'Other';
   const clean = val.toLowerCase().trim();
   if (COUNTRY_CODE_TO_NAME[clean]) return COUNTRY_CODE_TO_NAME[clean];
+  // If it's a full name in lowercase (e.g. "austria"), capitalize properly
   if (clean.length > 3) {
     return clean.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
   }
@@ -174,7 +178,7 @@ const DateRangeSelector: React.FC<{
                   <label htmlFor="comp_enabled_drop" className="text-[10px] font-black uppercase text-slate-600 cursor-pointer">Compare</label>
                 </div>
                 {filters.comparison.enabled && (
-                  <select className="w-full bg-white border border-slate-200 rounded-xl text-[10px] font-bold p-2" value={filters.comparison.type} onChange={e => setFilters({...filters, comparison: {...filters.comparison, type: e.target.value as any}})}>
+                  <select className="w-full bg-white border border-slate-200 rounded-xl text-[10px] font-bold p-2 outline-none" value={filters.comparison.type} onChange={e => setFilters({...filters, comparison: {...filters.comparison, type: e.target.value as any}})}>
                     <option value="previous_period">vs Previous Period</option>
                     <option value="previous_year">vs Previous Year (YoY)</option>
                   </select>
@@ -253,7 +257,8 @@ const ComparisonTooltip = ({ active, payload, label, currency = false, currencyS
 const SidebarLink: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string }> = ({ active, onClick, icon, label }) => (
   <button onClick={onClick} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-200 group ${active ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}>
     <div className={`p-1.5 rounded-lg transition-colors ${active ? 'bg-white/20' : 'bg-transparent group-hover:bg-white/10'}`}>
-      {React.cloneElement(icon as React.ReactElement, { size: 18 })}
+      {/* Fix: use React.isValidElement and cast to any to resolve TS error on 'size' prop for generic ReactElement */}
+      {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 18 }) : icon}
     </div>
     <span className="text-[11px] font-black uppercase tracking-widest">{label}</span>
   </button>
@@ -325,7 +330,7 @@ const SeoDeepDiveView: React.FC<{
           </div>
           <div className="relative w-full md:w-80">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input type="text" placeholder="Filtrar por URL o Keyword..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none" />
+            <input type="text" placeholder="Filtrar por URL o Keyword..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none ring-indigo-500 focus:ring-1" />
           </div>
         </div>
 
@@ -638,8 +643,8 @@ const App: React.FC = () => {
           <div className="mb-10 bg-slate-900 rounded-[32px] p-8 text-white shadow-2xl relative animate-in fade-in zoom-in-95"><div className="flex justify-between items-center mb-4"><div className="flex items-center gap-2 text-indigo-400"><Sparkles size={20}/><h3 className="text-xl font-black">AI Strategic Analysis</h3></div><button onClick={() => setTabInsights(p => ({...p, [activeTab]: null}))}><X size={20}/></button></div><div className="prose prose-invert max-w-none text-slate-300" dangerouslySetInnerHTML={{ __html: tabInsights[activeTab]!.replace(/\n/g, '<br/>') }} /></div>
         )}
 
-        {activeTab === DashboardTab.ORGANIC_VS_PAID && <OrganicVsPaidView stats={channelStats} data={filteredDailyData} comparisonEnabled={filters.comparison.enabled} grouping={grouping} setGrouping={setGrouping} currencySymbol={currencySymbol} />}
-        {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={filteredKeywordData} gscDailyTotals={gscDailyTotals} gscTotals={gscTotals} aggregate={aggregate} comparisonEnabled={filters.comparison.enabled} currencySymbol={currencySymbol} grouping={grouping} isBranded={isBranded} countryFilter={filters.country} />}
+        {activeTab === DashboardTab.ORGANIC_VS_PAID && <OrganicVsPaidView stats={channelStats} data={filteredDailyData} filters={filters} grouping={grouping} setGrouping={setGrouping} currencySymbol={currencySymbol} />}
+        {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={filteredKeywordData} gscDailyTotals={gscDailyTotals} gscTotals={gscTotals} aggregate={aggregate} comparisonEnabled={filters.comparison.enabled} currencySymbol={currencySymbol} grouping={grouping} isBranded={isBranded} countryFilter={filters.country} filters={filters} />}
         {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && <SeoDeepDiveView keywords={filteredKeywordData} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isLoading={isLoadingGsc} comparisonEnabled={filters.comparison.enabled} />}
 
         <div className="mt-12 flex justify-center"><button onClick={handleGenerateInsights} disabled={loadingInsights} className="px-10 py-4 bg-slate-950 text-white rounded-3xl text-xs font-black shadow-2xl hover:scale-105 transition-all flex items-center gap-3">{loadingInsights ? <RefreshCw className="animate-spin" /> : <Sparkles size={16}/>} Generate Performance Insights</button></div>
@@ -648,51 +653,81 @@ const App: React.FC = () => {
   );
 };
 
-const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGrouping, currencySymbol }: { stats: any; data: DailyData[]; comparisonEnabled: boolean; grouping: 'daily' | 'weekly' | 'monthly'; setGrouping: (g: 'daily' | 'weekly' | 'monthly') => void; currencySymbol: string; }) => {
+const OrganicVsPaidView = ({ stats, data, filters, grouping, setGrouping, currencySymbol }: { stats: any; data: DailyData[]; filters: DashboardFilters; grouping: 'daily' | 'weekly' | 'monthly'; setGrouping: (g: 'daily' | 'weekly' | 'monthly') => void; currencySymbol: string; }) => {
   const chartData = useMemo(() => {
     if (!data.length) return [];
-    const getBucket = (d: DailyData) => grouping === 'weekly' ? formatDate(getStartOfWeek(new Date(d.date))) : grouping === 'monthly' ? `${d.date.slice(0, 7)}-01` : d.date;
-    const curRaw = data.filter(d => d.dateRangeLabel === 'current').sort((a,b) => a.date.localeCompare(b.date));
-    const prevRaw = data.filter(d => d.dateRangeLabel === 'previous').sort((a,b) => a.date.localeCompare(b.date));
+    
+    // Determine range length for overlay
+    const start = new Date(filters.dateRange.start);
+    const end = new Date(filters.dateRange.end);
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
-    const aggregateByBucket = (items: DailyData[]) => {
-      const g: Record<string, DailyData[]> = {}; items.forEach(d => { const k = getBucket(d); if(!g[k]) g[k]=[]; g[k].push(d); }); return g;
-    };
-    const curG = aggregateByBucket(curRaw); const prevG = aggregateByBucket(prevRaw);
-    const curK = Object.keys(curG).sort(); const prevK = Object.keys(prevG).sort();
+    const compDates = filters.comparison.enabled ? (function() {
+        const d = end.getTime() - start.getTime();
+        if (filters.comparison.type === 'previous_period') {
+          const compStart = new Date(start.getTime() - d - 86400000);
+          return { start: formatDate(compStart) };
+        } else {
+          const compStart = new Date(start); compStart.setFullYear(compStart.getFullYear() - 1);
+          return { start: formatDate(compStart) };
+        }
+    })() : null;
 
-    return curK.map((bucket, index) => {
-      const curItems = curG[bucket] || [];
-      const prevBucket = prevK[index]; const prevItems = prevBucket ? prevG[prevBucket] : [];
-      const sum = (items: DailyData[]) => items.reduce((acc, d) => ({
+    const compStart = compDates ? new Date(compDates.start) : null;
+
+    const currentMap: Record<string, DailyData[]> = {};
+    const previousMap: Record<string, DailyData[]> = {};
+    
+    data.forEach(d => {
+      if (d.dateRangeLabel === 'current') {
+        if (!currentMap[d.date]) currentMap[d.date] = [];
+        currentMap[d.date].push(d);
+      } else {
+        if (!previousMap[d.date]) previousMap[d.date] = [];
+        previousMap[d.date].push(d);
+      }
+    });
+
+    const points = [];
+    for (let i = 0; i < diffDays; i++) {
+      const curD = new Date(start); curD.setDate(curD.getDate() + i);
+      const curDStr = formatDate(curD);
+
+      const prevD = compStart ? new Date(compStart) : null;
+      if (prevD) prevD.setDate(prevD.getDate() + i);
+      const prevDStr = prevD ? formatDate(prevD) : null;
+
+      const sum = (items: DailyData[] = []) => items.reduce((acc, d) => ({
         organic: acc.organic + (d.channel.toLowerCase().includes('organic') ? d.sessions : 0),
         paid: acc.paid + (d.channel.toLowerCase().includes('paid') || d.channel.toLowerCase().includes('cpc') ? d.sessions : 0),
         organicRev: acc.organicRev + (d.channel.toLowerCase().includes('organic') ? d.revenue : 0),
         paidRev: acc.paidRev + (d.channel.toLowerCase().includes('paid') || d.channel.toLowerCase().includes('cpc') ? d.revenue : 0),
       }), { organic: 0, paid: 0, organicRev: 0, paidRev: 0 });
 
-      const cS = sum(curItems); const pS = sum(prevItems);
-      const labelPrefix = grouping === 'daily' ? 'Day' : grouping === 'weekly' ? 'Week' : 'Month';
+      const cS = sum(currentMap[curDStr]);
+      const pS = sum(prevDStr ? previousMap[prevDStr] : []);
 
-      return {
-        relLabel: `${labelPrefix} ${index + 1}`,
-        curDate: bucket,
-        prevDate: prevBucket || null,
+      points.push({
+        relLabel: `Day ${i + 1}`,
+        curDate: curDStr,
+        prevDate: prevDStr,
         'Organic (Cur)': cS.organic, 'Paid (Cur)': cS.paid, 'Organic Rev (Cur)': cS.organicRev, 'Paid Rev (Cur)': cS.paidRev,
         'Organic (Prev)': pS.organic, 'Paid (Prev)': pS.paid, 'Organic Rev (Prev)': pS.organicRev, 'Paid Rev (Prev)': pS.paidRev
-      };
-    });
-  }, [data, grouping]);
+      });
+    }
+    return points;
+  }, [data, grouping, filters]);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        <div className="space-y-4"><div className="flex items-center gap-2"><div className="w-6 h-6 bg-indigo-600 rounded flex items-center justify-center text-white text-[8px] font-black">ORG</div><h4 className="text-[10px] font-black uppercase tracking-widest">Organic Performance</h4></div><div className="grid grid-cols-2 gap-4"><KpiCard title="Sessions" value={stats.organic.current.sessions} comparison={comparisonEnabled ? stats.organic.changes.sessions : undefined} icon={<TrendingUp />} color="indigo" /><KpiCard title="Revenue" value={`${currencySymbol}${stats.organic.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? stats.organic.changes.revenue : undefined} icon={<Tag />} color="emerald" prefix={currencySymbol} /></div></div>
-        <div className="space-y-4"><div className="flex items-center gap-2"><div className="w-6 h-6 bg-amber-600 rounded flex items-center justify-center text-white text-[8px] font-black">PAID</div><h4 className="text-[10px] font-black uppercase tracking-widest">Paid Performance</h4></div><div className="grid grid-cols-2 gap-4"><KpiCard title="Sessions" value={stats.paid.current.sessions} comparison={comparisonEnabled ? stats.paid.changes.sessions : undefined} icon={<TrendingUp />} color="amber" /><KpiCard title="Revenue" value={`${currencySymbol}${stats.paid.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? stats.paid.changes.revenue : undefined} icon={<Tag />} color="rose" prefix={currencySymbol} /></div></div>
+        <div className="space-y-4"><div className="flex items-center gap-2"><div className="w-6 h-6 bg-indigo-600 rounded flex items-center justify-center text-white text-[8px] font-black">ORG</div><h4 className="text-[10px] font-black uppercase tracking-widest">Organic Performance</h4></div><div className="grid grid-cols-2 gap-4"><KpiCard title="Sessions" value={stats.organic.current.sessions} comparison={filters.comparison.enabled ? stats.organic.changes.sessions : undefined} icon={<TrendingUp />} color="indigo" /><KpiCard title="Revenue" value={`${currencySymbol}${stats.organic.current.revenue.toLocaleString()}`} comparison={filters.comparison.enabled ? stats.organic.changes.revenue : undefined} icon={<Tag />} color="emerald" prefix={currencySymbol} /></div></div>
+        <div className="space-y-4"><div className="flex items-center gap-2"><div className="w-6 h-6 bg-amber-600 rounded flex items-center justify-center text-white text-[8px] font-black">PAID</div><h4 className="text-[10px] font-black uppercase tracking-widest">Paid Performance</h4></div><div className="grid grid-cols-2 gap-4"><KpiCard title="Sessions" value={stats.paid.current.sessions} comparison={filters.comparison.enabled ? stats.paid.changes.sessions : undefined} icon={<TrendingUp />} color="amber" /><KpiCard title="Revenue" value={`${currencySymbol}${stats.paid.current.revenue.toLocaleString()}`} comparison={filters.comparison.enabled ? stats.paid.changes.revenue : undefined} icon={<Tag />} color="rose" prefix={currencySymbol} /></div></div>
       </div>
 
       <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm">
-        <div className="flex justify-between items-center mb-8"><div><h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Sessions Overlap Comparison (YoY/PoP)</h4><p className="text-[10px] font-bold text-slate-500">Líneas superpuestas por índice temporal relativo ({grouping === 'daily' ? 'Días' : grouping === 'weekly' ? 'Semanas' : 'Meses'})</p></div><div className="flex bg-slate-100 p-1 rounded-xl">{['daily', 'weekly', 'monthly'].map(g => <button key={g} onClick={() => setGrouping(g as any)} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === g ? 'bg-white shadow-sm' : 'text-slate-500'}`}>{g}</button>)}</div></div>
+        <div className="flex justify-between items-center mb-8"><div><h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Sessions Overlap Comparison (YoY/PoP)</h4><p className="text-[10px] font-bold text-slate-500">Overlay view: Current vs Previous period aligned by Day Index</p></div></div>
         <div className="h-[350px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData}>
@@ -703,14 +738,14 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
               <Legend verticalAlign="top" iconType="circle" />
               <Line name="Organic (Cur)" type="monotone" dataKey="Organic (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{r: 6}} />
               <Line name="Paid (Cur)" type="monotone" dataKey="Paid (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} activeDot={{r: 6}} />
-              {comparisonEnabled && <><Line name="Organic (Prev)" type="monotone" dataKey="Organic (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} /><Line name="Paid (Prev)" type="monotone" dataKey="Paid (Prev)" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} /></>}
+              {filters.comparison.enabled && <><Line name="Organic (Prev)" type="monotone" dataKey="Organic (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} /><Line name="Paid (Prev)" type="monotone" dataKey="Paid (Prev)" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} /></>}
             </LineChart>
           </ResponsiveContainer>
         </div>
       </div>
 
       <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm">
-        <div className="flex justify-between items-center mb-8"><div><h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Revenue Overlap Evolution</h4><p className="text-[10px] font-bold text-slate-500">Comparativa directa de ingresos por posición en el periodo</p></div></div>
+        <div className="flex justify-between items-center mb-8"><div><h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Revenue Overlap Evolution</h4><p className="text-[10px] font-bold text-slate-500">Overlay view: Performance periods aligned side-by-side</p></div></div>
         <div className="h-[350px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData}>
@@ -721,7 +756,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
               <Legend verticalAlign="top" iconType="circle" />
               <Line name="Organic Rev (Cur)" type="monotone" dataKey="Organic Rev (Cur)" stroke="#10b981" strokeWidth={3} dot={false} />
               <Line name="Paid Rev (Cur)" type="monotone" dataKey="Paid Rev (Cur)" stroke="#ec4899" strokeWidth={3} dot={false} />
-              {comparisonEnabled && <><Line name="Organic Rev (Prev)" type="monotone" dataKey="Organic Rev (Prev)" stroke="#10b981" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} /><Line name="Paid Rev (Prev)" type="monotone" dataKey="Paid Rev (Prev)" stroke="#ec4899" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} /></>}
+              {filters.comparison.enabled && <><Line name="Organic Rev (Prev)" type="monotone" dataKey="Organic Rev (Prev)" stroke="#10b981" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} /><Line name="Paid Rev (Prev)" type="monotone" dataKey="Paid Rev (Prev)" stroke="#ec4899" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} /></>}
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -730,38 +765,67 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
   );
 };
 
-const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggregate, comparisonEnabled, currencySymbol, grouping, isBranded, countryFilter }: { data: DailyData[]; keywordData: KeywordData[]; gscDailyTotals: any[]; gscTotals: any; aggregate: (data: DailyData[]) => any; comparisonEnabled: boolean; currencySymbol: string; grouping: 'daily' | 'weekly' | 'monthly'; isBranded: (t: string) => boolean; countryFilter: string; }) => {
+const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggregate, comparisonEnabled, currencySymbol, grouping, isBranded, countryFilter, filters }: { data: DailyData[]; keywordData: KeywordData[]; gscDailyTotals: any[]; gscTotals: any; aggregate: (data: DailyData[]) => any; comparisonEnabled: boolean; currencySymbol: string; grouping: 'daily' | 'weekly' | 'monthly'; isBranded: (t: string) => boolean; countryFilter: string; filters: DashboardFilters; }) => {
   const organicGa4 = useMemo(() => aggregate(data.filter(d => d.channel.toLowerCase().includes('organic'))), [data, aggregate]);
   
   const brandedTrendData = useMemo(() => {
     if (!gscDailyTotals.length) return [];
-    const getB = (d: string) => grouping === 'weekly' ? formatDate(getStartOfWeek(new Date(d))) : grouping === 'monthly' ? `${d.slice(0, 7)}-01` : d;
-    const cD = gscDailyTotals.filter(t => t.label === 'current' && (countryFilter === 'All' || t.country === countryFilter)).sort((a,b) => a.date.localeCompare(b.date));
-    const pD = gscDailyTotals.filter(t => t.label === 'previous' && (countryFilter === 'All' || t.country === countryFilter)).sort((a,b) => a.date.localeCompare(b.date));
     
-    const cK = Array.from(new Set(cD.map(t => getB(t.date)))).sort();
-    const pK = Array.from(new Set(pD.map(t => getB(t.date)))).sort();
+    const start = new Date(filters.dateRange.start);
+    const end = new Date(filters.dateRange.end);
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
-    const agg = (items: any[], kw: KeywordData[]) => {
-      const m: Record<string, any> = {}; 
-      items.forEach(t => { const b = getB(t.date); if(!m[b]) m[b]={total:0,branded:0}; m[b].total += t.clicks; });
-      kw.forEach(k => { const b = getB(k.date||''); if(m[b] && isBranded(k.keyword)) m[b].branded += k.clicks; });
-      return m;
-    };
-    const cM = agg(cD, keywordData.filter(k => k.dateRangeLabel === 'current'));
-    const pM = agg(pD, keywordData.filter(k => k.dateRangeLabel === 'previous'));
+    const compDates = filters.comparison.enabled ? (function() {
+        const d = end.getTime() - start.getTime();
+        if (filters.comparison.type === 'previous_period') {
+          const compStart = new Date(start.getTime() - d - 86400000);
+          return { start: formatDate(compStart) };
+        } else {
+          const compStart = new Date(start); compStart.setFullYear(compStart.getFullYear() - 1);
+          return { start: formatDate(compStart) };
+        }
+    })() : null;
 
-    return cK.map((bucket, index) => {
-      const c = cM[bucket]; const pB = pK[index]; const p = pB ? pM[pB] : null;
-      const labelPrefix = grouping === 'daily' ? 'Day' : grouping === 'weekly' ? 'Week' : 'Month';
-      return {
-        relLabel: `${labelPrefix} ${index + 1}`,
-        curDate: bucket, prevDate: pB || null,
-        'Branded (Cur)': c.branded, 'Generic (Cur)': Math.max(0, c.total - c.branded),
-        'Branded (Prev)': p ? p.branded : 0, 'Generic (Prev)': p ? Math.max(0, p.total - p.branded) : 0
-      };
+    const compStart = compDates ? new Date(compDates.start) : null;
+
+    const currentMap: Record<string, any> = {};
+    const previousMap: Record<string, any> = {};
+
+    gscDailyTotals.forEach(t => {
+      const target = t.label === 'current' ? currentMap : previousMap;
+      if (!target[t.date]) target[t.date] = { total: 0, branded: 0 };
+      target[t.date].total += t.clicks;
     });
-  }, [gscDailyTotals, keywordData, grouping, isBranded, countryFilter]);
+
+    keywordData.forEach(k => {
+      const targetMap = k.dateRangeLabel === 'current' ? currentMap : previousMap;
+      if (k.date && targetMap[k.date] && isBranded(k.keyword)) {
+        targetMap[k.date].branded += k.clicks;
+      }
+    });
+
+    const points = [];
+    for (let i = 0; i < diffDays; i++) {
+      const curD = new Date(start); curD.setDate(curD.getDate() + i);
+      const curDStr = formatDate(curD);
+      const prevD = compStart ? new Date(compStart) : null;
+      if (prevD) prevD.setDate(prevD.getDate() + i);
+      const prevDStr = prevD ? formatDate(prevD) : null;
+
+      const c = currentMap[curDStr] || { total: 0, branded: 0 };
+      const p = prevDStr ? (previousMap[prevDStr] || { total: 0, branded: 0 }) : { total: 0, branded: 0 };
+
+      points.push({
+        relLabel: `Day ${i + 1}`,
+        curDate: curDStr,
+        prevDate: prevDStr,
+        'Branded (Cur)': c.branded, 'Generic (Cur)': Math.max(0, c.total - c.branded),
+        'Branded (Prev)': p.branded, 'Generic (Prev)': Math.max(0, p.total - p.branded)
+      });
+    }
+    return points;
+  }, [gscDailyTotals, keywordData, grouping, isBranded, countryFilter, filters]);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
