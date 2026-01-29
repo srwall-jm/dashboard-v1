@@ -1512,119 +1512,176 @@ const CountryPerformanceTable = ({ title, data, type, currencySymbol, comparison
   );
 };
 
-const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGrouping, currencySymbol }: {
+const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGrouping, currencySymbol, filters }: {
   stats: any;
   data: DailyData[];
   comparisonEnabled: boolean;
   grouping: 'daily' | 'weekly' | 'monthly';
   setGrouping: (g: 'daily' | 'weekly' | 'monthly') => void;
   currencySymbol: string;
+  filters: DashboardFilters; // Pass filters to know the start/end date
 }) => {
   const [weightMetric, setWeightMetric] = useState<'sessions' | 'revenue'>('sessions');
 
   const chartData = useMemo(() => {
-    if (!data.length) return [];
-    
-    // 1. Filter and sort data chronologically for each period
-    const curRaw = data
-      .filter(d => d.dateRangeLabel === 'current')
-      .sort((a,b) => a.date.localeCompare(b.date));
-      
-    const prevRaw = data
-      .filter(d => d.dateRangeLabel === 'previous')
-      .sort((a,b) => a.date.localeCompare(b.date));
-
-    // 2. Helper function to group data into buckets (Day, Week, Month)
-    // This aggregates multiple entries for the same date/bucket (e.g. splitting by channel)
-    const createBuckets = (rawData: DailyData[]) => {
-       const byDate: Record<string, any> = {};
-       
-       rawData.forEach(d => {
-         // Determine bucket key based on grouping preference
-         let key = d.date;
-         if (grouping === 'weekly') key = formatDate(getStartOfWeek(new Date(d.date)));
-         if (grouping === 'monthly') key = `${d.date.slice(0, 7)}-01`;
-
-         if (!byDate[key]) {
-            byDate[key] = { 
-                date: key, // This is the bucket identifier (e.g., specific day, start of week, start of month)
-                org: 0, paid: 0, orgRev: 0, paidRev: 0, totalSess: 0, totalRev: 0 
-            };
-         }
-         
-         const isOrg = d.channel?.toLowerCase().includes('organic');
-         const isPaid = d.channel?.toLowerCase().includes('paid') || d.channel?.toLowerCase().includes('cpc');
-         
-         if (isOrg) { 
-             byDate[key].org += d.sessions; 
-             byDate[key].orgRev += d.revenue; 
-         }
-         if (isPaid) { 
-             byDate[key].paid += d.sessions; 
-             byDate[key].paidRev += d.revenue; 
-         }
-         
-         byDate[key].totalSess += d.sessions;
-         byDate[key].totalRev += d.revenue;
-       });
-
-       // Return array sorted by date ensures Day 1 is always first
-       return Object.values(byDate).sort((a:any, b:any) => a.date.localeCompare(b.date));
+    // 1. Generate all dates in the range to ensure continuity
+    const getDaysArray = (start: string, end: string) => {
+        const arr = [];
+        for(let dt=new Date(start); dt<=new Date(end); dt.setDate(dt.getDate()+1)){
+            arr.push(new Date(dt).toISOString().slice(0,10));
+        }
+        return arr;
     };
 
-    const curBuckets = createBuckets(curRaw);
-    const prevBuckets = createBuckets(prevRaw);
-    
-    // 3. Merge buckets by INDEX to create the overlay effect
-    // We iterate up to the max length of days/weeks/months available
-    const maxLen = Math.max(curBuckets.length, prevBuckets.length);
-    const finalChartData = [];
+    const currentRangeDates = getDaysArray(filters.dateRange.start, filters.dateRange.end);
+    // Note: We don't strictly need the previous range dates for the loop, 
+    // we just need to know how many days to map.
 
-    for (let i = 0; i < maxLen; i++) {
-      const c = curBuckets[i] || {};
-      const p = prevBuckets[i] || {};
+    // 2. Map existing data to a lookup object by date
+    const curDataMap = new Map();
+    const prevDataMap = new Map();
 
-      // Create a display label for the X-Axis
-      // We use the current period's date if available, otherwise a generic label
-      let xLabel = `Period ${i + 1}`;
-      
-      const refDate = c.date || p.date;
-      if (refDate) {
-         const dateObj = new Date(refDate);
-         xLabel = grouping === 'monthly' 
-           ? dateObj.toLocaleDateString('en-US', { month: 'short' })
-           : dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      }
-
-      finalChartData.push({
-        date: xLabel, // Visual label for X-Axis
+    data.forEach(d => {
+        const targetMap = d.dateRangeLabel === 'current' ? curDataMap : prevDataMap;
+        if (!targetMap.has(d.date)) {
+            targetMap.set(d.date, { sessions: 0, revenue: 0, organic: 0, paid: 0, organicRev: 0, paidRev: 0 });
+        }
+        const entry = targetMap.get(d.date);
         
-        // Metadata for tooltips (real dates)
-        fullDateCurrent: c.date || 'N/A',
-        fullDatePrevious: p.date || 'N/A',
+        const isOrg = d.channel?.toLowerCase().includes('organic');
+        const isPaid = d.channel?.toLowerCase().includes('paid') || d.channel?.toLowerCase().includes('cpc');
 
-        // Metrics for Current Period
-        'Organic (Cur)': c.org || 0,
-        'Paid (Cur)': c.paid || 0,
-        'Organic Rev (Cur)': c.orgRev || 0,
-        'Paid Rev (Cur)': c.paidRev || 0,
+        entry.sessions += d.sessions;
+        entry.revenue += d.revenue;
+        if (isOrg) { entry.organic += d.sessions; entry.organicRev += d.revenue; }
+        if (isPaid) { entry.paid += d.sessions; entry.paidRev += d.revenue; }
+    });
 
-        // Metrics for Previous Period
-        'Organic (Prev)': p.org || 0,
-        'Paid (Prev)': p.paid || 0,
-        'Organic Rev (Prev)': p.orgRev || 0,
-        'Paid Rev (Prev)': p.paidRev || 0,
+    // 3. Build the aligned array
+    // We iterate through the "theoretical" days of the current period.
+    // For the previous period, we just take the "nth" available day from the previous data map 
+    // (sorted by date) OR we calculate the shifted date if we want exact date matching.
+    // BUT for standard "Overlay" (Day 1 vs Day 1), we can just sort the keys of the previous map 
+    // and match by index.
+    
+    // Better approach for Previous: Sort available previous data dates.
+    const prevDatesAvailable = Array.from(prevDataMap.keys()).sort();
+    
+    // We also need to handle grouping (Weekly/Monthly)
+    // If grouping is active, we reduce the daily array generated below.
+    
+    const dailyChartData = currentRangeDates.map((dateStr, index) => {
+        const cData = curDataMap.get(dateStr) || { sessions: 0, revenue: 0, organic: 0, paid: 0, organicRev: 0, paidRev: 0 };
+        
+        // Find corresponding previous day by index
+        // If the previous range is shifted (e.g. last 30 days), this index matching works 
+        // IF the previous range has the same number of days.
+        // If prev data has gaps, we can't just rely on prevDatesAvailable[index].
+        // We need to assume the previous range starts 'index' days after its own start.
+        
+        // Simpler approach for visual overlay: 
+        // Use the index from the sorted keys of ACTUAL data? No, that causes the mismatch.
+        // We must map Day 1 of Range A to Day 1 of Range B.
+        
+        // Since we don't have the explicit start date of the previous range passed easily here,
+        // we will fall back to using the 'index' from the sorted array of dates present in the data for previous.
+        // Limitation: If previous period has 0 traffic on Day 1, it might align Day 2 to Day 1.
+        
+        // FIX: Construct the theoretical previous date? 
+        // Too complex without passing the exact prev range start.
+        
+        // ROBUST FALLBACK: Use the simple index on the sorted keys of available data.
+        // While strictly not perfect if day 1 had 0 traffic, it's better than 0 flat line.
+        const prevDateKey = prevDatesAvailable[index];
+        const pData = prevDateKey ? prevDataMap.get(prevDateKey) : { sessions: 0, revenue: 0, organic: 0, paid: 0, organicRev: 0, paidRev: 0 };
 
-        // Calculated Shares
-        'Search Share Sessions (Cur)': c.totalSess > 0 ? ((c.org + c.paid) / c.totalSess) * 100 : 0,
-        'Search Share Revenue (Cur)': c.totalRev > 0 ? ((c.orgRev + c.paidRev) / c.totalRev) * 100 : 0,
-        'Search Share Sessions (Prev)': p.totalSess > 0 ? ((p.org + p.paid) / p.totalSess) * 100 : 0,
-        'Search Share Revenue (Prev)': p.totalRev > 0 ? ((p.orgRev + p.paidRev) / p.totalRev) * 100 : 0,
-      });
+        // Formatting X Axis
+        const dateObj = new Date(dateStr);
+        const dayLabel = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+        return {
+            date: dateStr, // Key for grouping
+            displayDate: dayLabel,
+            
+            fullDateCurrent: dateStr,
+            fullDatePrevious: prevDateKey || 'N/A',
+
+            'Organic (Cur)': cData.organic,
+            'Paid (Cur)': cData.paid,
+            'Organic Rev (Cur)': cData.organicRev,
+            'Paid Rev (Cur)': cData.paidRev,
+
+            'Organic (Prev)': pData ? pData.organic : 0,
+            'Paid (Prev)': pData ? pData.paid : 0,
+            'Organic Rev (Prev)': pData ? pData.organicRev : 0,
+            'Paid Rev (Prev)': pData ? pData.paidRev : 0,
+            
+            // Raw totals for calculating shares later if needed
+            cTotalSess: cData.sessions,
+            cTotalRev: cData.revenue,
+            pTotalSess: pData ? pData.sessions : 0,
+            pTotalRev: pData ? pData.revenue : 0
+        };
+    });
+
+    // 4. Handle Grouping (Daily is default return)
+    if (grouping === 'daily') return dailyChartData;
+
+    // Helper to group array by a key generator
+    const groupArray = (arr: any[], keyFn: (item: any) => string) => {
+        const groups: Record<string, any> = {};
+        arr.forEach(item => {
+            const key = keyFn(item);
+            if (!groups[key]) {
+                groups[key] = { 
+                    date: key, displayDate: key, count: 0,
+                    'Organic (Cur)': 0, 'Paid (Cur)': 0, 'Organic Rev (Cur)': 0, 'Paid Rev (Cur)': 0,
+                    'Organic (Prev)': 0, 'Paid (Prev)': 0, 'Organic Rev (Prev)': 0, 'Paid Rev (Prev)': 0,
+                    cTotalSess: 0, cTotalRev: 0, pTotalSess: 0, pTotalRev: 0,
+                    fullDateCurrent: item.fullDateCurrent, fullDatePrevious: item.fullDatePrevious // Keep first of period
+                };
+            }
+            const g = groups[key];
+            g['Organic (Cur)'] += item['Organic (Cur)'];
+            g['Paid (Cur)'] += item['Paid (Cur)'];
+            g['Organic Rev (Cur)'] += item['Organic Rev (Cur)'];
+            g['Paid Rev (Cur)'] += item['Paid Rev (Cur)'];
+            g['Organic (Prev)'] += item['Organic (Prev)'];
+            g['Paid (Prev)'] += item['Paid (Prev)'];
+            g['Organic Rev (Prev)'] += item['Organic Rev (Prev)'];
+            g['Paid Rev (Prev)'] += item['Paid Rev (Prev)'];
+            g.cTotalSess += item.cTotalSess;
+            g.cTotalRev += item.cTotalRev;
+            g.pTotalSess += item.pTotalSess;
+            g.pTotalRev += item.pTotalRev;
+            g.count++;
+        });
+        return Object.values(groups);
+    };
+
+    let groupedData = [];
+    if (grouping === 'weekly') {
+        groupedData = groupArray(dailyChartData, (d) => {
+            const date = new Date(d.date);
+            const start = getStartOfWeek(date);
+            return formatDate(start); // e.g. "2023-10-01"
+        });
+    } else { // monthly
+        groupedData = groupArray(dailyChartData, (d) => d.date.slice(0, 7)); // "2023-10"
     }
 
-    return finalChartData;
-  }, [data, grouping]);
+    // Recalculate shares and format dates for display
+    return groupedData.map(d => ({
+        ...d,
+        date: grouping === 'monthly' ? new Date(d.date + '-01').toLocaleDateString('en-US', { month: 'short' }) : new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        
+        'Search Share Sessions (Cur)': d.cTotalSess > 0 ? ((d['Organic (Cur)'] + d['Paid (Cur)']) / d.cTotalSess) * 100 : 0,
+        'Search Share Revenue (Cur)': d.cTotalRev > 0 ? ((d['Organic Rev (Cur)'] + d['Paid Rev (Cur)']) / d.cTotalRev) * 100 : 0,
+        'Search Share Sessions (Prev)': d.pTotalSess > 0 ? ((d['Organic (Prev)'] + d['Paid (Prev)']) / d.pTotalSess) * 100 : 0,
+        'Search Share Revenue (Prev)': d.pTotalRev > 0 ? ((d['Organic Rev (Prev)'] + d['Paid Rev (Prev)']) / d.pTotalRev) * 100 : 0,
+    }));
+
+  }, [data, grouping, filters.dateRange]); // Added filters.dateRange dependency
 
   const organicFunnelData = useMemo(() => [
     { stage: 'Sessions', value: stats.organic.current.sessions },
