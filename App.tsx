@@ -19,7 +19,7 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 };
 
 const COUNTRY_CODE_TO_NAME: Record<string, string> = {
-  // ISO-2 Codes (Common in GSC)
+  // ISO-2 Codes (Estándar GSC)
   'af': 'Afghanistan', 'al': 'Albania', 'dz': 'Algeria', 'ad': 'Andorra', 'ao': 'Angola',
   'ar': 'Argentina', 'am': 'Armenia', 'au': 'Australia', 'at': 'Austria', 'az': 'Azerbaijan',
   'be': 'Belgium', 'br': 'Brazil', 'ca': 'Canada', 'ch': 'Switzerland', 'cl': 'Chile',
@@ -32,19 +32,45 @@ const COUNTRY_CODE_TO_NAME: Record<string, string> = {
   'ph': 'Philippines', 'sg': 'Singapore', 'sa': 'Saudi Arabia', 'ae': 'United Arab Emirates',
   'eg': 'Egypt', 'ma': 'Morocco', 'il': 'Israel', 'ua': 'Ukraine', 'cz': 'Czech Republic',
   'ro': 'Romania', 'hu': 'Hungary', 'nz': 'New Zealand', 'ba': 'Bosnia and Herzegovina',
-  // ISO-3 Codes (Also found in some data exports)
-  'afg': 'Afghanistan', 'alb': 'Albania', 'dza': 'Algeria', 'and': 'Andorra', 'ago': 'Angola',
-  'arg': 'Argentina', 'arm': 'Armenia', 'aus': 'Australia', 'aut': 'Austria', 'aze': 'Azerbaijan',
-  'bel': 'Belgium', 'bra': 'Brazil', 'can': 'Canada', 'che': 'Switzerland', 'chl': 'Chile',
-  'chn': 'China', 'col': 'Colombia', 'deu': 'Germany', 'dnk': 'Denmark', 'esp': 'Spain',
-  'fin': 'Finland', 'fra': 'France', 'gbr': 'United Kingdom', 'grc': 'Greece', 'hkg': 'Hong Kong',
-  'irl': 'Ireland', 'ind': 'India', 'ita': 'Italy', 'jpn': 'Japan', 'mex': 'Mexico',
-  'nld': 'Netherlands', 'nor': 'Norway', 'per': 'Peru', 'pol': 'Poland', 'prt': 'Portugal',
-  'rus': 'Russia', 'swe': 'Sweden', 'tur': 'Turkey', 'usa': 'United States', 'zaf': 'South Africa',
-  'kor': 'South Korea', 'tha': 'Thailand', 'vnm': 'Vietnam', 'idn': 'Indonesia', 'mys': 'Malaysia',
-  'phl': 'Philippines', 'sgp': 'Singapore', 'sau': 'Saudi Arabia', 'are': 'United Arab Emirates',
-  'egy': 'Egypt', 'mar': 'Morocco', 'isr': 'Israel', 'ukr': 'Ukraine', 'cze': 'Czech Republic',
-  'rou': 'Romania', 'hun': 'Hungary', 'nzl': 'New Zealand', 'bih': 'Bosnia and Herzegovina'
+  
+  // ISO-3 Codes & Lista Extendida (Nueva)
+  'abw': 'Aruba', 'afg': 'Afghanistan', 'ago': 'Angola', 'alb': 'Albania', 'and': 'Andorra', 
+  'are': 'United Arab Emirates', 'arg': 'Argentina', 'arm': 'Armenia', 'atf': 'French Southern Territories', 
+  'aus': 'Australia', 'aut': 'Austria', 'aze': 'Azerbaijan', 'bel': 'Belgium', 'ben': 'Benin', 
+  'bgd': 'Bangladesh', 'bgr': 'Bulgaria', 'bhr': 'Bahrain', 'bih': 'Bosnia and Herzegovina', 
+  'blr': 'Belarus', 'bol': 'Bolivia', 'bra': 'Brazil', 'brb': 'Barbados', 'brn': 'Brunei', 
+  'btn': 'Bhutan', 'bwa': 'Botswana', 'caf': 'Central African Republic', 'can': 'Canada', 
+  'che': 'Switzerland', 'chl': 'Chile', 'chn': 'China', 'civ': 'Côte d\'Ivoire', 'cmr': 'Cameroon', 
+  'cod': 'DR Congo', 'cog': 'Congo', 'col': 'Colombia', 'com': 'Comoros', 'cpv': 'Cape Verde', 
+  'cri': 'Costa Rica', 'cub': 'Cuba', 'cyp': 'Cyprus', 'cze': 'Czech Republic', 'deu': 'Germany', 
+  'dji': 'Djibouti', 'dnk': 'Denmark', 'dom': 'Dominican Republic', 'dza': 'Algeria', 'ecu': 'Ecuador', 
+  'egy': 'Egypt', 'eri': 'Eritrea', 'esh': 'Western Sahara', 'esp': 'Spain', 'est': 'Estonia', 
+  'eth': 'Ethiopia', 'fin': 'Finland', 'fji': 'Fiji', 'fra': 'France', 'fro': 'Faroe Islands', 
+  'gbr': 'United Kingdom', 'geo': 'Georgia', 'ggy': 'Guernsey', 'gha': 'Ghana', 'gib': 'Gibraltar', 
+  'gin': 'Guinea', 'glp': 'Guadeloupe', 'gmb': 'Gambia', 'gnb': 'Guinea-Bissau', 'grc': 'Greece', 
+  'gtm': 'Guatemala', 'guf': 'French Guiana', 'guy': 'Guyana', 'hkg': 'Hong Kong', 'hnd': 'Honduras', 
+  'hrv': 'Croatia', 'hun': 'Hungary', 'idn': 'Indonesia', 'imn': 'Isle of Man', 'ind': 'India', 
+  'irl': 'Ireland', 'irn': 'Iran', 'irq': 'Iraq', 'isl': 'Iceland', 'isr': 'Israel', 'ita': 'Italy', 
+  'jam': 'Jamaica', 'jey': 'Jersey', 'jor': 'Jordan', 'jpn': 'Japan', 'kaz': 'Kazakhstan', 
+  'ken': 'Kenya', 'kgz': 'Kyrgyzstan', 'khm': 'Cambodia', 'kor': 'South Korea', 'kwt': 'Kuwait', 
+  'lbn': 'Lebanon', 'lby': 'Libya', 'lie': 'Liechtenstein', 'lka': 'Sri Lanka', 'lso': 'Lesotho', 
+  'ltu': 'Lithuania', 'lux': 'Luxembourg', 'lva': 'Latvia', 'mac': 'Macao', 'maf': 'Saint Martin', 
+  'mar': 'Morocco', 'mco': 'Monaco', 'mda': 'Moldova', 'mdg': 'Madagascar', 'mex': 'Mexico', 
+  'mkd': 'North Macedonia', 'mli': 'Mali', 'mlt': 'Malta', 'mmr': 'Myanmar', 'mne': 'Montenegro', 
+  'moz': 'Mozambique', 'mrt': 'Mauritania', 'mtq': 'Martinique', 'mus': 'Mauritius', 'mys': 'Malaysia', 
+  'nam': 'Namibia', 'ner': 'Niger', 'nga': 'Nigeria', 'nic': 'Nicaragua', 'nld': 'Netherlands', 
+  'nor': 'Norway', 'npl': 'Nepal', 'nzl': 'New Zealand', 'omn': 'Oman', 'pak': 'Pakistan', 
+  'pan': 'Panama', 'per': 'Peru', 'phl': 'Philippines', 'png': 'Papua New Guinea', 'pol': 'Poland', 
+  'pri': 'Puerto Rico', 'prt': 'Portugal', 'pry': 'Paraguay', 'pse': 'Palestine', 'qat': 'Qatar', 
+  'reu': 'Réunion', 'rou': 'Romania', 'rus': 'Russia', 'rwa': 'Rwanda', 'sau': 'Saudi Arabia', 
+  'sdn': 'Sudan', 'sen': 'Senegal', 'sgp': 'Singapore', 'slv': 'El Salvador', 'smr': 'San Marino', 
+  'som': 'Somalia', 'srb': 'Serbia', 'ssd': 'South Sudan', 'sur': 'Suriname', 'svk': 'Slovakia', 
+  'svn': 'Slovenia', 'swe': 'Sweden', 'swz': 'Eswatini', 'syr': 'Syria', 'tcd': 'Chad', 
+  'tgo': 'Togo', 'tha': 'Thailand', 'tjk': 'Tajikistan', 'tkm': 'Turkmenistan', 'tls': 'Timor-Leste', 
+  'tun': 'Tunisia', 'tur': 'Turkey', 'twn': 'Taiwan', 'tza': 'Tanzania', 'uga': 'Uganda', 
+  'ukr': 'Ukraine', 'ury': 'Uruguay', 'usa': 'United States', 'uzb': 'Uzbekistan', 'ven': 'Venezuela', 
+  'vnm': 'Vietnam', 'xkk': 'Kosovo', 'yem': 'Yemen', 'zaf': 'South Africa', 'zmb': 'Zambia', 
+  'zwe': 'Zimbabwe', 'zzz': 'Unknown Region'
 };
 
 const normalizeCountry = (val: string): string => {
@@ -695,7 +721,6 @@ const App: React.FC = () => {
         dateRanges.push({ startDate: comp.start, endDate: comp.end });
       }
 
-      // Dentro de fetchGa4Data...
       const ga4ReportResp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
@@ -705,8 +730,9 @@ const App: React.FC = () => {
             { name: 'date' }, 
             { name: filters.ga4Dimension }, 
             { name: 'country' }, 
-            { name: 'landingPage' },
-            { name: 'dateRange' } // <--- AÑADE ESTO AQUÍ
+            { name: 'landingPage' }
+            // IMPORTANTE: NO añadir { name: 'dateRange' } aquí. 
+            // La API lo añade sola cuando hay múltiples dateRanges.
           ],
           metrics: [
             { name: 'sessions' }, 
@@ -727,6 +753,9 @@ const App: React.FC = () => {
         country: normalizeCountry(row.dimensionValues[2].value),
         queryType: 'Non-Branded' as QueryType,
         landingPage: row.dimensionValues[3].value,
+        // LÓGICA DE DETECCIÓN:
+        // Si hay comparación, la API añade automáticamente una 5ª columna (índice 4)
+        // con el valor "date_range_1" para el periodo anterior.
         dateRangeLabel: row.dimensionValues.length > 4 && row.dimensionValues[4].value === 'date_range_1' ? 'previous' : 'current',
         sessions: parseInt(row.metricValues[0].value) || 0,
         revenue: parseFloat(row.metricValues[1].value) || 0,
@@ -1501,10 +1530,10 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
 }) => {
   const [weightMetric, setWeightMetric] = useState<'sessions' | 'revenue'>('sessions');
 
-const chartData = useMemo(() => {
+  const chartData = useMemo(() => {
     if (!data.length) return [];
     
-    // 1. Filtramos y ordenamos cronológicamente cada periodo por separado
+    // 1. Filtramos y ordenamos cronológicamente
     const curRaw = data
       .filter(d => d.dateRangeLabel === 'current')
       .sort((a,b) => a.date.localeCompare(b.date));
@@ -1513,43 +1542,8 @@ const chartData = useMemo(() => {
       .filter(d => d.dateRangeLabel === 'previous')
       .sort((a,b) => a.date.localeCompare(b.date));
 
-    // 2. Definimos la longitud del bucle basada en el periodo más largo
-    // Esto evita errores si un mes tiene 31 días y el anterior 30
-    const maxLength = Math.max(curRaw.length, prevRaw.length);
-    const result = [];
-
-    for (let i = 0; i < maxLength; i++) {
-      // Tomamos el dato en la posición i (Día 1, Día 2, etc.)
-      const cur = curRaw[i] || null;
-      const prev = prevRaw[i] || null;
-
-      // Calculamos métricas (si no hay dato ese día, es 0)
-      const getMetric = (d: DailyData | null, channelStr: string) => {
-        if (!d) return { sessions: 0, revenue: 0 };
-        const isMatch = d.channel?.toLowerCase().includes(channelStr) || 
-                       (channelStr === 'paid' && d.channel?.toLowerCase().includes('cpc'));
-        return isMatch ? { sessions: d.sessions, revenue: d.revenue } : { sessions: 0, revenue: 0 };
-      };
-
-      // Sumar si hubiera múltiples filas por día (aunque curRaw debería ser único por fecha si ya está agregado, 
-      // pero por seguridad recalculamos si tu data viene desagregada por canal)
-      // NOTA: Como curRaw ya viene filtrado, asumimos que puede haber múltiples filas por día (orgánico, paid, etc)
-      // Para simplificar el "Overlay" real, lo ideal es agrupar primero por día. 
-      // Pero como tu 'curRaw' actual viene de 'data' que tiene filas por canal, haremos un agrupado rápido aquí:
-      
-      // -- MEJORA DE AGRUPADO --
-      // Para que el overlay funcione perfecto, necesitamos agrupar primero por "Día N del periodo".
-      // Vamos a asumir que 'curRaw' y 'prevRaw' necesitan ser reducidos primero a arrays únicos por fecha.
-      // Sin embargo, para mantener el código simple y funcional con tu estructura actual:
-      
-      // Usaremos un enfoque de "Buckets" mejorado para Overlay:
-    }
-
-    // --- ENFOQUE FINAL OPTIMIZADO PARA OVERLAY ---
-    
-    // A. Función para agrupar todo un periodo en buckets (Día 1, Día 2...)
+    // 2. Función para agrupar todo un periodo en buckets (Día 1, Día 2...)
     const createBuckets = (rawData: DailyData[]) => {
-       // Primero agrupamos por fecha real para sumar canales
        const byDate: Record<string, any> = {};
        rawData.forEach(d => {
          if (!byDate[d.date]) byDate[d.date] = { date: d.date, org: 0, paid: 0, orgRev: 0, paidRev: 0, totalSess: 0, totalRev: 0 };
@@ -1563,7 +1557,6 @@ const chartData = useMemo(() => {
          byDate[d.date].totalSess += d.sessions;
          byDate[d.date].totalRev += d.revenue;
        });
-       // Devolvemos array ordenado por fecha
        return Object.values(byDate).sort((a:any, b:any) => a.date.localeCompare(b.date));
     };
 
@@ -1577,7 +1570,7 @@ const chartData = useMemo(() => {
       const c = curBuckets[i] || {};
       const p = prevBuckets[i] || {};
 
-      // Formatear fecha para el Eje X (visual)
+      // Formatear fecha para el Eje X
       let xLabel = `Day ${i + 1}`;
       if (c.date) {
          const dateObj = new Date(c.date);
@@ -1587,7 +1580,7 @@ const chartData = useMemo(() => {
       }
 
       finalChartData.push({
-        date: xLabel, // Etiqueta visual (ej: "Dec 1")
+        date: xLabel,
         fullDateCurrent: c.date || 'N/A',
         fullDatePrevious: p.date || 'N/A',
 
@@ -1611,7 +1604,14 @@ const chartData = useMemo(() => {
     return finalChartData;
   }, [data, grouping]);
 
-
+  // ... (Resto del return del componente igual que antes: kpis, charts, tables)
+  // Asegúrate de copiar el return completo que tenías en tu código original, 
+  // ya que aquí solo he corregido la lógica de chartData.
+  
+  // (Para brevedad, aquí iría el return que empieza con <div className="space-y-8... )
+  // SI NECESITAS EL COMPONENTE ENTERO DÍMELO, PERO LA CLAVE ERA LIMPIAR 'chartData'
+  
+  // -- Pego aquí el return para que no tengas dudas al copiar --
   const organicFunnelData = useMemo(() => [
     { stage: 'Sessions', value: stats.organic.current.sessions },
     { stage: 'Add to Basket', value: stats.organic.current.addToCarts },
@@ -1676,6 +1676,123 @@ const chartData = useMemo(() => {
           ) : <EmptyState text="No data available to chart" />}
         </div>
       </div>
+
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Revenue Evolution (Time Overlay)</h4>
+            <p className="text-[11px] font-bold text-slate-600">Moneda: {currencySymbol}</p>
+          </div>
+        </div>
+        <div className="h-[300px]">
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} />
+                <Tooltip content={<ComparisonTooltip currency currencySymbol={currencySymbol} />} />
+                <Legend verticalAlign="top" align="center" iconType="circle" />
+                
+                <Line name="Organic Rev (Cur)" type="monotone" dataKey="Organic Rev (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} />
+                <Line name="Paid Rev (Cur)" type="monotone" dataKey="Paid Rev (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} />
+                
+                {comparisonEnabled && (
+                  <>
+                    <Line name="Organic Rev (Prev)" type="monotone" dataKey="Organic Rev (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
+                    <Line name="Paid Rev (Prev)" type="monotone" dataKey="Paid Rev (Prev)" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
+                  </>
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          ) : <EmptyState text="No revenue data available to chart" />}
+        </div>
+      </div>
+
+      {/* PERFORMANCE TABLES BY COUNTRY */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        <CountryPerformanceTable 
+          title="Organic performance by country" 
+          data={data} 
+          type="Organic" 
+          currencySymbol={currencySymbol} 
+          comparisonEnabled={comparisonEnabled} 
+        />
+        <CountryPerformanceTable 
+          title="Paid performance by country" 
+          data={data} 
+          type="Paid" 
+          currencySymbol={currencySymbol} 
+          comparisonEnabled={comparisonEnabled} 
+        />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <EcommerceFunnel title="Organic Search Funnel" data={organicFunnelData} color="indigo" />
+        <EcommerceFunnel title="Paid Search Funnel" data={paidFunnelData} color="amber" />
+      </div>
+
+      <div className="mt-8 space-y-4">
+        <div className="flex items-center gap-3 px-2">
+          <div className="w-7 h-7 bg-violet-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px] shadow-lg shadow-violet-600/20">
+            <PieIcon size={14} />
+          </div>
+          <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Global Search Share (Market Dominance)</h4>
+        </div>
+        <ShareOfSearchAnalysis stats={stats} currencySymbol={currencySymbol} />
+      </div>
+
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm mt-8 overflow-hidden">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+          <div>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Global Search Share Trend (Time Overlay)</h4>
+            <p className="text-[11px] font-bold text-slate-600">Porcentaje de peso de búsqueda sobre el total de canales por período</p>
+          </div>
+          <div className="flex bg-slate-100 p-1 rounded-xl">
+             <button onClick={() => setWeightMetric('sessions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'sessions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Sessions %</button>
+             <button onClick={() => setWeightMetric('revenue')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'revenue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Revenue %</button>
+          </div>
+        </div>
+        <div className="h-[350px]">
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${val.toFixed(1)}%`} />
+                <Tooltip content={<ComparisonTooltip percent />} />
+                <Legend verticalAlign="top" align="center" iconType="circle" />
+                
+                <Line 
+                  name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Cur)`} 
+                  type="monotone" 
+                  dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Cur)' : 'Search Share Revenue (Cur)'} 
+                  stroke="#8b5cf6" 
+                  strokeWidth={3} 
+                  dot={false} 
+                  activeDot={{ r: 6 }} 
+                />
+                
+                {comparisonEnabled && (
+                  <Line 
+                    name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Prev)`} 
+                    type="monotone" 
+                    dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Prev)' : 'Search Share Revenue (Prev)'} 
+                    stroke="#8b5cf6" 
+                    strokeWidth={2} 
+                    strokeDasharray="5 5" 
+                    opacity={0.3} 
+                    dot={false} 
+                  />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          ) : <EmptyState text="No share data available to chart" />}
+        </div>
+      </div>
+    </div>
+  );
+};
 
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
