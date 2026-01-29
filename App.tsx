@@ -308,7 +308,6 @@ const SeoDeepDiveView: React.FC<{
         map[url] = { url, clicks: 0, impressions: 0, queries: [] };
       }
       
-      // We only aggregate 'current' data for the main list metrics
       if (k.dateRangeLabel === 'current') {
         map[url].clicks += k.clicks;
         map[url].impressions += k.impressions;
@@ -320,7 +319,6 @@ const SeoDeepDiveView: React.FC<{
       .map(page => ({
         ...page,
         ctr: page.impressions > 0 ? (page.clicks / page.impressions) * 100 : 0,
-        // Sort queries by clicks descending and limit
         topQueries: page.queries.sort((a, b) => b.clicks - a.clicks).slice(0, 20)
       }))
       .sort((a, b) => b.clicks - a.clicks);
@@ -1320,6 +1318,126 @@ const ShareOfSearchAnalysis = ({ stats, currencySymbol }: { stats: any, currency
   );
 };
 
+const CountryPerformanceTable = ({ title, data, type, currencySymbol, comparisonEnabled }: { 
+  title: string; 
+  data: DailyData[]; 
+  type: 'Organic' | 'Paid';
+  currencySymbol: string;
+  comparisonEnabled: boolean;
+}) => {
+  const [kpi, setKpi] = useState<'sessions' | 'cr' | 'revenue' | 'sales'>('sessions');
+
+  const countryStats = useMemo(() => {
+    const channelData = data.filter(d => 
+      type === 'Organic' ? d.channel.toLowerCase().includes('organic') : 
+      (d.channel.toLowerCase().includes('paid') || d.channel.toLowerCase().includes('cpc'))
+    );
+
+    const map: Record<string, { country: string; current: any; previous: any }> = {};
+
+    channelData.forEach(d => {
+      if (!map[d.country]) {
+        map[d.country] = { 
+          country: d.country, 
+          current: { sessions: 0, sales: 0, revenue: 0 }, 
+          previous: { sessions: 0, sales: 0, revenue: 0 } 
+        };
+      }
+      const target = d.dateRangeLabel === 'previous' ? map[d.country].previous : map[d.country].current;
+      target.sessions += d.sessions;
+      target.sales += d.sales;
+      target.revenue += d.revenue;
+    });
+
+    return Object.values(map).map(item => {
+      const getVal = (obj: any) => {
+        if (kpi === 'sessions') return obj.sessions;
+        if (kpi === 'sales') return obj.sales;
+        if (kpi === 'revenue') return obj.revenue;
+        if (kpi === 'cr') return obj.sessions > 0 ? (obj.sales / obj.sessions) * 100 : 0;
+        return 0;
+      };
+
+      const curVal = getVal(item.current);
+      const prevVal = getVal(item.previous);
+      const change = prevVal === 0 ? 0 : ((curVal - prevVal) / prevVal) * 100;
+
+      return {
+        country: item.country,
+        value: curVal,
+        change,
+        isCurrency: kpi === 'revenue',
+        isPercent: kpi === 'cr'
+      };
+    }).sort((a, b) => b.value - a.value);
+  }, [data, type, kpi]);
+
+  const kpis = [
+    { id: 'sessions', label: 'Sessions' },
+    { id: 'cr', label: 'Conv. Rate' },
+    { id: 'revenue', label: 'Revenue' },
+    { id: 'sales', label: 'Sales' }
+  ];
+
+  return (
+    <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-xl ${type === 'Organic' ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-600'}`}>
+            <Globe size={16} />
+          </div>
+          <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{title}</h4>
+        </div>
+        <div className="flex bg-slate-100 p-1 rounded-xl">
+          {kpis.map(k => (
+            <button 
+              key={k.id} 
+              onClick={() => setKpi(k.id as any)} 
+              className={`px-3 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${kpi === k.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              {k.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="overflow-x-auto custom-scrollbar flex-1">
+        <table className="w-full text-left">
+          <thead>
+            <tr className="border-b border-slate-100">
+              <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Country</th>
+              <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">{kpis.find(k => k.id === kpi)?.label}</th>
+              {comparisonEnabled && <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Growth</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {countryStats.slice(0, 10).map((item, idx) => (
+              <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                <td className="py-4 px-4">
+                  <span className="text-[11px] font-black text-slate-800">{item.country}</span>
+                </td>
+                <td className="py-4 px-4 text-right">
+                  <span className="text-[11px] font-black text-slate-900">
+                    {item.isCurrency ? `${currencySymbol}${item.value.toLocaleString()}` : item.isPercent ? `${item.value.toFixed(2)}%` : item.value.toLocaleString()}
+                  </span>
+                </td>
+                {comparisonEnabled && (
+                  <td className="py-4 px-4 text-right">
+                    <div className={`flex items-center justify-end text-[10px] font-bold ${item.change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                      {item.change >= 0 ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
+                      {Math.abs(item.change).toFixed(1)}%
+                    </div>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {countryStats.length === 0 && <EmptyState text="No regional data available" />}
+      </div>
+    </div>
+  );
+};
+
 const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGrouping, currencySymbol }: {
   stats: any;
   data: DailyData[];
@@ -1492,6 +1610,24 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
             </ResponsiveContainer>
           ) : <EmptyState text="No revenue data available to chart" />}
         </div>
+      </div>
+
+      {/* NEW PERFORMANCE TABLES BY COUNTRY */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        <CountryPerformanceTable 
+          title="Organic performance by country" 
+          data={data} 
+          type="Organic" 
+          currencySymbol={currencySymbol} 
+          comparisonEnabled={comparisonEnabled} 
+        />
+        <CountryPerformanceTable 
+          title="Paid performance by country" 
+          data={data} 
+          type="Paid" 
+          currencySymbol={currencySymbol} 
+          comparisonEnabled={comparisonEnabled} 
+        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -1842,7 +1978,6 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
         <KpiCard title="Organic Conv. Rate" value={`${organicGa4.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? organicGa4.changes.cr : undefined} icon={<ShoppingBag />} isPercent color="emerald" />
       </div>
 
-      {/* Brand vs Generic Search (Time Overlay) moved ABOVE Market Distribution */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden w-full mt-8">
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -1882,7 +2017,6 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
         </div>
       </div>
 
-      {/* Country Performance & Efficiency Section moved BELOW Brand vs Generic */}
       <div className="mt-8 space-y-4">
         <div className="flex items-center gap-3 px-2">
           <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px] shadow-lg shadow-indigo-600/20">
