@@ -243,7 +243,6 @@ const DateRangeSelector: React.FC<{
               </div>
             </div>
 
-            {/* COMPARISON CONTROLS MOVED HERE */}
             <div className="mt-auto pt-6 border-t border-slate-100 space-y-4">
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
                 <div className="flex items-center justify-between mb-3">
@@ -286,14 +285,12 @@ const DateRangeSelector: React.FC<{
 
 const ComparisonTooltip = ({ active, payload, label, currency = false, currencySymbol = '£', percent = false }: any) => {
   if (active && payload && payload.length) {
-    // Extraemos las fechas reales que guardaremos en el payload
     const dataPoint = payload[0].payload;
     const currentDate = dataPoint.fullDateCurrent;
     const prevDate = dataPoint.fullDatePrevious;
 
     return (
       <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10 min-w-[220px]">
-        {/* Cabecera con las dos fechas que se comparan */}
         <div className="mb-3 border-b border-white/10 pb-2">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Current: <span className="text-white">{currentDate}</span></p>
           {prevDate && <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">Previous: <span className="text-white">{prevDate}</span></p>}
@@ -731,8 +728,6 @@ const App: React.FC = () => {
             { name: filters.ga4Dimension }, 
             { name: 'country' }, 
             { name: 'landingPage' }
-            // IMPORTANTE: NO añadir { name: 'dateRange' } aquí. 
-            // La API lo añade sola cuando hay múltiples dateRanges.
           ],
           metrics: [
             { name: 'sessions' }, 
@@ -753,9 +748,6 @@ const App: React.FC = () => {
         country: normalizeCountry(row.dimensionValues[2].value),
         queryType: 'Non-Branded' as QueryType,
         landingPage: row.dimensionValues[3].value,
-        // LÓGICA DE DETECCIÓN:
-        // Si hay comparación, la API añade automáticamente una 5ª columna (índice 4)
-        // con el valor "date_range_1" para el periodo anterior.
         dateRangeLabel: row.dimensionValues.length > 4 && row.dimensionValues[4].value === 'date_range_1' ? 'previous' : 'current',
         sessions: parseInt(row.metricValues[0].value) || 0,
         revenue: parseFloat(row.metricValues[1].value) || 0,
@@ -1331,7 +1323,7 @@ const ShareOfSearchAnalysis = ({ stats, currencySymbol }: { stats: any, currency
     ];
   }, [stats]);
 
-  const COLORS = ['#6366f1', '#94a3b8']; // Indigo for Search, Slate for Others
+  const COLORS = ['#6366f1', '#94a3b8']; 
 
   const renderDonut = (data: any[], title: string, metric: string, isCurrency = false) => (
     <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm flex flex-col items-center h-full">
@@ -1533,7 +1525,6 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
   const chartData = useMemo(() => {
     if (!data.length) return [];
     
-    // 1. Filtramos y ordenamos cronológicamente
     const curRaw = data
       .filter(d => d.dateRangeLabel === 'current')
       .sort((a,b) => a.date.localeCompare(b.date));
@@ -1542,7 +1533,6 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
       .filter(d => d.dateRangeLabel === 'previous')
       .sort((a,b) => a.date.localeCompare(b.date));
 
-    // 2. Función para agrupar todo un periodo en buckets
     const createBuckets = (rawData: DailyData[]) => {
        const byDate: Record<string, any> = {};
        rawData.forEach(d => {
@@ -1582,17 +1572,14 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
         date: xLabel,
         fullDateCurrent: c.date || 'N/A',
         fullDatePrevious: p.date || 'N/A',
-
         'Organic (Cur)': c.org || 0,
         'Paid (Cur)': c.paid || 0,
         'Organic Rev (Cur)': c.orgRev || 0,
         'Paid Rev (Cur)': c.paidRev || 0,
-
         'Organic (Prev)': p.org || 0,
         'Paid (Prev)': p.paid || 0,
         'Organic Rev (Prev)': p.orgRev || 0,
         'Paid Rev (Prev)': p.paidRev || 0,
-
         'Search Share Sessions (Cur)': c.totalSess > 0 ? ((c.org + c.paid) / c.totalSess) * 100 : 0,
         'Search Share Revenue (Cur)': c.totalRev > 0 ? ((c.orgRev + c.paidRev) / c.totalRev) * 100 : 0,
         'Search Share Sessions (Prev)': p.totalSess > 0 ? ((p.org + p.paid) / p.totalSess) * 100 : 0,
@@ -1652,10 +1639,8 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
                 <Tooltip content={<ComparisonTooltip />} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
-                
                 <Line name="Organic (Cur)" type="monotone" dataKey="Organic (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
                 <Line name="Paid (Cur)" type="monotone" dataKey="Paid (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
-                
                 {comparisonEnabled && (
                   <>
                     <Line name="Organic (Prev)" type="monotone" dataKey="Organic (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
@@ -1684,10 +1669,8 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} />
                 <Tooltip content={<ComparisonTooltip currency currencySymbol={currencySymbol} />} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
-                
                 <Line name="Organic Rev (Cur)" type="monotone" dataKey="Organic Rev (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} />
                 <Line name="Paid Rev (Cur)" type="monotone" dataKey="Paid Rev (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} />
-                
                 {comparisonEnabled && (
                   <>
                     <Line name="Organic Rev (Prev)" type="monotone" dataKey="Organic Rev (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
@@ -1701,20 +1684,8 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        <CountryPerformanceTable 
-          title="Organic performance by country" 
-          data={data} 
-          type="Organic" 
-          currencySymbol={currencySymbol} 
-          comparisonEnabled={comparisonEnabled} 
-        />
-        <CountryPerformanceTable 
-          title="Paid performance by country" 
-          data={data} 
-          type="Paid" 
-          currencySymbol={currencySymbol} 
-          comparisonEnabled={comparisonEnabled} 
-        />
+        <CountryPerformanceTable title="Organic performance by country" data={data} type="Organic" currencySymbol={currencySymbol} comparisonEnabled={comparisonEnabled} />
+        <CountryPerformanceTable title="Paid performance by country" data={data} type="Paid" currencySymbol={currencySymbol} comparisonEnabled={comparisonEnabled} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -1752,230 +1723,9 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${val.toFixed(1)}%`} />
                 <Tooltip content={<ComparisonTooltip percent />} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
-                
-                <Line 
-                  name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Cur)`} 
-                  type="monotone" 
-                  dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Cur)' : 'Search Share Revenue (Cur)'} 
-                  stroke="#8b5cf6" 
-                  strokeWidth={3} 
-                  dot={false} 
-                  activeDot={{ r: 6 }} 
-                />
-                
+                <Line name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Cur)`} type="monotone" dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Cur)' : 'Search Share Revenue (Cur)'} stroke="#8b5cf6" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
                 {comparisonEnabled && (
-                  <Line 
-                    name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Prev)`} 
-                    type="monotone" 
-                    dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Prev)' : 'Search Share Revenue (Prev)'} 
-                    stroke="#8b5cf6" 
-                    strokeWidth={2} 
-                    strokeDasharray="5 5" 
-                    opacity={0.3} 
-                    dot={false} 
-                  />
-                )}
-              </LineChart>
-            </ResponsiveContainer>
-          ) : <EmptyState text="No share data available to chart" />}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-      {/* PERFORMANCE TABLES BY COUNTRY */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        <CountryPerformanceTable 
-          title="Organic performance by country" 
-          data={data} 
-          type="Organic" 
-          currencySymbol={currencySymbol} 
-          comparisonEnabled={comparisonEnabled} 
-        />
-        <CountryPerformanceTable 
-          title="Paid performance by country" 
-          data={data} 
-          type="Paid" 
-          currencySymbol={currencySymbol} 
-          comparisonEnabled={comparisonEnabled} 
-        />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <EcommerceFunnel title="Organic Search Funnel" data={organicFunnelData} color="indigo" />
-        <EcommerceFunnel title="Paid Search Funnel" data={paidFunnelData} color="amber" />
-      </div>
-
-      <div className="mt-8 space-y-4">
-        <div className="flex items-center gap-3 px-2">
-          <div className="w-7 h-7 bg-violet-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px] shadow-lg shadow-violet-600/20">
-            <PieIcon size={14} />
-          </div>
-          <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Global Search Share (Market Dominance)</h4>
-        </div>
-        <ShareOfSearchAnalysis stats={stats} currencySymbol={currencySymbol} />
-      </div>
-
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm mt-8 overflow-hidden">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-          <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Global Search Share Trend (Time Overlay)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Porcentaje de peso de búsqueda sobre el total de canales por período</p>
-          </div>
-          <div className="flex bg-slate-100 p-1 rounded-xl">
-             <button onClick={() => setWeightMetric('sessions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'sessions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Sessions %</button>
-             <button onClick={() => setWeightMetric('revenue')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'revenue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Revenue %</button>
-          </div>
-        </div>
-        <div className="h-[350px]">
-          {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${val.toFixed(1)}%`} />
-                <Tooltip content={<ComparisonTooltip percent />} />
-                <Legend verticalAlign="top" align="center" iconType="circle" />
-                
-                <Line 
-                  name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Cur)`} 
-                  type="monotone" 
-                  dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Cur)' : 'Search Share Revenue (Cur)'} 
-                  stroke="#8b5cf6" 
-                  strokeWidth={3} 
-                  dot={false} 
-                  activeDot={{ r: 6 }} 
-                />
-                
-                {comparisonEnabled && (
-                  <Line 
-                    name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Prev)`} 
-                    type="monotone" 
-                    dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Prev)' : 'Search Share Revenue (Prev)'} 
-                    stroke="#8b5cf6" 
-                    strokeWidth={2} 
-                    strokeDasharray="5 5" 
-                    opacity={0.3} 
-                    dot={false} 
-                  />
-                )}
-              </LineChart>
-            </ResponsiveContainer>
-          ) : <EmptyState text="No share data available to chart" />}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Revenue Evolution (Time Overlay)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Moneda: {currencySymbol}</p>
-          </div>
-        </div>
-        <div className="h-[300px]">
-          {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} />
-                <Tooltip content={<ComparisonTooltip currency currencySymbol={currencySymbol} />} />
-                <Legend verticalAlign="top" align="center" iconType="circle" />
-                
-                <Line name="Organic Rev (Cur)" type="monotone" dataKey="Organic Rev (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} />
-                <Line name="Paid Rev (Cur)" type="monotone" dataKey="Paid Rev (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} />
-                
-                {comparisonEnabled && (
-                  <>
-                    <Line name="Organic Rev (Prev)" type="monotone" dataKey="Organic Rev (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
-                    <Line name="Paid Rev (Prev)" type="monotone" dataKey="Paid Rev (Prev)" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
-                  </>
-                )}
-              </LineChart>
-            </ResponsiveContainer>
-          ) : <EmptyState text="No revenue data available to chart" />}
-        </div>
-      </div>
-
-      {/* PERFORMANCE TABLES BY COUNTRY */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        <CountryPerformanceTable 
-          title="Organic performance by country" 
-          data={data} 
-          type="Organic" 
-          currencySymbol={currencySymbol} 
-          comparisonEnabled={comparisonEnabled} 
-        />
-        <CountryPerformanceTable 
-          title="Paid performance by country" 
-          data={data} 
-          type="Paid" 
-          currencySymbol={currencySymbol} 
-          comparisonEnabled={comparisonEnabled} 
-        />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <EcommerceFunnel title="Organic Search Funnel" data={organicFunnelData} color="indigo" />
-        <EcommerceFunnel title="Paid Search Funnel" data={paidFunnelData} color="amber" />
-      </div>
-
-      <div className="mt-8 space-y-4">
-        <div className="flex items-center gap-3 px-2">
-          <div className="w-7 h-7 bg-violet-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px] shadow-lg shadow-violet-600/20">
-            <PieIcon size={14} />
-          </div>
-          <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Global Search Share (Market Dominance)</h4>
-        </div>
-        <ShareOfSearchAnalysis stats={stats} currencySymbol={currencySymbol} />
-      </div>
-
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm mt-8 overflow-hidden">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-          <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Global Search Share Trend (Time Overlay)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Porcentaje de peso de búsqueda sobre el total de canales por período</p>
-          </div>
-          <div className="flex bg-slate-100 p-1 rounded-xl">
-             <button onClick={() => setWeightMetric('sessions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'sessions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Sessions %</button>
-             <button onClick={() => setWeightMetric('revenue')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'revenue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Revenue %</button>
-          </div>
-        </div>
-        <div className="h-[350px]">
-          {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${val.toFixed(1)}%`} />
-                <Tooltip content={<ComparisonTooltip percent />} />
-                <Legend verticalAlign="top" align="center" iconType="circle" />
-                
-                <Line 
-                  name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Cur)`} 
-                  type="monotone" 
-                  dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Cur)' : 'Search Share Revenue (Cur)'} 
-                  stroke="#8b5cf6" 
-                  strokeWidth={3} 
-                  dot={false} 
-                  activeDot={{ r: 6 }} 
-                />
-                
-                {comparisonEnabled && (
-                  <Line 
-                    name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Prev)`} 
-                    type="monotone" 
-                    dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Prev)' : 'Search Share Revenue (Prev)'} 
-                    stroke="#8b5cf6" 
-                    strokeWidth={2} 
-                    strokeDasharray="5 5" 
-                    opacity={0.3} 
-                    dot={false} 
-                  />
+                  <Line name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Prev)`} type="monotone" dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Prev)' : 'Search Share Revenue (Prev)'} stroke="#8b5cf6" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
                 )}
               </LineChart>
             </ResponsiveContainer>
@@ -2076,7 +1826,6 @@ const CountryShareAnalysis = ({ data, currencySymbol }: { data: any[], currencyS
           {renderDonut(sessionShare, 'Volume Contribution (Sessions)', 'Sessions')}
           {renderDonut(revenueShare, 'Value Contribution (Revenue)', 'Revenue', true)}
        </div>
-
        <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
           <div className="flex justify-between items-center mb-8">
             <div>
@@ -2093,23 +1842,18 @@ const CountryShareAnalysis = ({ data, currencySymbol }: { data: any[], currencyS
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                 <XAxis type="number" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val}`} />
                 <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 800, fill: '#1e293b'}} />
-                <Tooltip 
-                  cursor={{fill: 'transparent'}}
-                  content={({ active, payload }: any) => {
+                <Tooltip cursor={{fill: 'transparent'}} content={({ active, payload }: any) => {
                     if (active && payload && payload.length) {
                       const d = payload[0].payload;
                       return (
                         <div className="bg-slate-900 text-white p-3 rounded-xl border border-white/10 shadow-xl">
                           <p className="text-[9px] font-black uppercase tracking-widest mb-1">{d.name}</p>
-                          <p className="text-[11px] font-bold text-emerald-400">
-                            {currencySymbol}{d.efficiency.toFixed(2)} per session
-                          </p>
+                          <p className="text-[11px] font-bold text-emerald-400">{currencySymbol}{d.efficiency.toFixed(2)} per session</p>
                         </div>
                       );
                     }
                     return null;
-                  }}
-                />
+                }} />
                 <Bar dataKey="efficiency" radius={[0, 12, 12, 0]} barSize={24}>
                   {efficiencyRank.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.efficiency > (totalRevenue / totalSessions) ? '#10b981' : '#6366f1'} />
@@ -2137,44 +1881,22 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
   countryFilter: string;
 }) => {
   const [brandedMetric, setBrandedMetric] = useState<'clicks' | 'impressions'>('clicks');
-  
   const organicGa4 = useMemo(() => aggregate(data.filter((d: any) => d.channel?.toLowerCase().includes('organic'))), [data, aggregate]);
-  
   const gscStats = useMemo(() => {
     if (!gscTotals) return { current: { clicks: 0, impressions: 0, ctr: 0 }, changes: { clicks: 0, impressions: 0, ctr: 0 } };
-    
     const getRangeStats = (label: 'current' | 'previous') => {
       const visibleItems = keywordData.filter(k => k.dateRangeLabel === label);
-      
-      const brandedSum = visibleItems.filter(k => isBranded(k.keyword))
-        .reduce((acc, k) => ({ clicks: acc.clicks + k.clicks, impressions: acc.impressions + k.impressions }), { clicks: 0, impressions: 0 });
-
-      const nonBrandedSumVisible = visibleItems.filter(k => !isBranded(k.keyword))
-        .reduce((acc, k) => ({ clicks: acc.clicks + k.clicks, impressions: acc.impressions + k.impressions }), { clicks: 0, impressions: 0 });
-
-      const totalSumForCurrentScope = visibleItems.reduce((acc, k) => ({ 
-        clicks: acc.clicks + k.clicks, 
-        impressions: acc.impressions + k.impressions 
-      }), { clicks: 0, impressions: 0 });
-
-      if (queryTypeFilter === 'Branded') {
-        return brandedSum;
-      } else if (queryTypeFilter === 'Non-Branded') {
-        return nonBrandedSumVisible;
-      }
-
-      if (countryFilter !== 'All') {
-        return totalSumForCurrentScope;
-      }
-      
+      const brandedSum = visibleItems.filter(k => isBranded(k.keyword)).reduce((acc, k) => ({ clicks: acc.clicks + k.clicks, impressions: acc.impressions + k.impressions }), { clicks: 0, impressions: 0 });
+      const nonBrandedSumVisible = visibleItems.filter(k => !isBranded(k.keyword)).reduce((acc, k) => ({ clicks: acc.clicks + k.clicks, impressions: acc.impressions + k.impressions }), { clicks: 0, impressions: 0 });
+      const totalSumForCurrentScope = visibleItems.reduce((acc, k) => ({ clicks: acc.clicks + k.clicks, impressions: acc.impressions + k.impressions }), { clicks: 0, impressions: 0 });
+      if (queryTypeFilter === 'Branded') return brandedSum;
+      if (queryTypeFilter === 'Non-Branded') return nonBrandedSumVisible;
+      if (countryFilter !== 'All') return totalSumForCurrentScope;
       return label === 'current' ? gscTotals.current : gscTotals.previous;
     };
-
     const cur = getRangeStats('current');
     const prev = getRangeStats('previous');
-    
     const getChange = (c: number, p: number) => p === 0 ? 0 : ((c - p) / p) * 100;
-    
     return {
       current: { ...cur, ctr: cur.impressions > 0 ? (cur.clicks / cur.impressions) * 100 : 0 },
       changes: {
@@ -2187,19 +1909,15 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
 
   const brandedTrendData = useMemo(() => {
     if (!gscDailyTotals.length) return [];
-    
     const getBucket = (dateStr: string) => {
       if (grouping === 'weekly') return formatDate(getStartOfWeek(new Date(dateStr)));
       if (grouping === 'monthly') return `${dateStr.slice(0, 7)}-01`;
       return dateStr;
     };
-
     const curDaily = gscDailyTotals.filter(t => t.label === 'current' && (countryFilter === 'All' || t.country === countryFilter)).sort((a,b) => a.date.localeCompare(b.date));
     const prevDaily = gscDailyTotals.filter(t => t.label === 'previous' && (countryFilter === 'All' || t.country === countryFilter)).sort((a,b) => a.date.localeCompare(b.date));
-
     const curBuckets = Array.from(new Set(curDaily.map(t => getBucket(t.date)))).sort();
     const prevBuckets = Array.from(new Set(prevDaily.map(t => getBucket(t.date)))).sort();
-
     const aggregateByBucket = (items: any[], kwData: KeywordData[]) => {
       const map: Record<string, any> = {};
       items.forEach(t => {
@@ -2211,28 +1929,19 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
       kwData.forEach(k => {
         const b = getBucket(k.date || '');
         if (map[b]) {
-          if (isBranded(k.keyword)) {
-            map[b].brandedClicks += k.clicks;
-            map[b].brandedImpr += k.impressions;
-          } else {
-            map[b].genericClicks += k.clicks;
-            map[b].genericImpr += k.impressions;
-          }
+          if (isBranded(k.keyword)) { map[b].brandedClicks += k.clicks; map[b].brandedImpr += k.impressions; }
+          else { map[b].genericClicks += k.clicks; map[b].genericImpr += k.impressions; }
         }
       });
       return map;
     };
-
     const curMap = aggregateByBucket(curDaily, keywordData.filter(k => k.dateRangeLabel === 'current'));
     const prevMap = aggregateByBucket(prevDaily, keywordData.filter(k => k.dateRangeLabel === 'previous'));
-
     return curBuckets.map((bucket, index) => {
       const cur = curMap[bucket];
       const pBucket = prevBuckets[index];
       const prev = pBucket ? prevMap[pBucket] : null;
-
       const m = brandedMetric === 'clicks' ? 'Clicks' : 'Impr';
-
       return {
         date: bucket,
         [`Branded (Cur)`]: cur[`branded${m}`],
@@ -2283,18 +1992,14 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
           {brandedTrendData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={brandedTrendData}>
-                <defs>
-                  <linearGradient id="colorBrand" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/><stop offset="95%" stopColor="#6366f1" stopOpacity={0}/></linearGradient>
-                </defs>
+                <defs><linearGradient id="colorBrand" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/><stop offset="95%" stopColor="#6366f1" stopOpacity={0}/></linearGradient></defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
                 <Tooltip content={<ComparisonTooltip />} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
-                
                 <Area name="Branded (Cur)" type="monotone" dataKey="Branded (Cur)" stroke="#6366f1" fillOpacity={1} fill="url(#colorBrand)" strokeWidth={3} />
                 <Area name="Non-Branded (Cur)" type="monotone" dataKey="Non-Branded (Cur)" stroke="#94a3b8" fillOpacity={0} strokeWidth={3} />
-                
                 {comparisonEnabled && (
                   <>
                     <Line name="Branded (Prev)" type="monotone" dataKey="Branded (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
@@ -2309,9 +2014,7 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
 
       <div className="mt-8 space-y-4">
         <div className="flex items-center gap-3 px-2">
-          <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px] shadow-lg shadow-indigo-600/20">
-            <Globe size={14} />
-          </div>
+          <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px] shadow-lg shadow-indigo-600/20"><Globe size={14} /></div>
           <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Market Distribution & Efficiency Analysis</h4>
         </div>
         <CountryShareAnalysis data={countryPerformanceData} currencySymbol={currencySymbol} />
@@ -2319,10 +2022,7 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
 
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm mt-8">
         <div className="flex justify-between items-center mb-8">
-          <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Market Efficiency Analysis (Current Period)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Traffic vs Revenue | Size = Revenue Contribution</p>
-          </div>
+          <div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Market Efficiency Analysis (Current Period)</h4><p className="text-[11px] font-bold text-slate-600">Traffic vs Revenue | Size = Revenue Contribution</p></div>
         </div>
         <div className="h-[450px]">
           {countryPerformanceData.length > 0 ? (
