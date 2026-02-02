@@ -789,7 +789,7 @@ const App: React.FC = () => {
     }
   };
 
-  const fetchGa4Data = async () => {
+ const fetchGa4Data = async () => {
     if (!ga4Auth?.property || !ga4Auth.token) return;
     setIsLoadingGa4(true);
     try {
@@ -809,6 +809,7 @@ const App: React.FC = () => {
             { name: filters.ga4Dimension }, 
             { name: 'country' }, 
             { name: 'landingPage' }
+            // IMPORTANTE: NO incluimos 'dateRange' aquí para evitar el error
           ],
           metrics: [
             { name: 'sessions' }, 
@@ -823,21 +824,34 @@ const App: React.FC = () => {
       const ga4Data = await ga4ReportResp.json();
       if (ga4Data.error) throw new Error(ga4Data.error.message);
 
-      const dailyMapped: DailyData[] = (ga4Data.rows || []).map((row: any) => ({
-        date: `${row.dimensionValues[0].value.slice(0,4)}-${row.dimensionValues[0].value.slice(4,6)}-${row.dimensionValues[0].value.slice(6,8)}`,
-        channel: row.dimensionValues[1].value,
-        country: normalizeCountry(row.dimensionValues[2].value),
-        queryType: 'Non-Branded' as QueryType,
-        landingPage: row.dimensionValues[3].value,
-        dateRangeLabel: row.dimensionValues.length > 4 && row.dimensionValues[4].value === 'date_range_1' ? 'previous' : 'current',
-        sessions: parseInt(row.metricValues[0].value) || 0,
-        revenue: parseFloat(row.metricValues[1].value) || 0,
-        sales: parseInt(row.metricValues[2].value) || 0,
-        conversionRate: (parseFloat(row.metricValues[3].value) || 0) * 100,
-        addToCarts: parseInt(row.metricValues[4].value) || 0,
-        checkouts: parseInt(row.metricValues[5].value) || 0,
-        clicks: 0, impressions: 0, ctr: 0
-      }));
+      // 1. Buscamos en qué índice (columna) nos devolvió Google el dato 'dateRange'
+      // Normalmente lo añade al final, pero es más seguro buscarlo por nombre en los headers.
+      const dateRangeIndex = ga4Data.dimensionHeaders?.findIndex((h: any) => h.name === 'dateRange');
+
+      const dailyMapped: DailyData[] = (ga4Data.rows || []).map((row: any) => {
+        // 2. Extraemos el valor usando ese índice dinámico.
+        // Si dateRangeIndex es -1 (no existe), asumimos que es el rango actual ('date_range_0')
+        const rangeValue = dateRangeIndex !== -1 ? row.dimensionValues[dateRangeIndex].value : 'date_range_0';
+
+        return {
+          date: `${row.dimensionValues[0].value.slice(0,4)}-${row.dimensionValues[0].value.slice(4,6)}-${row.dimensionValues[0].value.slice(6,8)}`,
+          channel: row.dimensionValues[1].value,
+          country: normalizeCountry(row.dimensionValues[2].value),
+          queryType: 'Non-Branded' as QueryType,
+          landingPage: row.dimensionValues[3].value,
+          
+          // 3. Asignamos 'previous' solo si el valor es explícitamente 'date_range_1'
+          dateRangeLabel: rangeValue === 'date_range_1' ? 'previous' : 'current',
+          
+          sessions: parseInt(row.metricValues[0].value) || 0,
+          revenue: parseFloat(row.metricValues[1].value) || 0,
+          sales: parseInt(row.metricValues[2].value) || 0,
+          conversionRate: (parseFloat(row.metricValues[3].value) || 0) * 100,
+          addToCarts: parseInt(row.metricValues[4].value) || 0,
+          checkouts: parseInt(row.metricValues[5].value) || 0,
+          clicks: 0, impressions: 0, ctr: 0
+        };
+      });
       setRealDailyData(dailyMapped);
     } catch (err: any) {
       console.error(err);
