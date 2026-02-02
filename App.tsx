@@ -1988,7 +1988,8 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
           ) : <EmptyState text="No data available to chart" />}
         </div>
       </div>
-
+);
+};
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
           <div>
