@@ -1653,119 +1653,84 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
   const chartData = useMemo(() => {
     if (!data.length) return [];
     
-    // 1. Separar datos actuales y anteriores
-    const curRaw = data.filter(d => d.dateRangeLabel === 'current');
-    const prevRaw = data.filter(d => d.dateRangeLabel === 'previous');
+    const getBucket = (dateStr: string) => {
+      if (grouping === 'weekly') return formatDate(getStartOfWeek(new Date(dateStr)));
+      if (grouping === 'monthly') return `${dateStr.slice(0, 7)}-01`;
+      return dateStr;
+    };
+
+    const curRaw = data.filter(d => d.dateRangeLabel === 'current').sort((a, b) => a.date.localeCompare(b.date));
+    const prevRaw = data.filter(d => d.dateRangeLabel === 'previous').sort((a, b) => a.date.localeCompare(b.date));
 
     if (curRaw.length === 0) return [];
 
-    // 2. Función auxiliar para obtener la fecha mínima (timestamp) de un dataset
-    const getMinDate = (dataset: DailyData[]) => {
-        if (dataset.length === 0) return 0;
-        return dataset.reduce((min, p) => {
-            const t = new Date(p.date).getTime();
-            return t < min ? t : min;
-        }, new Date(dataset[0].date).getTime());
+    const curBuckets = Array.from(new Set(curRaw.map(d => getBucket(d.date)))).sort();
+    const prevBuckets = Array.from(new Set(prevRaw.map(d => getBucket(d.date)))).sort();
+
+    const aggregateByBucket = (items: DailyData[]) => {
+      const map: Record<string, any> = {};
+      items.forEach(d => {
+        const b = getBucket(d.date);
+        if (!map[b]) map[b] = { 
+          date: d.date,
+          org: 0, paid: 0, orgRev: 0, paidRev: 0, totalSess: 0, totalRev: 0 
+        };
+        
+        const isOrg = d.channel?.toLowerCase().includes('organic');
+        const isPaid = d.channel?.toLowerCase().includes('paid') || d.channel?.toLowerCase().includes('cpc');
+        
+        if (isOrg) { 
+          map[b].org += d.sessions; 
+          map[b].orgRev += d.revenue; 
+        }
+        if (isPaid) { 
+          map[b].paid += d.sessions; 
+          map[b].paidRev += d.revenue; 
+        }
+        
+        map[b].totalSess += d.sessions;
+        map[b].totalRev += d.revenue;
+      });
+      return map;
     };
 
-    const curStart = getMinDate(curRaw);
-    const prevStart = getMinDate(prevRaw);
+    const curMap = aggregateByBucket(curRaw);
+    const prevMap = aggregateByBucket(prevRaw);
 
-    // 3. Crear "buckets" basados en ÍNDICE RELATIVO (Día 0, Día 1, etc. desde el inicio del periodo)
-    const createRelativeBuckets = (rawData: DailyData[], startDate: number) => {
-       const buckets: Record<number, any> = {};
-       
-       rawData.forEach(d => {
-         const dateTs = new Date(d.date).getTime();
-         const diffTime = dateTs - startDate;
-         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-         
-         let index = diffDays;
-         // Ajustar índice según agrupación
-         if (grouping === 'weekly') index = Math.floor(diffDays / 7);
-         if (grouping === 'monthly') {
-             const dDate = new Date(d.date);
-             const sDate = new Date(startDate);
-             index = (dDate.getFullYear() - sDate.getFullYear()) * 12 + (dDate.getMonth() - sDate.getMonth());
-         }
+    return curBuckets.map((bucket, index) => {
+      const c = curMap[bucket];
+      const pBucket = prevBuckets[index];
+      const p = pBucket ? prevMap[pBucket] : null;
 
-         if (!buckets[index]) {
-            buckets[index] = { 
-                date: d.date, 
-                org: 0, paid: 0, orgRev: 0, paidRev: 0, totalSess: 0, totalRev: 0 
-            };
-         }
-         
-         const isOrg = d.channel?.toLowerCase().includes('organic');
-         const isPaid = d.channel?.toLowerCase().includes('paid') || d.channel?.toLowerCase().includes('cpc');
-         
-         if (isOrg) { 
-             buckets[index].org += d.sessions; 
-             buckets[index].orgRev += d.revenue; 
-         }
-         if (isPaid) { 
-             buckets[index].paid += d.sessions; 
-             buckets[index].paidRev += d.revenue; 
-         }
-         
-         buckets[index].totalSess += d.sessions;
-         buckets[index].totalRev += d.revenue;
-       });
-
-       return buckets;
-    };
-
-    const curBuckets = createRelativeBuckets(curRaw, curStart);
-    const prevBuckets = createRelativeBuckets(prevRaw, prevStart);
-    
-    // 4. Determinar la longitud máxima de índices para iterar
-    const maxIndexCur = Math.max(...Object.keys(curBuckets).map(Number), 0);
-    const maxIndexPrev = prevRaw.length ? Math.max(...Object.keys(prevBuckets).map(Number), 0) : 0;
-    const maxLen = Math.max(maxIndexCur, maxIndexPrev) + 1;
-
-    const finalChartData = [];
-
-    for (let i = 0; i < maxLen; i++) {
-      const c = curBuckets[i] || {};
-      const p = prevBuckets[i] || {};
-
-      // Etiqueta para el eje X
-      let xLabel = `Period ${i + 1}`;
-      
-      // Preferimos la fecha actual para la etiqueta, si no hay, intentamos la anterior
-      const refDate = c.date ? new Date(c.date) : (p.date ? new Date(p.date) : null);
-      
+      let xLabel = bucket;
+      const refDate = c.date ? new Date(c.date) : null;
       if (refDate) {
-         xLabel = grouping === 'monthly' 
-           ? refDate.toLocaleDateString('en-US', { month: 'short' })
-           : refDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        xLabel = grouping === 'monthly' 
+          ? refDate.toLocaleDateString('en-US', { month: 'short' })
+          : refDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       }
 
-      finalChartData.push({
-        date: xLabel, 
-        
-        // Fechas reales para el tooltip
+      return {
+        date: xLabel,
         fullDateCurrent: c.date || 'N/A',
-        fullDatePrevious: p.date || 'N/A', 
+        fullDatePrevious: p?.date || 'N/A',
 
         'Organic (Cur)': c.org || 0,
         'Paid (Cur)': c.paid || 0,
         'Organic Rev (Cur)': c.orgRev || 0,
         'Paid Rev (Cur)': c.paidRev || 0,
 
-        'Organic (Prev)': p.org || 0,
-        'Paid (Prev)': p.paid || 0,
-        'Organic Rev (Prev)': p.orgRev || 0,
-        'Paid Rev (Prev)': p.paidRev || 0,
+        'Organic (Prev)': p?.org || 0,
+        'Paid (Prev)': p?.paid || 0,
+        'Organic Rev (Prev)': p?.orgRev || 0,
+        'Paid Rev (Prev)': p?.paidRev || 0,
 
         'Search Share Sessions (Cur)': c.totalSess > 0 ? ((c.org + c.paid) / c.totalSess) * 100 : 0,
         'Search Share Revenue (Cur)': c.totalRev > 0 ? ((c.orgRev + c.paidRev) / c.totalRev) * 100 : 0,
-        'Search Share Sessions (Prev)': p.totalSess > 0 ? ((p.org + p.paid) / p.totalSess) * 100 : 0,
-        'Search Share Revenue (Prev)': p.totalRev > 0 ? ((p.orgRev + p.paidRev) / p.totalRev) * 100 : 0,
-      });
-    }
-
-    return finalChartData;
+        'Search Share Sessions (Prev)': p && p.totalSess > 0 ? ((p.org + p.paid) / p.totalSess) * 100 : 0,
+        'Search Share Revenue (Prev)': p && p.totalRev > 0 ? ((p.orgRev + p.paidRev) / p.totalRev) * 100 : 0,
+      };
+    });
   }, [data, grouping]);
 
   const organicFunnelData = useMemo(() => [
@@ -1802,7 +1767,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
         <div className="flex justify-between items-center mb-8">
           <div>
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Sessions Performance (Time Overlay)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Línea sólida = Actual | Línea discontinua = Anterior</p>
+            <p className="text-[11px] font-bold text-slate-600">Períodos superpuestos por posición relativa en el tiempo</p>
           </div>
           <div className="flex items-center gap-4">
             <button 
@@ -1845,7 +1810,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
         <div className="flex justify-between items-center mb-8">
           <div>
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Revenue Evolution (Time Overlay)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Moneda: {currencySymbol}</p>
+            <p className="text-[11px] font-bold text-slate-600">Períodos superpuestos por posición relativa en el tiempo | Moneda: {currencySymbol}</p>
           </div>
           <button 
             onClick={() => exportToCSV(chartData, "Revenue_Evolution_Overlay")} 
@@ -1915,7 +1880,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Global Search Share Trend (Time Overlay)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Porcentaje de peso de búsqueda sobre el total de canales por período</p>
+            <p className="text-[11px] font-bold text-slate-600">Períodos superpuestos por posición relativa en el tiempo</p>
           </div>
           <div className="flex items-center gap-4">
              <button 
