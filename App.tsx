@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key, PieChart as PieIcon, Check, ChevronUp, Link as LinkIcon, History, Trophy
@@ -112,6 +111,29 @@ const getStartOfWeek = (date: Date) => {
   return new Date(d.setDate(diff));
 };
 
+const exportToCSV = (data: any[], filename: string) => {
+  if (!data || !data.length) return;
+  
+  // Extraer cabeceras de las llaves del primer objeto
+  const headers = Object.keys(data[0]).join(",");
+  const rows = data.map(obj => 
+    Object.values(obj)
+      .map(val => typeof val === 'string' ? `"${val}"` : val) // Escapar strings con comas
+      .join(",")
+  );
+
+  const csvContent = [headers, ...rows].join("\n");
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  
+  link.setAttribute("href", url);
+  link.setAttribute("download", `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
 const KpiCard: React.FC<{ 
   title: string; 
   value: string | number; 
@@ -126,7 +148,7 @@ const KpiCard: React.FC<{
     <div className="flex justify-between items-start mb-2 lg:mb-4">
       {/* Icono adaptable: más pequeño en laptops, normal en desktop */}
       <div className={`p-2 lg:p-3 bg-${color}-50 text-${color}-600 rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0`}>
-        {React.cloneElement(icon as React.ReactElement, { className: "w-4 h-4 lg:w-5 lg:h-5" })}
+        {React.cloneElement(icon as React.ReactElement<any>, { className: "w-4 h-4 lg:w-5 lg:h-5" })}
       </div>
 
       {comparison !== undefined && !isNaN(comparison) && (
@@ -352,7 +374,7 @@ const SidebarLink: React.FC<{ active: boolean; onClick: () => void; icon: React.
     }`}
   >
     <div className={`p-1.5 rounded-lg transition-colors ${active ? 'bg-white/20' : 'bg-transparent group-hover:bg-white/10'}`}>
-      {React.cloneElement(icon as React.ReactElement, { size: 18 })}
+      {React.cloneElement(icon as React.ReactElement<any>, { size: 18 })}
     </div>
     <span className="text-[11px] font-black uppercase tracking-widest">{label}</span>
   </button>
@@ -565,28 +587,7 @@ return (
     </div>
   );
 };
-const exportToCSV = (data: any[], filename: string) => {
-  if (!data || !data.length) return;
-  
-  // Extraer cabeceras de las llaves del primer objeto
-  const headers = Object.keys(data[0]).join(",");
-  const rows = data.map(obj => 
-    Object.values(obj)
-      .map(val => typeof val === 'string' ? `"${val}"` : val) // Escapar strings con comas
-      .join(",")
-  );
 
-  const csvContent = [headers, ...rows].join("\n");
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  
-  link.setAttribute("href", url);
-  link.setAttribute("download", `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
 
 const App: React.FC = () => {
   const [user, setUser] = useState<{ name: string; email: string; picture: string } | null>(() => {
@@ -1358,7 +1359,15 @@ const EcommerceFunnel = ({ title, data, color }: any) => {
   const max = data[0].value || 1;
   return (
     <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
-      <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-8">{title}</h4>
+      <div className="flex justify-between items-center mb-8">
+        <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{title}</h4>
+        <button 
+          onClick={() => exportToCSV(data, `${title.replace(/ /g, "_")}_Funnel`)} 
+          className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+        >
+          <FileText size={12} /> Export CSV
+        </button>
+      </div>
       <div className="space-y-6">
         {data.map((stage: any, i: number) => {
           const width = (stage.value / max) * 100;
@@ -1405,7 +1414,15 @@ const ShareOfSearchAnalysis = ({ stats, currencySymbol }: { stats: any, currency
 
   const renderDonut = (data: any[], title: string, metric: string, isCurrency = false) => (
     <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm flex flex-col items-center h-full">
-      <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-6 self-start">{title}</h4>
+      <div className="w-full flex justify-between items-center mb-6">
+        <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest self-start">{title}</h4>
+        <button 
+          onClick={() => exportToCSV(data, `${title.replace(/ /g, "_")}`)} 
+          className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+        >
+          <FileText size={12} /> Export CSV
+        </button>
+      </div>
       <div className="w-full h-[220px] relative">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -1748,8 +1765,16 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Sessions Performance (Time Overlay)</h4>
             <p className="text-[11px] font-bold text-slate-600">Línea sólida = Actual | Línea discontinua = Anterior</p>
           </div>
-          <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
-            {['daily', 'weekly', 'monthly'].map(g => <button key={g} onClick={() => setGrouping(g as any)} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === g ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>{g === 'daily' ? 'Day' : g === 'weekly' ? 'Week' : 'Month'}</button>)}
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => exportToCSV(chartData, "Sessions_Performance_Overlay")} 
+              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+            >
+              <FileText size={12} /> Export CSV
+            </button>
+            <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+              {['daily', 'weekly', 'monthly'].map(g => <button key={g} onClick={() => setGrouping(g as any)} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === g ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>{g === 'daily' ? 'Day' : g === 'weekly' ? 'Week' : 'Month'}</button>)}
+            </div>
           </div>
         </div>
         <div className="h-[300px]">
@@ -1783,6 +1808,12 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Revenue Evolution (Time Overlay)</h4>
             <p className="text-[11px] font-bold text-slate-600">Moneda: {currencySymbol}</p>
           </div>
+          <button 
+            onClick={() => exportToCSV(chartData, "Revenue_Evolution_Overlay")} 
+            className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+          >
+            <FileText size={12} /> Export CSV
+          </button>
         </div>
         <div className="h-[300px]">
           {chartData.length > 0 ? (
@@ -1847,9 +1878,17 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Global Search Share Trend (Time Overlay)</h4>
             <p className="text-[11px] font-bold text-slate-600">Porcentaje de peso de búsqueda sobre el total de canales por período</p>
           </div>
-          <div className="flex bg-slate-100 p-1 rounded-xl">
-             <button onClick={() => setWeightMetric('sessions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'sessions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Sessions %</button>
-             <button onClick={() => setWeightMetric('revenue')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'revenue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Revenue %</button>
+          <div className="flex items-center gap-4">
+             <button 
+                onClick={() => exportToCSV(chartData, "Global_Share_Trend")} 
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+              >
+                <FileText size={12} /> Export CSV
+              </button>
+            <div className="flex bg-slate-100 p-1 rounded-xl">
+               <button onClick={() => setWeightMetric('sessions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'sessions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Sessions %</button>
+               <button onClick={() => setWeightMetric('revenue')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'revenue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Revenue %</button>
+            </div>
           </div>
         </div>
         <div className="h-[350px]">
@@ -1902,7 +1941,15 @@ const CountryShareAnalysis = ({ data, currencySymbol }: { data: any[], currencyS
 
   const renderDonut = (shareData: any[], title: string, metric: string, isCurrency = false) => (
     <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm h-full flex flex-col">
-      <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-6">{title}</h4>
+      <div className="flex justify-between items-center mb-6">
+        <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{title}</h4>
+        <button 
+          onClick={() => exportToCSV(shareData, `${title.replace(/ /g, "_")}`)} 
+          className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+        >
+          <FileText size={12} /> Export CSV
+        </button>
+      </div>
       <div className="flex-1 h-[250px] relative">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -1970,8 +2017,16 @@ const CountryShareAnalysis = ({ data, currencySymbol }: { data: any[], currencyS
               <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Country Efficiency Leaderboard</h4>
               <p className="text-[11px] font-bold text-slate-600">Ingreso promedio generado por cada sesión orgánica por país</p>
             </div>
-            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
-              <Trophy size={16} />
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={() => exportToCSV(efficiencyRank, "Country_Efficiency_Leaderboard")} 
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+              >
+                <FileText size={12} /> Export CSV
+              </button>
+              <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                <Trophy size={16} />
+              </div>
             </div>
           </div>
           <div className="h-[300px]">
@@ -2120,9 +2175,17 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Brand vs Generic Search (Time Overlay)</h4>
             <p className="text-[11px] font-bold text-slate-600">Períodos superpuestos por posición relativa en el tiempo</p>
           </div>
-          <div className="flex bg-slate-100 p-1 rounded-xl">
-             <button onClick={() => setBrandedMetric('clicks')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'clicks' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Clicks</button>
-             <button onClick={() => setBrandedMetric('impressions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'impressions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Impr.</button>
+          <div className="flex items-center gap-4">
+             <button 
+                onClick={() => exportToCSV(brandedTrendData, "Brand_vs_Generic_Trend")} 
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+              >
+                <FileText size={12} /> Export CSV
+              </button>
+            <div className="flex bg-slate-100 p-1 rounded-xl">
+               <button onClick={() => setBrandedMetric('clicks')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'clicks' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Clicks</button>
+               <button onClick={() => setBrandedMetric('impressions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'impressions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Impr.</button>
+            </div>
           </div>
         </div>
         <div className="h-[400px]">
@@ -2160,6 +2223,12 @@ const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggr
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm mt-8">
         <div className="flex justify-between items-center mb-8">
           <div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Market Efficiency Analysis (Current Period)</h4><p className="text-[11px] font-bold text-slate-600">Traffic vs Revenue | Size = Revenue Contribution</p></div>
+          <button 
+            onClick={() => exportToCSV(countryPerformanceData, "Market_Efficiency_Analysis")} 
+            className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+          >
+            <FileText size={12} /> Export CSV
+          </button>
         </div>
         <div className="h-[450px]">
           {countryPerformanceData.length > 0 ? (
