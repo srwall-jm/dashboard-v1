@@ -789,24 +789,24 @@ const App: React.FC = () => {
     }
   };
 
- const fetchGa4Data = async () => {
+const fetchGa4Data = async () => {
+    // 1. Verificaciones de seguridad
     if (!ga4Auth?.property || !ga4Auth.token) return;
+    
     setIsLoadingGa4(true);
+    
     try {
+      // 2. Preparar los rangos de fechas para la API
+      // Rango 0: El seleccionado en el calendario (Current)
       const dateRanges = [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }];
       
-      // Obtenemos las fechas de comparación para usarlas manualmente después
-      let compStartStr = "";
-      let compEndStr = "";
-      
+      // Rango 1: La comparación (Previous), solo si está activo
       if (filters.comparison.enabled) {
         const comp = getComparisonDates();
         dateRanges.push({ startDate: comp.start, endDate: comp.end });
-        // Guardamos las fechas en formato YYYYMMDD para comparar fácil
-        compStartStr = comp.start.replace(/-/g, '');
-        compEndStr = comp.end.replace(/-/g, '');
       }
 
+      // 3. Petición a la API (SIN la dimensión 'dateRange' que daba error)
       const ga4ReportResp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
@@ -817,7 +817,6 @@ const App: React.FC = () => {
             { name: filters.ga4Dimension }, 
             { name: 'country' }, 
             { name: 'landingPage' }
-            // NO pedimos dateRange aquí para evitar el error
           ],
           metrics: [
             { name: 'sessions' }, 
@@ -829,27 +828,43 @@ const App: React.FC = () => {
           ]
         })
       });
+      
       const ga4Data = await ga4ReportResp.json();
       if (ga4Data.error) throw new Error(ga4Data.error.message);
 
+      // 4. PREPARACIÓN PARA EL FILTRADO MANUAL (La clave de la solución)
+      // Convertimos las fechas del filtro principal a formato numérico YYYYMMDD para comparar fácil
+      const currentStart = parseInt(filters.dateRange.start.replace(/-/g, ''), 10);
+      const currentEnd = parseInt(filters.dateRange.end.replace(/-/g, ''), 10);
+
       const dailyMapped: DailyData[] = (ga4Data.rows || []).map((row: any) => {
-        const rowDate = row.dimensionValues[0].value; // Viene como "20240130"
+        // La fecha viene de GA4 como string "20240131"
+        const rowDateStr = row.dimensionValues[0].value;
+        const rowDateNum = parseInt(rowDateStr, 10);
         
-        // LÓGICA MANUAL: Si la comparación está activa y la fecha cae en ese rango, es 'previous'
-        let rangeLabel = 'current';
-        if (filters.comparison.enabled && rowDate >= compStartStr && rowDate <= compEndStr) {
-           rangeLabel = 'previous';
+        // 5. LÓGICA DE ETIQUETADO MANUAL E INFALIBLE:
+        let label: 'current' | 'previous' = 'current';
+
+        if (filters.comparison.enabled) {
+          // Si la fecha de esta fila cae DENTRO del rango que seleccionaste en el calendario:
+          if (rowDateNum >= currentStart && rowDateNum <= currentEnd) {
+            label = 'current';
+          } else {
+            // Si cae FUERA (y la comparación está activa), por descarte es el periodo anterior
+            label = 'previous';
+          }
         }
 
         return {
-          date: `${rowDate.slice(0,4)}-${rowDate.slice(4,6)}-${rowDate.slice(6,8)}`,
+          // Formato visual para gráficos (YYYY-MM-DD)
+          date: `${rowDateStr.slice(0,4)}-${rowDateStr.slice(4,6)}-${rowDateStr.slice(6,8)}`,
           channel: row.dimensionValues[1].value,
           country: normalizeCountry(row.dimensionValues[2].value),
           queryType: 'Non-Branded' as QueryType,
           landingPage: row.dimensionValues[3].value,
           
-          // Usamos nuestra etiqueta calculada manualmente
-          dateRangeLabel: rangeLabel,
+          // Aquí aplicamos la etiqueta calculada arriba
+          dateRangeLabel: label,
           
           sessions: parseInt(row.metricValues[0].value) || 0,
           revenue: parseFloat(row.metricValues[1].value) || 0,
@@ -860,9 +875,11 @@ const App: React.FC = () => {
           clicks: 0, impressions: 0, ctr: 0
         };
       });
+
       setRealDailyData(dailyMapped);
+      
     } catch (err: any) {
-      console.error(err);
+      console.error("Error fetching GA4:", err);
       setError(`GA4 Error: ${err.message}`);
     } finally {
       setIsLoadingGa4(false);
