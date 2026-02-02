@@ -554,36 +554,36 @@ return (
                   </tr>
                   {expandedUrls.has(page.url) && (
                     <tr>
-                      <td colSpan={5} className="bg-slate-50/50 p-0 overflow-hidden">
-                        <div className="animate-in slide-in-from-top-2 duration-200">
-                          <table className="w-full ml-10 border-l-2 border-indigo-100 my-4">
+                      <td colSpan={5} className="bg-slate-50/50 p-0">
+                        <div className="animate-in slide-in-from-top-2 duration-200 pl-12 pr-8 py-6">
+                          <table className="w-full border-l-2 border-indigo-200/50">
                             <thead>
-                              <tr className="border-b border-indigo-50/50">
-                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-6">Top Queries (Limit 20)</th>
-                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4">Type</th>
-                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Clicks</th>
-                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Impr.</th>
-                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">CTR</th>
+                              <tr className="border-b border-indigo-100">
+                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-left">Top Queries (Limit 20)</th>
+                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 w-24">Type</th>
+                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right w-24">Clicks</th>
+                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right w-24">Impr.</th>
+                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right w-24">CTR</th>
                               </tr>
                             </thead>
                             <tbody>
                               {page.topQueries.map((q, idx) => (
-                                <tr key={idx} className="hover:bg-indigo-50/30 border-b border-indigo-50/10">
-                                  <td className="py-3 px-6">
-                                    <span className="text-[10px] font-bold text-slate-700">{q.keyword}</span>
+                                <tr key={idx} className="hover:bg-indigo-50/50 border-b border-indigo-50/30 last:border-0 transition-colors">
+                                  <td className="py-2.5 px-4">
+                                    <span className="text-[11px] font-bold text-slate-700">{q.keyword}</span>
                                   </td>
-                                  <td className="py-3 px-4">
-                                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tight ${q.queryType === 'Branded' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>
+                                  <td className="py-2.5 px-4">
+                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tight ${q.queryType === 'Branded' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>
                                       {q.queryType}
                                     </span>
                                   </td>
-                                  <td className="py-3 px-4 text-right">
-                                    <span className="text-[10px] font-black text-slate-900">{q.clicks.toLocaleString()}</span>
+                                  <td className="py-2.5 px-4 text-right">
+                                    <span className="text-[11px] font-black text-slate-900">{q.clicks.toLocaleString()}</span>
                                   </td>
-                                  <td className="py-3 px-4 text-right font-bold text-slate-500 text-[10px]">
+                                  <td className="py-2.5 px-4 text-right font-bold text-slate-500 text-[10px]">
                                     {q.impressions.toLocaleString()}
                                   </td>
-                                  <td className="py-3 px-4 text-right font-black text-slate-900 text-[10px]">
+                                  <td className="py-2.5 px-4 text-right font-black text-slate-900 text-[10px]">
                                     {q.ctr.toFixed(2)}%
                                   </td>
                                 </tr>
