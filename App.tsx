@@ -532,6 +532,28 @@ const SeoDeepDiveView: React.FC<{
     </div>
   );
 };
+const exportToCSV = (data: any[], filename: string) => {
+  if (!data || !data.length) return;
+  
+  // Extraer cabeceras de las llaves del primer objeto
+  const headers = Object.keys(data[0]).join(",");
+  const rows = data.map(obj => 
+    Object.values(obj)
+      .map(val => typeof val === 'string' ? `"${val}"` : val) // Escapar strings con comas
+      .join(",")
+  );
+
+  const csvContent = [headers, ...rows].join("\n");
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  
+  link.setAttribute("href", url);
+  link.setAttribute("download", `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
 
 const App: React.FC = () => {
   const [user, setUser] = useState<{ name: string; email: string; picture: string } | null>(() => {
