@@ -413,26 +413,50 @@ const SeoDeepDiveView: React.FC<{
       k.landingPage.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const map: Record<string, { url: string; clicks: number; impressions: number; queries: KeywordData[] }> = {};
+    // Cambiado: Ahora 'queries' es un mapa interno para agregar duplicados antes de convertir a array
+    const map: Record<string, { 
+      url: string; 
+      clicks: number; 
+      impressions: number; 
+      queryMap: Record<string, KeywordData>; 
+    }> = {};
 
     filtered.forEach(k => {
       const url = k.landingPage || 'Unknown';
       if (!map[url]) {
-        map[url] = { url, clicks: 0, impressions: 0, queries: [] };
+        map[url] = { url, clicks: 0, impressions: 0, queryMap: {} };
       }
       
       if (k.dateRangeLabel === 'current') {
+        // Totales de la URL
         map[url].clicks += k.clicks;
         map[url].impressions += k.impressions;
-        map[url].queries.push(k);
+
+        // Agregación de Queries duplicadas dentro de la URL
+        if (!map[url].queryMap[k.keyword]) {
+            // Inicializar con 0 para sumar limpiamente
+            map[url].queryMap[k.keyword] = {
+                ...k,
+                clicks: 0,
+                impressions: 0
+            };
+        }
+        
+        const q = map[url].queryMap[k.keyword];
+        q.clicks += k.clicks;
+        q.impressions += k.impressions;
+        q.ctr = q.impressions > 0 ? (q.clicks / q.impressions) * 100 : 0;
       }
     });
 
     return Object.values(map)
       .map(page => ({
-        ...page,
+        url: page.url,
+        clicks: page.clicks,
+        impressions: page.impressions,
         ctr: page.impressions > 0 ? (page.clicks / page.impressions) * 100 : 0,
-        topQueries: page.queries.sort((a, b) => b.clicks - a.clicks).slice(0, 20)
+        // Convertir el mapa de queries agregado a array y ordenar
+        topQueries: Object.values(page.queryMap).sort((a, b) => b.clicks - a.clicks).slice(0, 20)
       }))
       .sort((a, b) => b.clicks - a.clicks);
   }, [keywords, searchTerm]);
@@ -445,7 +469,7 @@ return (
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
           <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">URL & Keyword Precision Analysis</h4>
-          <p className="text-[11px] font-bold text-slate-600">Jerarquía por URL y sus Top 20 Queries correspondientes</p>
+          <p className="text-[11px] font-bold text-slate-600">Jerarquía por URL y sus Top 20 Queries correspondientes (Aggregated)</p>
         </div>
         
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
