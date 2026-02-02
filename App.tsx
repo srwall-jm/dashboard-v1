@@ -566,23 +566,17 @@ return (
   );
 };
 const exportToCSV = (data: any[], filename: string) => {
-  if (!data || !data.length) return;
-  
-  // Extraer cabeceras de las llaves del primer objeto
+  if (data.length === 0) return;
   const headers = Object.keys(data[0]).join(",");
-  const rows = data.map(obj => 
-    Object.values(obj)
-      .map(val => typeof val === 'string' ? `"${val}"` : val) // Escapar strings con comas
-      .join(",")
+  const rows = data.map(row => 
+    Object.values(row).map(value => `"${value}"`).join(",")
   );
-
   const csvContent = [headers, ...rows].join("\n");
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  
+  const url = URL.createObjectURL(blob);
   link.setAttribute("href", url);
-  link.setAttribute("download", `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
+  link.setAttribute("download", `${filename}.csv`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -1611,7 +1605,6 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
   const chartData = useMemo(() => {
     if (!data.length) return [];
     
-    // 1. Filter and sort data chronologically for each period
     const curRaw = data
       .filter(d => d.dateRangeLabel === 'current')
       .sort((a,b) => a.date.localeCompare(b.date));
@@ -1620,20 +1613,17 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
       .filter(d => d.dateRangeLabel === 'previous')
       .sort((a,b) => a.date.localeCompare(b.date));
 
-    // 2. Helper function to group data into buckets (Day, Week, Month)
-    // This aggregates multiple entries for the same date/bucket (e.g. splitting by channel)
     const createBuckets = (rawData: DailyData[]) => {
        const byDate: Record<string, any> = {};
        
        rawData.forEach(d => {
-         // Determine bucket key based on grouping preference
          let key = d.date;
          if (grouping === 'weekly') key = formatDate(getStartOfWeek(new Date(d.date)));
          if (grouping === 'monthly') key = `${d.date.slice(0, 7)}-01`;
 
          if (!byDate[key]) {
             byDate[key] = { 
-                date: key, // This is the bucket identifier (e.g., specific day, start of week, start of month)
+                date: key,
                 org: 0, paid: 0, orgRev: 0, paidRev: 0, totalSess: 0, totalRev: 0 
             };
          }
@@ -1654,9 +1644,230 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
          byDate[key].totalRev += d.revenue;
        });
 
-       // Return array sorted by date ensures Day 1 is always first
        return Object.values(byDate).sort((a:any, b:any) => a.date.localeCompare(b.date));
     };
+
+    const curBuckets = createBuckets(curRaw);
+    const prevBuckets = createBuckets(prevRaw);
+    
+    const maxLen = Math.max(curBuckets.length, prevBuckets.length);
+    const finalChartData = [];
+
+    for (let i = 0; i < maxLen; i++) {
+      const c = curBuckets[i] || {};
+      const p = prevBuckets[i] || {};
+
+      let xLabel = `Period ${i + 1}`;
+      const refDate = c.date || p.date;
+      if (refDate) {
+          const dateObj = new Date(refDate);
+          xLabel = grouping === 'monthly' 
+            ? dateObj.toLocaleDateString('en-US', { month: 'short' })
+            : dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      }
+
+      finalChartData.push({
+        date: xLabel,
+        fullDateCurrent: c.date || 'N/A',
+        fullDatePrevious: p.date || 'N/A',
+        'Organic (Cur)': c.org || 0,
+        'Paid (Cur)': c.paid || 0,
+        'Organic Rev (Cur)': c.orgRev || 0,
+        'Paid Rev (Cur)': c.paidRev || 0,
+        'Organic (Prev)': p.org || 0,
+        'Paid (Prev)': p.paid || 0,
+        'Organic Rev (Prev)': p.orgRev || 0,
+        'Paid Rev (Prev)': p.paidRev || 0,
+        'Search Share Sessions (Cur)': c.totalSess > 0 ? ((c.org + c.paid) / c.totalSess) * 100 : 0,
+        'Search Share Revenue (Cur)': c.totalRev > 0 ? ((c.orgRev + c.paidRev) / c.totalRev) * 100 : 0,
+        'Search Share Sessions (Prev)': p.totalSess > 0 ? ((p.org + p.paid) / p.totalSess) * 100 : 0,
+        'Search Share Revenue (Prev)': p.totalRev > 0 ? ((p.orgRev + p.paidRev) / p.totalRev) * 100 : 0,
+      });
+    }
+
+    return finalChartData;
+  }, [data, grouping]);
+
+  const organicFunnelData = useMemo(() => [
+    { stage: 'Sessions', value: stats.organic.current.sessions },
+    { stage: 'Add to Basket', value: stats.organic.current.addToCarts },
+    { stage: 'Checkout', value: stats.organic.current.checkouts },
+    { stage: 'Sale', value: stats.organic.current.sales },
+  ], [stats.organic.current]);
+
+  const paidFunnelData = useMemo(() => [
+    { stage: 'Sessions', value: stats.paid.current.sessions },
+    { stage: 'Add to Basket', value: stats.paid.current.addToCarts },
+    { stage: 'Checkout', value: stats.paid.current.checkouts },
+    { stage: 'Sale', value: stats.paid.current.sales },
+  ], [stats.paid.current]);
+
+  // Funciones de Exportación Individuales
+  const exportSessionsTrend = () => {
+    const toExport = chartData.map(d => ({
+      Label: d.date,
+      Date_Current: d.fullDateCurrent,
+      Organic_Sessions_Cur: d['Organic (Cur)'],
+      Paid_Sessions_Cur: d['Paid (Cur)'],
+      Date_Previous: d.fullDatePrevious,
+      Organic_Sessions_Prev: d['Organic (Prev)'],
+      Paid_Sessions_Prev: d['Paid (Prev)']
+    }));
+    exportToCSV(toExport, "Sessions_Trend_Analysis");
+  };
+
+  const exportRevenueTrend = () => {
+    const toExport = chartData.map(d => ({
+      Label: d.date,
+      Date_Current: d.fullDateCurrent,
+      Organic_Rev_Cur: d['Organic Rev (Cur)'],
+      Paid_Rev_Cur: d['Paid Rev (Cur)'],
+      Date_Previous: d.fullDatePrevious,
+      Organic_Rev_Prev: d['Organic Rev (Prev)'],
+      Paid_Rev_Prev: d['Paid Rev (Prev)']
+    }));
+    exportToCSV(toExport, "Revenue_Trend_Analysis");
+  };
+
+  const exportShareTrend = () => {
+    const toExport = chartData.map(d => ({
+      Label: d.date,
+      Share_Sessions_Cur: d['Search Share Sessions (Cur)'].toFixed(2) + "%",
+      Share_Revenue_Cur: d['Search Share Revenue (Cur)'].toFixed(2) + "%",
+      Share_Sessions_Prev: d['Search Share Sessions (Prev)'].toFixed(2) + "%",
+      Share_Revenue_Prev: d['Search Share Revenue (Prev)'].toFixed(2) + "%"
+    }));
+    exportToCSV(toExport, "Search_Market_Share_Trend");
+  };
+
+  return (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
+      {/* ... Bloque de KPI Cards (Organic/Paid Performance) ... */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        {[ {type: 'ORG', color: 'indigo', label: 'Organic', s: stats.organic}, {type: 'PAID', color: 'amber', label: 'Paid', s: stats.paid} ].map(ch => (
+          <div key={ch.type} className="space-y-4">
+            <div className="flex items-center gap-3 px-2"><div className={`w-7 h-7 bg-${ch.color}-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px]`}>{ch.type}</div><h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{ch.label} Performance</h4></div>
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 gap-3">
+              <KpiCard title="Sessions" value={ch.s.current.sessions} comparison={comparisonEnabled ? ch.s.changes.sessions : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sessions : undefined} icon={<TrendingUp />} color={ch.color} />
+              <KpiCard title="Conv. Rate" value={`${ch.s.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? ch.s.changes.cr : undefined} icon={<Percent />} isPercent color={ch.color} />
+              <KpiCard title="Revenue" value={`${currencySymbol}${ch.s.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? ch.s.changes.revenue : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<Tag />} prefix={currencySymbol} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
+              <KpiCard title="Sales" value={ch.s.current.sales} comparison={comparisonEnabled ? ch.s.changes.sales : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<ShoppingBag />} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Gráfico 1: Sessions */}
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Sessions Performance (Time Overlay)</h4>
+            <p className="text-[11px] font-bold text-slate-600">Línea sólida = Actual | Línea discontinua = Anterior</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={exportSessionsTrend} className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase hover:bg-slate-800 transition-all shadow-md">
+              <FileText size={12} /> Export CSV
+            </button>
+            <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+              {['daily', 'weekly', 'monthly'].map(g => <button key={g} onClick={() => setGrouping(g as any)} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === g ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>{g === 'daily' ? 'Day' : g === 'weekly' ? 'Week' : 'Month'}</button>)}
+            </div>
+          </div>
+        </div>
+        <div className="h-[300px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
+              <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
+              <Tooltip content={<ComparisonTooltip />} />
+              <Legend verticalAlign="top" align="center" iconType="circle" />
+              <Line name="Organic (Cur)" type="monotone" dataKey="Organic (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+              <Line name="Paid (Cur)" type="monotone" dataKey="Paid (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+              {comparisonEnabled && (
+                <>
+                  <Line name="Organic (Prev)" type="monotone" dataKey="Organic (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
+                  <Line name="Paid (Prev)" type="monotone" dataKey="Paid (Prev)" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
+                </>
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Gráfico 2: Revenue */}
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Revenue Evolution (Time Overlay)</h4>
+            <p className="text-[11px] font-bold text-slate-600">Moneda: {currencySymbol}</p>
+          </div>
+          <button onClick={exportRevenueTrend} className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase hover:bg-slate-800 transition-all shadow-md">
+            <FileText size={12} /> Export CSV
+          </button>
+        </div>
+        <div className="h-[300px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
+              <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} />
+              <Tooltip content={<ComparisonTooltip currency currencySymbol={currencySymbol} />} />
+              <Legend verticalAlign="top" align="center" iconType="circle" />
+              <Line name="Organic Rev (Cur)" type="monotone" dataKey="Organic Rev (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} />
+              <Line name="Paid Rev (Cur)" type="monotone" dataKey="Paid Rev (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} />
+              {comparisonEnabled && (
+                <>
+                  <Line name="Organic Rev (Prev)" type="monotone" dataKey="Organic Rev (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
+                  <Line name="Paid Rev (Prev)" type="monotone" dataKey="Paid Rev (Prev)" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
+                </>
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Tablas de Países (Ya optimizadas en pasos anteriores) */}
+      <div className="grid grid-cols-1 gap-8 w-full">
+        <CountryPerformanceTable title="Organic performance by country" data={data} type="Organic" currencySymbol={currencySymbol} comparisonEnabled={comparisonEnabled} />
+        <CountryPerformanceTable title="Paid performance by country" data={data} type="Paid" currencySymbol={currencySymbol} comparisonEnabled={comparisonEnabled} />
+      </div>
+
+      {/* Gráfico 3: Global Search Share */}
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm mt-8 overflow-hidden">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+          <div>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Global Search Share Trend</h4>
+            <p className="text-[11px] font-bold text-slate-600">Peso de búsqueda sobre el total de canales</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={exportShareTrend} className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase hover:bg-slate-800 transition-all shadow-md">
+              <FileText size={12} /> Export CSV
+            </button>
+            <div className="flex bg-slate-100 p-1 rounded-xl">
+               <button onClick={() => setWeightMetric('sessions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'sessions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Sessions %</button>
+               <button onClick={() => setWeightMetric('revenue')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'revenue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Revenue %</button>
+            </div>
+          </div>
+        </div>
+        <div className="h-[350px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
+              <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${val.toFixed(1)}%`} />
+              <Tooltip content={<ComparisonTooltip percent />} />
+              <Legend verticalAlign="top" align="center" iconType="circle" />
+              <Line name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Cur)`} type="monotone" dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Cur)' : 'Search Share Revenue (Cur)'} stroke="#8b5cf6" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+              {comparisonEnabled && (
+                <Line name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Prev)`} type="monotone" dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Prev)' : 'Search Share Revenue (Prev)'} stroke="#8b5cf6" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+};
 
     const curBuckets = createBuckets(curRaw);
     const prevBuckets = createBuckets(prevRaw);
