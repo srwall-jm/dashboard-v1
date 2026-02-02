@@ -1683,26 +1683,12 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
         'Search Share Sessions (Prev)': p.totalSess > 0 ? ((p.org + p.paid) / p.totalSess) * 100 : 0,
         'Search Share Revenue (Prev)': p.totalRev > 0 ? ((p.orgRev + p.paidRev) / p.totalRev) * 100 : 0,
       });
-
+    }
 
     return finalChartData;
-  }, [data, grouping]);
+  }, [data, grouping]); // <-- AQUÍ FALTABA CERRAR LA LLAVE DEL USEMEMO
 
-  const organicFunnelData = useMemo(() => [
-    { stage: 'Sessions', value: stats.organic.current.sessions },
-    { stage: 'Add to Basket', value: stats.organic.current.addToCarts },
-    { stage: 'Checkout', value: stats.organic.current.checkouts },
-    { stage: 'Sale', value: stats.organic.current.sales },
-  ], [stats.organic.current]);
-
-  const paidFunnelData = useMemo(() => [
-    { stage: 'Sessions', value: stats.paid.current.sessions },
-    { stage: 'Add to Basket', value: stats.paid.current.addToCarts },
-    { stage: 'Checkout', value: stats.paid.current.checkouts },
-    { stage: 'Sale', value: stats.paid.current.sales },
-  ], [stats.paid.current]);
-
-  // Funciones de Exportación Individuales
+  // Funciones de Exportación (Usan el exportToCSV global)
   const exportSessionsTrend = () => {
     const toExport = chartData.map(d => ({
       Label: d.date,
@@ -1740,14 +1726,32 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
     exportToCSV(toExport, "Search_Market_Share_Trend");
   };
 
+  // Funnel Data (Calculado para las tablas de funnel)
+  const organicFunnelData = useMemo(() => [
+    { stage: 'Sessions', value: stats.organic.current.sessions },
+    { stage: 'Add to Basket', value: stats.organic.current.addToCarts },
+    { stage: 'Checkout', value: stats.organic.current.checkouts },
+    { stage: 'Sale', value: stats.organic.current.sales },
+  ], [stats.organic.current]);
+
+  const paidFunnelData = useMemo(() => [
+    { stage: 'Sessions', value: stats.paid.current.sessions },
+    { stage: 'Add to Basket', value: stats.paid.current.addToCarts },
+    { stage: 'Checkout', value: stats.paid.current.checkouts },
+    { stage: 'Sale', value: stats.paid.current.sales },
+  ], [stats.paid.current]);
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
-      {/* ... Bloque de KPI Cards (Organic/Paid Performance) ... */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
         {[ {type: 'ORG', color: 'indigo', label: 'Organic', s: stats.organic}, {type: 'PAID', color: 'amber', label: 'Paid', s: stats.paid} ].map(ch => (
           <div key={ch.type} className="space-y-4">
-            <div className="flex items-center gap-3 px-2"><div className={`w-7 h-7 bg-${ch.color}-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px]`}>{ch.type}</div><h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{ch.label} Performance</h4></div>
-            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 gap-3">
+            <div className="flex items-center gap-3 px-2">
+              <div className={`w-7 h-7 bg-${ch.color}-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px]`}>{ch.type}</div>
+              <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{ch.label} Performance</h4>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <KpiCard title="Sessions" value={ch.s.current.sessions} comparison={comparisonEnabled ? ch.s.changes.sessions : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sessions : undefined} icon={<TrendingUp />} color={ch.color} />
               <KpiCard title="Conv. Rate" value={`${ch.s.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? ch.s.changes.cr : undefined} icon={<Percent />} isPercent color={ch.color} />
               <KpiCard title="Revenue" value={`${currencySymbol}${ch.s.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? ch.s.changes.revenue : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<Tag />} prefix={currencySymbol} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
@@ -1757,19 +1761,22 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
         ))}
       </div>
 
-      {/* Gráfico 1: Sessions */}
+      {/* Gráfico Sessions */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
           <div>
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Sessions Performance (Time Overlay)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Línea sólida = Actual | Línea discontinua = Anterior</p>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={exportSessionsTrend} className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase hover:bg-slate-800 transition-all shadow-md">
+            <button onClick={exportSessionsTrend} className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase shadow-md">
               <FileText size={12} /> Export CSV
             </button>
             <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
-              {['daily', 'weekly', 'monthly'].map(g => <button key={g} onClick={() => setGrouping(g as any)} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === g ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>{g === 'daily' ? 'Day' : g === 'weekly' ? 'Week' : 'Month'}</button>)}
+              {['daily', 'weekly', 'monthly'].map(g => (
+                <button key={g} onClick={() => setGrouping(g as any)} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === g ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>
+                  {g === 'daily' ? 'Day' : g === 'weekly' ? 'Week' : 'Month'}
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -1794,14 +1801,11 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
         </div>
       </div>
 
-      {/* Gráfico 2: Revenue */}
+      {/* Gráfico Revenue */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
-          <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Revenue Evolution (Time Overlay)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Moneda: {currencySymbol}</p>
-          </div>
-          <button onClick={exportRevenueTrend} className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase hover:bg-slate-800 transition-all shadow-md">
+          <div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Revenue Evolution</h4></div>
+          <button onClick={exportRevenueTrend} className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase shadow-md">
             <FileText size={12} /> Export CSV
           </button>
         </div>
@@ -1826,28 +1830,25 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
         </div>
       </div>
 
-      {/* Tablas de Países (Ya optimizadas en pasos anteriores) */}
+      {/* Tablas de Países */}
       <div className="grid grid-cols-1 gap-8 w-full">
         <CountryPerformanceTable title="Organic performance by country" data={data} type="Organic" currencySymbol={currencySymbol} comparisonEnabled={comparisonEnabled} />
         <CountryPerformanceTable title="Paid performance by country" data={data} type="Paid" currencySymbol={currencySymbol} comparisonEnabled={comparisonEnabled} />
       </div>
 
-      {/* Gráfico 3: Global Search Share */}
+      {/* Funnels */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <EcommerceFunnel title="Organic Search Funnel" data={organicFunnelData} color="indigo" />
+        <EcommerceFunnel title="Paid Search Funnel" data={paidFunnelData} color="amber" />
+      </div>
+
+      {/* Share of Search */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm mt-8 overflow-hidden">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-          <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Global Search Share Trend</h4>
-            <p className="text-[11px] font-bold text-slate-600">Peso de búsqueda sobre el total de canales</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button onClick={exportShareTrend} className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase hover:bg-slate-800 transition-all shadow-md">
-              <FileText size={12} /> Export CSV
-            </button>
-            <div className="flex bg-slate-100 p-1 rounded-xl">
-               <button onClick={() => setWeightMetric('sessions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'sessions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Sessions %</button>
-               <button onClick={() => setWeightMetric('revenue')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'revenue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Revenue %</button>
-            </div>
-          </div>
+        <div className="flex justify-between items-center mb-8">
+          <div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Global Search Share Trend</h4></div>
+          <button onClick={exportShareTrend} className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase shadow-md">
+            <FileText size={12} /> Export CSV
+          </button>
         </div>
         <div className="h-[350px]">
           <ResponsiveContainer width="100%" height="100%">
