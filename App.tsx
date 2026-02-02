@@ -122,29 +122,37 @@ const KpiCard: React.FC<{
   isPercent?: boolean;
   prefix?: string;
 }> = ({ title, value, comparison, absoluteChange, icon, color = "indigo", isPercent = false, prefix = "" }) => (
-  <div className="bg-white p-5 md:p-6 rounded-[24px] border border-slate-200 shadow-sm hover:shadow-md transition-all group">
-    <div className="flex justify-between items-start mb-4">
-      <div className={`p-3 bg-${color}-50 text-${color}-600 rounded-2xl group-hover:scale-110 transition-transform`}>
-        {icon}
+  <div className="bg-white p-4 lg:p-6 rounded-[24px] border border-slate-200 shadow-sm hover:shadow-md transition-all group h-full flex flex-col justify-between">
+    <div className="flex justify-between items-start mb-2 lg:mb-4">
+      {/* Icono adaptable: más pequeño en laptops, normal en desktop */}
+      <div className={`p-2 lg:p-3 bg-${color}-50 text-${color}-600 rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0`}>
+        {React.cloneElement(icon as React.ReactElement, { className: "w-4 h-4 lg:w-5 lg:h-5" })}
       </div>
+
       {comparison !== undefined && !isNaN(comparison) && (
-        <div className="text-right">
-          <div className={`flex items-center text-[11px] font-bold px-2 py-1 rounded-full ${comparison >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-            {comparison >= 0 ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
+        <div className="text-right ml-2">
+          <div className={`flex items-center text-[10px] lg:text-[11px] font-bold px-2 py-0.5 lg:py-1 rounded-full whitespace-nowrap ${comparison >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+            {comparison >= 0 ? <ArrowUpRight className="w-2.5 h-2.5 lg:w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-2.5 h-2.5 lg:w-3 h-3 mr-0.5" />}
             {Math.abs(comparison).toFixed(1)}%
           </div>
           {absoluteChange !== undefined && (
-            <div className={`text-[9px] font-bold mt-1 ${absoluteChange >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+            <div className={`text-[8px] lg:text-[9px] font-black mt-0.5 lg:mt-1 ${absoluteChange >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
               {absoluteChange >= 0 ? '+' : ''}{prefix}{absoluteChange.toLocaleString()}
             </div>
           )}
         </div>
       )}
     </div>
-    <p className="text-slate-400 text-[9px] md:text-[10px] font-black uppercase tracking-[0.15em] mb-1">{title}</p>
-    <h3 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight truncate">
-      {typeof value === 'number' && !isPercent ? value.toLocaleString() : value}
-    </h3>
+
+    <div>
+      <p className="text-slate-400 text-[8px] lg:text-[9px] font-black uppercase tracking-[0.15em] mb-0.5 lg:mb-1 leading-tight">
+        {title}
+      </p>
+      {/* Texto de valor dinámico: se ajusta al tamaño de pantalla */}
+      <h3 className="text-lg md:text-xl lg:text-2xl font-black text-slate-900 tracking-tight truncate leading-none">
+        {typeof value === 'number' && !isPercent ? value.toLocaleString() : value}
+      </h3>
+    </div>
   </div>
 );
 
@@ -1241,15 +1249,18 @@ const App: React.FC = () => {
 <main className={`flex-1 transition-all duration-300 ease-in-out p-5 md:p-8 xl:p-12 overflow-x-hidden ${isSidebarOpen ? 'xl:ml-80' : 'ml-0'}`}>
   <header className="flex flex-col gap-6 mb-10">
     <div className="flex items-center gap-4">
-      {/* Botón de Hamburguesa para re-abrir la barra lateral cuando está cerrada */}
+      
+      {/* BOTÓN PARA RE-ABRIR EL SIDEBAR (Solo visible si está cerrado) */}
       {!isSidebarOpen && (
         <button 
           onClick={() => setIsSidebarOpen(true)}
-          className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm text-slate-600"
+          className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-indigo-300 transition-all shadow-sm text-slate-600 hover:text-indigo-600 group"
+          title="Abrir menú (Atajo: B)"
         >
-          <Menu size={20} />
+          <Menu size={20} className="group-hover:scale-110 transition-transform" />
         </button>
       )}
+
       <div>
         <div className="flex items-center gap-2 mb-2">
           <span className={`w-2 h-2 rounded-full ${isAnythingLoading ? 'bg-amber-500 animate-ping' : 'bg-emerald-500'}`} />
