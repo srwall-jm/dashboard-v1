@@ -794,9 +794,17 @@ const App: React.FC = () => {
     setIsLoadingGa4(true);
     try {
       const dateRanges = [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }];
+      
+      // Obtenemos las fechas de comparación para usarlas manualmente después
+      let compStartStr = "";
+      let compEndStr = "";
+      
       if (filters.comparison.enabled) {
         const comp = getComparisonDates();
         dateRanges.push({ startDate: comp.start, endDate: comp.end });
+        // Guardamos las fechas en formato YYYYMMDD para comparar fácil
+        compStartStr = comp.start.replace(/-/g, '');
+        compEndStr = comp.end.replace(/-/g, '');
       }
 
       const ga4ReportResp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
@@ -809,7 +817,7 @@ const App: React.FC = () => {
             { name: filters.ga4Dimension }, 
             { name: 'country' }, 
             { name: 'landingPage' }
-            // IMPORTANTE: NO incluimos 'dateRange' aquí para evitar el error
+            // NO pedimos dateRange aquí para evitar el error
           ],
           metrics: [
             { name: 'sessions' }, 
@@ -824,24 +832,24 @@ const App: React.FC = () => {
       const ga4Data = await ga4ReportResp.json();
       if (ga4Data.error) throw new Error(ga4Data.error.message);
 
-      // 1. Buscamos en qué índice (columna) nos devolvió Google el dato 'dateRange'
-      // Normalmente lo añade al final, pero es más seguro buscarlo por nombre en los headers.
-      const dateRangeIndex = ga4Data.dimensionHeaders?.findIndex((h: any) => h.name === 'dateRange');
-
       const dailyMapped: DailyData[] = (ga4Data.rows || []).map((row: any) => {
-        // 2. Extraemos el valor usando ese índice dinámico.
-        // Si dateRangeIndex es -1 (no existe), asumimos que es el rango actual ('date_range_0')
-        const rangeValue = dateRangeIndex !== -1 ? row.dimensionValues[dateRangeIndex].value : 'date_range_0';
+        const rowDate = row.dimensionValues[0].value; // Viene como "20240130"
+        
+        // LÓGICA MANUAL: Si la comparación está activa y la fecha cae en ese rango, es 'previous'
+        let rangeLabel = 'current';
+        if (filters.comparison.enabled && rowDate >= compStartStr && rowDate <= compEndStr) {
+           rangeLabel = 'previous';
+        }
 
         return {
-          date: `${row.dimensionValues[0].value.slice(0,4)}-${row.dimensionValues[0].value.slice(4,6)}-${row.dimensionValues[0].value.slice(6,8)}`,
+          date: `${rowDate.slice(0,4)}-${rowDate.slice(4,6)}-${rowDate.slice(6,8)}`,
           channel: row.dimensionValues[1].value,
           country: normalizeCountry(row.dimensionValues[2].value),
           queryType: 'Non-Branded' as QueryType,
           landingPage: row.dimensionValues[3].value,
           
-          // 3. Asignamos 'previous' solo si el valor es explícitamente 'date_range_1'
-          dateRangeLabel: rangeValue === 'date_range_1' ? 'previous' : 'current',
+          // Usamos nuestra etiqueta calculada manualmente
+          dateRangeLabel: rangeLabel,
           
           sessions: parseInt(row.metricValues[0].value) || 0,
           revenue: parseFloat(row.metricValues[1].value) || 0,
