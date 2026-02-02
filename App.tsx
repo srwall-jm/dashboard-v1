@@ -1683,7 +1683,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
         'Search Share Sessions (Prev)': p.totalSess > 0 ? ((p.org + p.paid) / p.totalSess) * 100 : 0,
         'Search Share Revenue (Prev)': p.totalRev > 0 ? ((p.orgRev + p.paidRev) / p.totalRev) * 100 : 0,
       });
-    }
+
 
     return finalChartData;
   }, [data, grouping]);
