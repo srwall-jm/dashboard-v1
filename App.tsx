@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key, PieChart as PieIcon, Check, ChevronUp, Link as LinkIcon, History, Trophy
@@ -1628,29 +1629,45 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
   const chartData = useMemo(() => {
     if (!data.length) return [];
     
-    // 1. Filter and sort data chronologically for each period
-    const curRaw = data
-      .filter(d => d.dateRangeLabel === 'current')
-      .sort((a,b) => a.date.localeCompare(b.date));
-      
-    const prevRaw = data
-      .filter(d => d.dateRangeLabel === 'previous')
-      .sort((a,b) => a.date.localeCompare(b.date));
+    // 1. Separar datos actuales y anteriores
+    const curRaw = data.filter(d => d.dateRangeLabel === 'current');
+    const prevRaw = data.filter(d => d.dateRangeLabel === 'previous');
 
-    // 2. Helper function to group data into buckets (Day, Week, Month)
-    // This aggregates multiple entries for the same date/bucket (e.g. splitting by channel)
-    const createBuckets = (rawData: DailyData[]) => {
-       const byDate: Record<string, any> = {};
+    if (curRaw.length === 0) return [];
+
+    // 2. Función auxiliar para obtener la fecha mínima (timestamp) de un dataset
+    const getMinDate = (dataset: DailyData[]) => {
+        if (dataset.length === 0) return 0;
+        return dataset.reduce((min, p) => {
+            const t = new Date(p.date).getTime();
+            return t < min ? t : min;
+        }, new Date(dataset[0].date).getTime());
+    };
+
+    const curStart = getMinDate(curRaw);
+    const prevStart = getMinDate(prevRaw);
+
+    // 3. Crear "buckets" basados en ÍNDICE RELATIVO (Día 0, Día 1, etc. desde el inicio del periodo)
+    const createRelativeBuckets = (rawData: DailyData[], startDate: number) => {
+       const buckets: Record<number, any> = {};
        
        rawData.forEach(d => {
-         // Determine bucket key based on grouping preference
-         let key = d.date;
-         if (grouping === 'weekly') key = formatDate(getStartOfWeek(new Date(d.date)));
-         if (grouping === 'monthly') key = `${d.date.slice(0, 7)}-01`;
+         const dateTs = new Date(d.date).getTime();
+         const diffTime = dateTs - startDate;
+         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+         
+         let index = diffDays;
+         // Ajustar índice según agrupación
+         if (grouping === 'weekly') index = Math.floor(diffDays / 7);
+         if (grouping === 'monthly') {
+             const dDate = new Date(d.date);
+             const sDate = new Date(startDate);
+             index = (dDate.getFullYear() - sDate.getFullYear()) * 12 + (dDate.getMonth() - sDate.getMonth());
+         }
 
-         if (!byDate[key]) {
-            byDate[key] = { 
-                date: key, // This is the bucket identifier (e.g., specific day, start of week, start of month)
+         if (!buckets[index]) {
+            buckets[index] = { 
+                date: d.date, 
                 org: 0, paid: 0, orgRev: 0, paidRev: 0, totalSess: 0, totalRev: 0 
             };
          }
@@ -1659,66 +1676,64 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
          const isPaid = d.channel?.toLowerCase().includes('paid') || d.channel?.toLowerCase().includes('cpc');
          
          if (isOrg) { 
-             byDate[key].org += d.sessions; 
-             byDate[key].orgRev += d.revenue; 
+             buckets[index].org += d.sessions; 
+             buckets[index].orgRev += d.revenue; 
          }
          if (isPaid) { 
-             byDate[key].paid += d.sessions; 
-             byDate[key].paidRev += d.revenue; 
+             buckets[index].paid += d.sessions; 
+             buckets[index].paidRev += d.revenue; 
          }
          
-         byDate[key].totalSess += d.sessions;
-         byDate[key].totalRev += d.revenue;
+         buckets[index].totalSess += d.sessions;
+         buckets[index].totalRev += d.revenue;
        });
 
-       // Return array sorted by date ensures Day 1 is always first
-       return Object.values(byDate).sort((a:any, b:any) => a.date.localeCompare(b.date));
+       return buckets;
     };
 
-    const curBuckets = createBuckets(curRaw);
-    const prevBuckets = createBuckets(prevRaw);
+    const curBuckets = createRelativeBuckets(curRaw, curStart);
+    const prevBuckets = createRelativeBuckets(prevRaw, prevStart);
     
-    // 3. Merge buckets by INDEX to create the overlay effect
-    // We iterate up to the max length of days/weeks/months available
-    const maxLen = Math.max(curBuckets.length, prevBuckets.length);
+    // 4. Determinar la longitud máxima de índices para iterar
+    const maxIndexCur = Math.max(...Object.keys(curBuckets).map(Number), 0);
+    const maxIndexPrev = prevRaw.length ? Math.max(...Object.keys(prevBuckets).map(Number), 0) : 0;
+    const maxLen = Math.max(maxIndexCur, maxIndexPrev) + 1;
+
     const finalChartData = [];
 
     for (let i = 0; i < maxLen; i++) {
       const c = curBuckets[i] || {};
       const p = prevBuckets[i] || {};
 
-      // Create a display label for the X-Axis
-      // We use the current period's date if available, otherwise a generic label
+      // Etiqueta para el eje X
       let xLabel = `Period ${i + 1}`;
       
-      const refDate = c.date || p.date;
+      // Preferimos la fecha actual para la etiqueta, si no hay, intentamos la anterior
+      const refDate = c.date ? new Date(c.date) : (p.date ? new Date(p.date) : null);
+      
       if (refDate) {
-         const dateObj = new Date(refDate);
          xLabel = grouping === 'monthly' 
-           ? dateObj.toLocaleDateString('en-US', { month: 'short' })
-           : dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+           ? refDate.toLocaleDateString('en-US', { month: 'short' })
+           : refDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       }
 
       finalChartData.push({
-        date: xLabel, // Visual label for X-Axis
+        date: xLabel, 
         
-        // Metadata for tooltips (real dates)
+        // Fechas reales para el tooltip
         fullDateCurrent: c.date || 'N/A',
-        fullDatePrevious: p.date || 'N/A',
+        fullDatePrevious: p.date || 'N/A', 
 
-        // Metrics for Current Period
         'Organic (Cur)': c.org || 0,
         'Paid (Cur)': c.paid || 0,
         'Organic Rev (Cur)': c.orgRev || 0,
         'Paid Rev (Cur)': c.paidRev || 0,
 
-        // Metrics for Previous Period
         'Organic (Prev)': p.org || 0,
         'Paid (Prev)': p.paid || 0,
         'Organic Rev (Prev)': p.orgRev || 0,
         'Paid Rev (Prev)': p.paidRev || 0,
 
-        // Calculated Shares
         'Search Share Sessions (Cur)': c.totalSess > 0 ? ((c.org + c.paid) / c.totalSess) * 100 : 0,
         'Search Share Revenue (Cur)': c.totalRev > 0 ? ((c.orgRev + c.paidRev) / c.totalRev) * 100 : 0,
         'Search Share Sessions (Prev)': p.totalSess > 0 ? ((p.org + p.paid) / p.totalSess) * 100 : 0,
