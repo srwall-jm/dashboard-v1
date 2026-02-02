@@ -808,9 +808,7 @@ const App: React.FC = () => {
             { name: 'date' }, 
             { name: filters.ga4Dimension }, 
             { name: 'country' }, 
-            { name: 'landingPage' },
-            // CORRECCIÓN: Solicitamos explícitamente la dimensión dateRange
-            { name: 'dateRange' } 
+            { name: 'landingPage' }
           ],
           metrics: [
             { name: 'sessions' }, 
@@ -831,8 +829,7 @@ const App: React.FC = () => {
         country: normalizeCountry(row.dimensionValues[2].value),
         queryType: 'Non-Branded' as QueryType,
         landingPage: row.dimensionValues[3].value,
-        // CORRECCIÓN: Ahora el índice 4 sí existe y contiene "date_range_0" (actual) o "date_range_1" (anterior)
-        dateRangeLabel: row.dimensionValues[4]?.value === 'date_range_1' ? 'previous' : 'current',
+        dateRangeLabel: row.dimensionValues.length > 4 && row.dimensionValues[4].value === 'date_range_1' ? 'previous' : 'current',
         sessions: parseInt(row.metricValues[0].value) || 0,
         revenue: parseFloat(row.metricValues[1].value) || 0,
         sales: parseInt(row.metricValues[2].value) || 0,
