@@ -1476,7 +1476,6 @@ const CountryPerformanceTable = ({ title, data, type, currencySymbol, comparison
   currencySymbol: string;
   comparisonEnabled: boolean;
 }) => {
-  // Procesamos la data completa
   const countryStats = useMemo(() => {
     const channelData = data.filter(d => 
       type === 'Organic' ? d.channel.toLowerCase().includes('organic') : 
@@ -1500,28 +1499,53 @@ const CountryPerformanceTable = ({ title, data, type, currencySymbol, comparison
       target.revenue += d.revenue;
     });
 
+    const getChange = (curr: number, prev: number) => prev === 0 ? 0 : ((curr - prev) / prev) * 100;
+
     return Object.values(map).map(item => ({
       country: item.country,
+      // Valores actuales
       sessions: item.current.sessions,
       cr: item.current.sessions > 0 ? (item.current.sales / item.current.sessions) * 100 : 0,
       revenue: item.current.revenue,
       sales: item.current.sales,
-      growth: item.previous.sessions > 0 ? ((item.current.sessions - item.previous.sessions) / item.previous.sessions) * 100 : 0
+      // Cambios porcentuales para la comparación
+      changes: {
+        sessions: getChange(item.current.sessions, item.previous.sessions),
+        cr: getChange(
+          item.current.sessions > 0 ? item.current.sales / item.current.sessions : 0,
+          item.previous.sessions > 0 ? item.previous.sales / item.previous.sessions : 0
+        ),
+        revenue: getChange(item.current.revenue, item.previous.revenue),
+        sales: getChange(item.current.sales, item.previous.sales)
+      }
     })).sort((a, b) => b.sessions - a.sessions);
   }, [data, type]);
 
   const handleDownload = () => {
-    // Exportamos countryStats completo (sin el slice de 10)
     const exportData = countryStats.map(c => ({
       Country: c.country,
       Sessions: c.sessions,
       Conversion_Rate: c.cr.toFixed(2) + "%",
       Revenue: c.revenue.toFixed(2),
-      Sales: c.sales,
-      Growth_Sessions: c.growth.toFixed(2) + "%"
+      Sales: c.sales
     }));
     exportToCSV(exportData, `Full_Data_${type}_Performance`);
   };
+
+  // Función auxiliar para renderizar el valor con su comparación
+  const RenderValueWithComparison = ({ value, change, isCurrency = false, isPercent = false }: any) => (
+    <div className="flex flex-col items-end">
+      <span className="font-bold text-slate-900 text-[11px]">
+        {isCurrency ? `${currencySymbol}${value.toLocaleString()}` : isPercent ? `${value.toFixed(2)}%` : value.toLocaleString()}
+      </span>
+      {comparisonEnabled && (
+        <div className={`flex items-center text-[9px] font-black ${change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+          {change >= 0 ? <ArrowUpRight className="w-2.5 h-2.5 mr-0.5" /> : <ArrowDownRight className="w-2.5 h-2.5 mr-0.5" />}
+          {Math.abs(change).toFixed(1)}%
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full w-full">
@@ -1532,12 +1556,8 @@ const CountryPerformanceTable = ({ title, data, type, currencySymbol, comparison
           </div>
           <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-widest">{title}</h4>
         </div>
-        
-        <button 
-          onClick={handleDownload}
-          className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
-        >
-          <FileText size={12} /> Export CSV (All Data)
+        <button onClick={handleDownload} className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md">
+          <FileText size={12} /> Export CSV
         </button>
       </div>
 
@@ -1550,25 +1570,24 @@ const CountryPerformanceTable = ({ title, data, type, currencySymbol, comparison
               <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Conv. Rate</th>
               <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Revenue</th>
               <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Sales</th>
-              {comparisonEnabled && <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Growth (Sess)</th>}
             </tr>
           </thead>
           <tbody>
             {countryStats.slice(0, 10).map((item, idx) => (
               <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                 <td className="py-4 px-4 font-black text-slate-800 text-[11px]">{item.country}</td>
-                <td className="py-4 px-4 text-right font-bold text-slate-900 text-[11px]">{item.sessions.toLocaleString()}</td>
-                <td className="py-4 px-4 text-right font-bold text-indigo-600 text-[11px]">{item.cr.toFixed(2)}%</td>
-                <td className="py-4 px-4 text-right font-bold text-emerald-600 text-[11px]">{currencySymbol}{item.revenue.toLocaleString()}</td>
-                <td className="py-4 px-4 text-right font-bold text-slate-900 text-[11px]">{item.sales.toLocaleString()}</td>
-                {comparisonEnabled && (
-                  <td className="py-4 px-4 text-right">
-                    <div className={`flex items-center justify-end text-[10px] font-bold ${item.growth >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                      {item.growth >= 0 ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
-                      {Math.abs(item.growth).toFixed(1)}%
-                    </div>
-                  </td>
-                )}
+                <td className="py-4 px-4 text-right">
+                  <RenderValueWithComparison value={item.sessions} change={item.changes.sessions} />
+                </td>
+                <td className="py-4 px-4 text-right">
+                  <RenderValueWithComparison value={item.cr} change={item.changes.cr} isPercent />
+                </td>
+                <td className="py-4 px-4 text-right">
+                  <RenderValueWithComparison value={item.revenue} change={item.changes.revenue} isCurrency />
+                </td>
+                <td className="py-4 px-4 text-right">
+                  <RenderValueWithComparison value={item.sales} change={item.changes.sales} />
+                </td>
               </tr>
             ))}
           </tbody>
