@@ -1920,8 +1920,7 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
         'Search Share Revenue (Prev)': p.totalRev > 0 ? ((p.orgRev + p.paidRev) / p.totalRev) * 100 : 0,
       });
     }
-
-    return finalChartData;
+return finalChartData;
   }, [data, grouping]);
 
   const organicFunnelData = useMemo(() => [
@@ -1938,12 +1937,30 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
     { stage: 'Sale', value: stats.paid.current.sales },
   ], [stats.paid.current]);
 
+  // Funciones de exportación
+  const exportSessionsTrend = () => {
+    const toExport = chartData.map(d => ({
+      Label: d.date,
+      Date_Current: d.fullDateCurrent,
+      Organic_Sessions_Cur: d['Organic (Cur)'],
+      Paid_Sessions_Cur: d['Paid (Cur)'],
+      Date_Previous: d.fullDatePrevious,
+      Organic_Sessions_Prev: d['Organic (Prev)'],
+      Paid_Sessions_Prev: d['Paid (Prev)']
+    }));
+    exportToCSV(toExport, "Sessions_Trend_Analysis");
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
+      {/* KPI Cards Section */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
         {[ {type: 'ORG', color: 'indigo', label: 'Organic', s: stats.organic}, {type: 'PAID', color: 'amber', label: 'Paid', s: stats.paid} ].map(ch => (
           <div key={ch.type} className="space-y-4">
-            <div className="flex items-center gap-3 px-2"><div className={`w-7 h-7 bg-${ch.color}-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px]`}>{ch.type}</div><h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{ch.label} Performance</h4></div>
+            <div className="flex items-center gap-3 px-2">
+              <div className={`w-7 h-7 bg-${ch.color}-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px]`}>{ch.type}</div>
+              <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{ch.label} Performance</h4>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <KpiCard title="Sessions" value={ch.s.current.sessions} comparison={comparisonEnabled ? ch.s.changes.sessions : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sessions : undefined} icon={<TrendingUp />} color={ch.color} />
               <KpiCard title="Conv. Rate" value={`${ch.s.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? ch.s.changes.cr : undefined} icon={<Percent />} isPercent color={ch.color} />
@@ -1954,14 +1971,24 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
         ))}
       </div>
 
+      {/* Sessions Performance Graph */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
           <div>
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Sessions Performance (Time Overlay)</h4>
             <p className="text-[11px] font-bold text-slate-600">Línea sólida = Actual | Línea discontinua = Anterior</p>
           </div>
-          <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
-            {['daily', 'weekly', 'monthly'].map(g => <button key={g} onClick={() => setGrouping(g as any)} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === g ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>{g === 'daily' ? 'Day' : g === 'weekly' ? 'Week' : 'Month'}</button>)}
+          <div className="flex items-center gap-3">
+            <button onClick={exportSessionsTrend} className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase shadow-md">
+              <FileText size={12} /> Export CSV
+            </button>
+            <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+              {['daily', 'weekly', 'monthly'].map(g => (
+                <button key={g} onClick={() => setGrouping(g as any)} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === g ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>
+                  {g === 'daily' ? 'Day' : g === 'weekly' ? 'Week' : 'Month'}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
         <div className="h-[300px]">
@@ -1973,10 +2000,8 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
                 <Tooltip content={<ComparisonTooltip />} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
-                
                 <Line name="Organic (Cur)" type="monotone" dataKey="Organic (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
                 <Line name="Paid (Cur)" type="monotone" dataKey="Paid (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
-                
                 {comparisonEnabled && (
                   <>
                     <Line name="Organic (Prev)" type="monotone" dataKey="Organic (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
@@ -1988,8 +2013,9 @@ const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGroupi
           ) : <EmptyState text="No data available to chart" />}
         </div>
       </div>
-);
-};
+    </div>
+  );
+}; // <--- ESTE ES EL CIERRE DEL COMPONENTE OrganicVsPaidView
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
           <div>
