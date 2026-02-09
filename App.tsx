@@ -1,14 +1,15 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key, PieChart as PieIcon, Check, ChevronUp, Link as LinkIcon, History, Trophy
+  BarChart3, Search, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, Sparkles, Globe, Tag, MousePointer2, Eye, Percent, ShoppingBag, LogOut, RefreshCw, CheckCircle2, Layers, Activity, Filter, ArrowRight, Target, FileText, AlertCircle, Settings2, Info, Menu, X, ChevronDown, ChevronRight, ExternalLink, HardDrive, Clock, Map, Zap, AlertTriangle, Cpu, Key, PieChart as PieIcon, Check, ChevronUp, Link as LinkIcon, History, Trophy, Shield, Rocket, DollarSign
 } from 'lucide-react';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Legend, LineChart, Line, ScatterChart, Scatter, ZAxis, Cell, PieChart, Pie
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Legend, LineChart, Line, ScatterChart, Scatter, ZAxis, Cell, PieChart, Pie, ReferenceLine
 } from 'recharts';
 import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, QueryType, ChannelType } from './types';
 import { getDashboardInsights, getOpenAiInsights } from './geminiService';
 import GoogleLogin from './GoogleLogin'; 
+import { generateMockBridgeData, BridgeData } from './mockData';
 
 const CLIENT_ID = "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com"; 
 const SCOPE_GA4 = "https://www.googleapis.com/auth/analytics.readonly";
@@ -613,6 +614,230 @@ return (
   );
 };
 
+const PpcSeoBridgeView: React.FC<{ currencySymbol: string }> = ({ currencySymbol }) => {
+  const [targetCpa, setTargetCpa] = useState(50);
+  const [data, setData] = useState<BridgeData[]>([]);
+
+  useEffect(() => {
+    // Generate data on mount (Simulating API Join)
+    const mock = generateMockBridgeData();
+    // Classify Logic
+    const classified = mock.map(d => {
+      let status: 'Exclude' | 'Increase' | 'Maintain' | 'Review' = 'Review';
+      
+      // Rule 1: EXCLUDE (Cannibalization) - Rank <= 3 & PPC Cost > 0
+      if (d.organicRank !== null && d.organicRank <= 3 && d.ppcCost > 0) {
+        status = 'Exclude';
+      } 
+      // Rule 2: INCREASE (Opportunity) - Rank 5-20 & CPA < Target
+      else if (d.organicRank !== null && d.organicRank >= 5 && d.organicRank <= 20 && d.ppcCpa < targetCpa) {
+        status = 'Increase';
+      }
+      // Rule 3: MAINTAIN (Defense) - Rank > 20 or NULL & Conversions > 0
+      else if ((d.organicRank === null || d.organicRank > 20) && d.ppcConversions > 0) {
+        status = 'Maintain';
+      }
+
+      return { ...d, status };
+    });
+    setData(classified);
+  }, [targetCpa]);
+
+  const stats = useMemo(() => {
+    return {
+      excludeCount: data.filter(d => d.status === 'Exclude').length,
+      increaseCount: data.filter(d => d.status === 'Increase').length,
+      maintainCount: data.filter(d => d.status === 'Maintain').length,
+      wastedSpend: data.filter(d => d.status === 'Exclude').reduce((acc, curr) => acc + curr.ppcCost, 0)
+    };
+  }, [data]);
+
+  const scatterData = useMemo(() => {
+    return data.map(d => ({
+      x: d.organicRank || 100, // Handle null rank for chart
+      y: d.ppcCpa,
+      z: d.ppcCost, // Bubble size
+      status: d.status,
+      name: d.query
+    }));
+  }, [data]);
+
+  const savingsMockHistory = useMemo(() => {
+    // Mock monthly history for the Bar Chart
+    return [
+      { month: 'Jan', savings: stats.wastedSpend * 0.9 },
+      { month: 'Feb', savings: stats.wastedSpend * 0.85 },
+      { month: 'Mar', savings: stats.wastedSpend * 1.1 },
+      { month: 'Apr', savings: stats.wastedSpend },
+    ];
+  }, [stats.wastedSpend]);
+
+  return (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
+      
+      {/* Header & Controls */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[24px] border border-slate-200 shadow-sm">
+        <div>
+          <h2 className="text-xl font-black text-slate-900">Unified SEO vs. PPC Intelligence</h2>
+          <p className="text-slate-500 text-xs font-bold mt-1">Cross-channel analysis to detect cannibalization & opportunities.</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="flex flex-col items-end">
+             <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Target CPA</label>
+             <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5">
+                <span className="text-xs font-bold text-slate-500">{currencySymbol}</span>
+                <input 
+                  type="number" 
+                  value={targetCpa} 
+                  onChange={e => setTargetCpa(Number(e.target.value))} 
+                  className="bg-transparent w-16 text-xs font-black text-slate-900 outline-none" 
+                />
+             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Action Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard title="Keywords to Exclude" value={stats.excludeCount} icon={<AlertTriangle />} color="rose" />
+        <KpiCard title="Keywords to Boost" value={stats.increaseCount} icon={<Rocket />} color="indigo" />
+        <KpiCard title="Defense Keywords" value={stats.maintainCount} icon={<Shield />} color="emerald" />
+        <KpiCard title="Potential Monthly Savings" value={`${currencySymbol}${stats.wastedSpend.toLocaleString()}`} icon={<DollarSign />} color="amber" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* Scatter Plot - Opportunity Matrix */}
+        <div className="lg:col-span-2 bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+           <div className="flex justify-between items-center mb-6">
+              <div>
+                <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Opportunity Matrix</h4>
+                <p className="text-[11px] font-bold text-slate-600">X: Organic Rank (Inverted) | Y: CPA | Bubble Size: Cost</p>
+              </div>
+           </div>
+           <div className="h-[350px]">
+             <ResponsiveContainer width="100%" height="100%">
+               <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                 <CartesianGrid strokeDasharray="3 3" />
+                 <XAxis type="number" dataKey="x" name="Organic Rank" reversed={true} domain={[1, 100]} label={{ value: 'Organic Position (1 is Best)', position: 'insideBottom', offset: 0, fontSize: 10, fontWeight: 700 }} />
+                 <YAxis type="number" dataKey="y" name="CPA" unit={currencySymbol} label={{ value: 'CPA', angle: -90, position: 'insideLeft', fontSize: 10, fontWeight: 700 }} />
+                 <ZAxis type="number" dataKey="z" range={[50, 400]} name="Cost" unit={currencySymbol} />
+                 <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }: any) => {
+                    if (active && payload && payload.length) {
+                      const d = payload[0].payload;
+                      return (
+                        <div className="bg-slate-900 text-white p-3 rounded-xl border border-white/10 shadow-xl max-w-xs">
+                          <p className="text-[10px] font-black uppercase tracking-widest mb-1 text-slate-400">{d.status}</p>
+                          <p className="text-xs font-bold mb-2 break-words">{d.name}</p>
+                          <div className="flex justify-between gap-4 text-[9px] text-slate-300">
+                             <span>Rank: <b className="text-white">{d.x === 100 ? '>100' : d.x}</b></span>
+                             <span>CPA: <b className="text-white">{currencySymbol}{d.y.toFixed(2)}</b></span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                 }} />
+                 <ReferenceLine x={3.5} stroke="#ef4444" strokeDasharray="3 3" label={{ value: 'Cannibalization Zone', position: 'insideTopLeft', fill: '#ef4444', fontSize: 10, fontWeight: 800 }} />
+                 <ReferenceLine y={targetCpa} stroke="#6366f1" strokeDasharray="3 3" label={{ value: 'Target CPA', position: 'insideRight', fill: '#6366f1', fontSize: 10, fontWeight: 800 }} />
+                 
+                 <Scatter name="Opportunities" data={scatterData}>
+                    {scatterData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.status === 'Exclude' ? '#ef4444' : entry.status === 'Increase' ? '#6366f1' : entry.status === 'Maintain' ? '#10b981' : '#cbd5e1'} />
+                    ))}
+                 </Scatter>
+               </ScatterChart>
+             </ResponsiveContainer>
+           </div>
+        </div>
+
+        {/* Savings Monitor */}
+        <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm flex flex-col">
+            <div className="mb-6">
+                <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Potential Savings Impact</h4>
+                <p className="text-[11px] font-bold text-slate-600">Monthly Wasted Spend (Cannibalization)</p>
+            </div>
+            <div className="flex-1 min-h-[200px]">
+                <ResponsiveContainer width="100%" height="100%">
+                   <BarChart data={savingsMockHistory}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700}} />
+                      <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val}`} />
+                      <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                      <Bar dataKey="savings" fill="#fbbf24" radius={[6, 6, 0, 0]} barSize={40} />
+                   </BarChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
+
+      </div>
+
+      {/* Detailed Table */}
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
+         <div className="flex justify-between items-center mb-6">
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">GSC to PPC Bridge Table</h4>
+            <button 
+              onClick={() => exportToCSV(data, "Bridge_Report")} 
+              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+            >
+              <FileText size={12} /> Export CSV
+            </button>
+         </div>
+         <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse">
+               <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50/50">
+                     <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest w-24">Status</th>
+                     <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Query / URL</th>
+                     <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Org. Rank</th>
+                     <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">PPC Campaign</th>
+                     <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">PPC Cost</th>
+                     <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">CPA</th>
+                  </tr>
+               </thead>
+               <tbody>
+                  {data.slice(0, 50).map((row, i) => (
+                     <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                        <td className="py-4 px-4">
+                           <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-tight ${
+                              row.status === 'Exclude' ? 'bg-rose-100 text-rose-700' :
+                              row.status === 'Increase' ? 'bg-indigo-100 text-indigo-700' :
+                              row.status === 'Maintain' ? 'bg-emerald-100 text-emerald-700' :
+                              'bg-slate-100 text-slate-600'
+                           }`}>
+                              {row.status}
+                           </span>
+                        </td>
+                        <td className="py-4 px-4 max-w-xs">
+                           <div className="flex flex-col">
+                              <span className="text-[11px] font-bold text-slate-800 truncate" title={row.query}>{row.query}</span>
+                              <div className="flex items-center gap-1 text-[9px] text-slate-400 truncate mt-0.5">
+                                 <LinkIcon size={10} />
+                                 <span title={row.url}>{row.url}</span>
+                              </div>
+                           </div>
+                        </td>
+                        <td className="py-4 px-4 text-right">
+                           {row.organicRank ? (
+                              <span className={`text-[11px] font-bold ${row.organicRank <= 3 ? 'text-emerald-600' : row.organicRank > 20 ? 'text-rose-500' : 'text-slate-600'}`}>
+                                 {row.organicRank.toFixed(1)}
+                              </span>
+                           ) : <span className="text-[10px] text-slate-400 italic">--</span>}
+                        </td>
+                        <td className="py-4 px-4 text-[10px] font-bold text-slate-500">{row.ppcCampaign}</td>
+                        <td className="py-4 px-4 text-right text-[11px] font-bold text-slate-700">{currencySymbol}{row.ppcCost.toLocaleString()}</td>
+                        <td className="py-4 px-4 text-right text-[11px] font-bold text-slate-700">{currencySymbol}{row.ppcCpa.toFixed(2)}</td>
+                     </tr>
+                  ))}
+               </tbody>
+            </table>
+         </div>
+      </div>
+
+    </div>
+  );
+};
+
 
 const App: React.FC = () => {
   const [user, setUser] = useState<{ name: string; email: string; picture: string } | null>(() => {
@@ -661,7 +886,8 @@ const App: React.FC = () => {
   const [tabInsights, setTabInsights] = useState<Record<string, string | null>>({
     [DashboardTab.ORGANIC_VS_PAID]: null,
     [DashboardTab.SEO_BY_COUNTRY]: null,
-    [DashboardTab.KEYWORD_DEEP_DIVE]: null
+    [DashboardTab.KEYWORD_DEEP_DIVE]: null,
+    [DashboardTab.PPC_SEO_BRIDGE]: null
   });
   const [loadingInsights, setLoadingInsights] = useState(false);
 
@@ -1126,6 +1352,7 @@ const fetchGa4Data = async () => {
       let summary = "";
       const dashboardName = activeTab === DashboardTab.ORGANIC_VS_PAID ? "Organic vs Paid Performance" : 
                            (activeTab === DashboardTab.SEO_BY_COUNTRY ? "SEO Performance by Country" : 
+                           activeTab === DashboardTab.PPC_SEO_BRIDGE ? "Unified SEO vs PPC Bridge" :
                            "Deep URL and Keyword Analysis");
 
       if (activeTab === DashboardTab.ORGANIC_VS_PAID) {
@@ -1139,6 +1366,11 @@ const fetchGa4Data = async () => {
         summary = `
           Context: Market-level SEO efficiency.
           Organic GA4 Rev: ${currencySymbol}${channelStats.organic.current.revenue.toLocaleString()}.
+        `;
+      } else if (activeTab === DashboardTab.PPC_SEO_BRIDGE) {
+        summary = `
+          Context: Financial efficiency analysis between SEO and PPC.
+          Goal: Identify cannibalization (spending on high ranking keywords) and opportunities.
         `;
       }
 
@@ -1240,6 +1472,12 @@ const fetchGa4Data = async () => {
         icon={<Target />} 
         label="Deep SEO Analysis" 
       />
+      <SidebarLink 
+        active={activeTab === DashboardTab.PPC_SEO_BRIDGE} 
+        onClick={() => setActiveTab(DashboardTab.PPC_SEO_BRIDGE)} 
+        icon={<Zap />} 
+        label="SEO vs PPC Bridge" 
+      />
     </nav>
     
     {/* Sección AI Analysis */}
@@ -1337,6 +1575,7 @@ const fetchGa4Data = async () => {
           {activeTab === DashboardTab.ORGANIC_VS_PAID && "Organic vs Paid Performance"}
           {activeTab === DashboardTab.SEO_BY_COUNTRY && "SEO Performance by Country"}
           {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && "URL & Keyword Analysis"}
+          {activeTab === DashboardTab.PPC_SEO_BRIDGE && "The Bridge: SEO vs PPC"}
         </h2>
       </div>
     </div>
@@ -1388,7 +1627,7 @@ const fetchGa4Data = async () => {
               <div className="flex items-center gap-3">
                 {aiProvider === 'openai' ? <Cpu className="w-5 h-5 text-emerald-400" /> : <Sparkles className="w-5 h-5 text-indigo-400" />}
                 <div className="flex flex-col">
-                  <h3 className="text-xl font-black">Strategic Report: {activeTab === DashboardTab.ORGANIC_VS_PAID ? "Channels" : activeTab === DashboardTab.SEO_BY_COUNTRY ? "Markets" : "Deep Dive"}</h3>
+                  <h3 className="text-xl font-black">Strategic Report: {activeTab === DashboardTab.ORGANIC_VS_PAID ? "Channels" : activeTab === DashboardTab.SEO_BY_COUNTRY ? "Markets" : activeTab === DashboardTab.PPC_SEO_BRIDGE ? "Unified Bridge" : "Deep Dive"}</h3>
                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Generated by {aiProvider === 'openai' ? 'OpenAI GPT-4o-mini' : 'Google Gemini 3 Pro'}</p>
                 </div>
               </div>
@@ -1402,6 +1641,7 @@ const fetchGa4Data = async () => {
           {activeTab === DashboardTab.ORGANIC_VS_PAID && <OrganicVsPaidView stats={channelStats} data={filteredDailyData} comparisonEnabled={filters.comparison.enabled} grouping={grouping} setGrouping={setGrouping} currencySymbol={currencySymbol} />}
           {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={filteredKeywordData} gscDailyTotals={gscDailyTotals} gscTotals={gscTotals} aggregate={aggregate} comparisonEnabled={filters.comparison.enabled} currencySymbol={currencySymbol} grouping={grouping} isBranded={isBranded} queryTypeFilter={filters.queryType} countryFilter={filters.country} />}
           {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && <SeoDeepDiveView keywords={filteredKeywordData} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isLoading={isAnythingLoading} comparisonEnabled={filters.comparison.enabled} />}
+          {activeTab === DashboardTab.PPC_SEO_BRIDGE && <PpcSeoBridgeView currencySymbol={currencySymbol} />}
         </div>
 
         <div className="mt-12 flex justify-center pb-12">

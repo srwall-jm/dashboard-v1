@@ -93,3 +93,84 @@ export const generateMockKeywordData = (): KeywordData[] => {
     };
   });
 };
+
+// --- NEW BRIDGE MOCK DATA ---
+
+export interface BridgeData {
+  url: string;
+  query: string;
+  organicRank: number | null;
+  organicClicks: number;
+  ppcCampaign: string;
+  ppcCost: number;
+  ppcConversions: number;
+  ppcCpa: number;
+  ppcClicks: number;
+  ppcImpressions: number;
+  status?: 'Exclude' | 'Increase' | 'Maintain' | 'Review';
+}
+
+export const generateMockBridgeData = (): BridgeData[] => {
+  const queries = [
+    'nike running shoes', 'buy dumbbells', 'yoga mats online', 'best gym routine', 
+    'pro sports shop', 'cheap treadmill', 'compression socks', 'marathon training plan',
+    'protein powder', 'crossfit gear', 'running shorts men', 'womens leggings',
+    'home gym setup', 'adjustable bench', 'kettlebell set'
+  ];
+  
+  const pages = [
+    '/shop/running', '/shop/weights', '/shop/yoga', '/blog/workouts',
+    '/home', '/cardio/treadmills', '/accessories/socks', '/training/plans'
+  ];
+
+  const campaigns = ['Search - Brand', 'Search - Generic', 'PMax - Products', 'Shopping - Best Sellers'];
+
+  return Array.from({ length: 60 }).map((_, i) => {
+    const isPMax = Math.random() > 0.8; // 20% Chance of being PMax (Query might be null/grouped)
+    const hasOrganic = Math.random() > 0.1; // 90% chance of having organic data
+    
+    const organicRank = hasOrganic ? (Math.random() * 50) + 1 : null; // Rank 1 to 50 or Null
+    
+    // Simulate Logic for Categories
+    // Case 1: Cannibalization (High Rank, High Spend)
+    // Case 2: Opportunity (Mid Rank, Low CPA)
+    // Case 3: Defense (Low/No Rank, High Conv)
+    
+    const scenario = Math.random();
+    let ppcCost = 0;
+    let ppcConversions = 0;
+    let rank = organicRank;
+
+    if (scenario < 0.2) {
+      // Cannibalization setup
+      rank = Math.floor(Math.random() * 3) + 1; // 1-3
+      ppcCost = Math.floor(Math.random() * 500) + 100;
+      ppcConversions = Math.floor(Math.random() * 10);
+    } else if (scenario < 0.5) {
+      // Opportunity setup
+      rank = Math.floor(Math.random() * 15) + 5; // 5-20
+      ppcCost = Math.floor(Math.random() * 200) + 50;
+      ppcConversions = Math.floor(Math.random() * 20) + 5; // Good conversions
+    } else {
+      // Defense or General
+      rank = Math.random() > 0.5 ? Math.floor(Math.random() * 80) + 20 : null;
+      ppcCost = Math.floor(Math.random() * 1000) + 50;
+      ppcConversions = Math.floor(Math.random() * 50);
+    }
+
+    const ppcCpa = ppcConversions > 0 ? ppcCost / ppcConversions : 0;
+
+    return {
+      url: pages[i % pages.length],
+      query: isPMax ? '(not provided)' : queries[i % queries.length],
+      organicRank: rank,
+      organicClicks: rank && rank < 10 ? Math.floor(Math.random() * 1000) : Math.floor(Math.random() * 50),
+      ppcCampaign: campaigns[i % campaigns.length],
+      ppcCost,
+      ppcConversions,
+      ppcCpa,
+      ppcClicks: Math.floor(ppcCost / (0.5 + Math.random())),
+      ppcImpressions: Math.floor(ppcCost * 20)
+    };
+  });
+};
