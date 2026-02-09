@@ -1184,7 +1184,7 @@ const fetchGa4Data = async () => {
           <div className="w-16 h-16 md:w-20 md:h-20 bg-indigo-600 rounded-[24px] md:rounded-[28px] flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-indigo-500/20 transform -rotate-6">
             <Activity className="w-8 h-8 md:w-10 md:h-10 text-white" />
           </div>
-          <h1 className="text-3xl md:text-4xl font-black mb-4 tracking-tighter">SEO & Paid Reporting</h1>
+          <h1 className="text-3xl md:text-4xl font-black mb-4 tracking-tighter">The OneSearch Engine</h1>
           <p className="text-slate-400 font-medium mb-10 text-base md:text-lg">Sign in with Google to access your dashboard.</p>
           <div className="flex justify-center w-full"><GoogleLogin onLoginSuccess={handleLoginSuccess} /></div>
         </div>
@@ -1208,7 +1208,7 @@ const fetchGa4Data = async () => {
           <Activity className="w-6 h-6" />
         </div>
         <div>
-          <h1 className="text-lg font-black tracking-tight">SEO Master</h1>
+          <h1 className="text-lg font-black tracking-tight">The OneSearch Engine</h1>
           <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Suite Pro</p>
         </div>
       </div>

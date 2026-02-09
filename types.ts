@@ -60,7 +60,8 @@ export interface DashboardFilters {
 export enum DashboardTab {
   ORGANIC_VS_PAID = 'organic_vs_paid',
   SEO_BY_COUNTRY = 'seo_by_country',
-  KEYWORD_DEEP_DIVE = 'keyword_deep_dive'
+  KEYWORD_DEEP_DIVE = 'keyword_deep_dive',
+  PPC_SEO_BRIDGE = 'ppc_seo_bridge'
 }
 
 export interface ComparisonMetrics {
