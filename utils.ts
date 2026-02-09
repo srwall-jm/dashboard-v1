@@ -23,6 +23,10 @@ export const COUNTRY_CODE_TO_NAME: Record<string, string> = {
   'usa': 'United States', 'gbr': 'United Kingdom', 'esp': 'Spain', 'fra': 'France', 'deu': 'Germany'
 };
 
+// Configuration for AI Traffic Sources
+// Easy to extend: just add '|grok|llama' etc.
+export const AI_SOURCE_REGEX_STRING = '(chatgpt|openai|gemini|bard|bing|copilot|perplexity|claude|anthropic|grok|llama)';
+
 export const normalizeCountry = (val: string): string => {
   if (!val) return 'Other';
   const clean = val.toLowerCase().trim();

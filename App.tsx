@@ -3,11 +3,11 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   RefreshCw, Filter, Globe, Tag, AlertCircle, Sparkles, Cpu, Activity, Menu, X
 } from 'lucide-react';
-import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, QueryType, BridgeData } from './types';
+import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, QueryType, BridgeData, AiTrafficData } from './types';
 import { getDashboardInsights, getOpenAiInsights } from './geminiService';
 import GoogleLogin from './GoogleLogin'; 
-import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry, extractPath } from './utils';
-import { generateMockBridgeData } from './mockData';
+import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry, extractPath, AI_SOURCE_REGEX_STRING } from './utils';
+import { generateMockBridgeData, generateMockAiTrafficData } from './mockData';
 
 // Import New Components and Views
 import { Sidebar } from './components/Sidebar';
@@ -16,6 +16,7 @@ import { OrganicVsPaidView } from './views/OrganicVsPaidView';
 import { SeoMarketplaceView } from './views/SeoMarketplaceView';
 import { SeoDeepDiveView } from './views/SeoDeepDiveView';
 import { SeoPpcBridgeView } from './views/SeoPpcBridgeView';
+import { AiTrafficView } from './views/AiTrafficView';
 
 const CLIENT_ID = "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com"; 
 const SCOPE_GA4 = "https://www.googleapis.com/auth/analytics.readonly";
@@ -56,7 +57,8 @@ const App: React.FC = () => {
   
   const [realDailyData, setRealDailyData] = useState<DailyData[]>([]);
   const [realKeywordData, setRealKeywordData] = useState<KeywordData[]>([]);
-  const [bridgeData, setBridgeData] = useState<BridgeData[]>([]); // New State for Bridge Data
+  const [bridgeData, setBridgeData] = useState<BridgeData[]>([]); 
+  const [aiTrafficData, setAiTrafficData] = useState<AiTrafficData[]>([]); // New State
 
   const [gscDailyTotals, setGscDailyTotals] = useState<any[]>([]);
   const [gscTotals, setGscTotals] = useState<{current: any, previous: any} | null>(null);
@@ -64,6 +66,7 @@ const App: React.FC = () => {
   const [isLoadingGa4, setIsLoadingGa4] = useState(false);
   const [isLoadingGsc, setIsLoadingGsc] = useState(false);
   const [isLoadingBridge, setIsLoadingBridge] = useState(false);
+  const [isLoadingAi, setIsLoadingAi] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [brandRegexStr, setBrandRegexStr] = useState('shop|brand|pro|sports');
@@ -81,7 +84,8 @@ const App: React.FC = () => {
     [DashboardTab.ORGANIC_VS_PAID]: null,
     [DashboardTab.SEO_BY_COUNTRY]: null,
     [DashboardTab.KEYWORD_DEEP_DIVE]: null,
-    [DashboardTab.PPC_SEO_BRIDGE]: null
+    [DashboardTab.PPC_SEO_BRIDGE]: null,
+    [DashboardTab.AI_TRAFFIC_MONITOR]: null
   });
   const [loadingInsights, setLoadingInsights] = useState(false);
 
@@ -206,6 +210,68 @@ const App: React.FC = () => {
     } catch (e) {
       console.error(e);
       setError("Error connecting to Search Console API.");
+    }
+  };
+
+  // --- AI TRAFFIC DATA FETCHING ---
+  const fetchAiTrafficData = async () => {
+    if (!ga4Auth?.property || !ga4Auth.token) {
+        if (!aiTrafficData.length) setAiTrafficData(generateMockAiTrafficData());
+        return;
+    }
+
+    setIsLoadingAi(true);
+    try {
+        const resp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                dateRanges: [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }],
+                dimensions: [
+                    { name: 'date' },
+                    { name: 'sessionSource' },
+                    { name: 'landingPage' }
+                ],
+                metrics: [
+                    { name: 'sessions' },
+                    { name: 'engagedSessions' },
+                    { name: 'engagementRate' },
+                    { name: 'totalRevenue' }
+                ],
+                dimensionFilter: {
+                    filter: {
+                        fieldName: 'sessionSource',
+                        stringFilter: { 
+                            matchType: 'FULL_REGEXP', 
+                            value: AI_SOURCE_REGEX_STRING,
+                            caseSensitive: false
+                        }
+                    }
+                }
+            })
+        });
+        const data = await resp.json();
+        if (data.error) throw new Error(data.error.message);
+
+        const processed: AiTrafficData[] = (data.rows || []).map((row: any) => {
+            const dateStr = row.dimensionValues[0].value;
+            return {
+                date: `${dateStr.slice(0,4)}-${dateStr.slice(4,6)}-${dateStr.slice(6,8)}`,
+                source: row.dimensionValues[1].value,
+                landingPage: row.dimensionValues[2].value,
+                sessions: parseInt(row.metricValues[0].value),
+                engagedSessions: parseInt(row.metricValues[1].value),
+                engagementRate: parseFloat(row.metricValues[2].value) * 100,
+                revenue: parseFloat(row.metricValues[3].value)
+            };
+        });
+        setAiTrafficData(processed);
+    } catch (e: any) {
+        console.error("AI Traffic API Error", e);
+        // Fallback
+        if(!aiTrafficData.length) setAiTrafficData(generateMockAiTrafficData());
+    } finally {
+        setIsLoadingAi(false);
     }
   };
 
@@ -532,9 +598,11 @@ const fetchGa4Data = async () => {
   };
 
   useEffect(() => {
-    // Fetch Bridge Data when Tab is active
+    // Fetch Data depending on Active Tab
     if (activeTab === DashboardTab.PPC_SEO_BRIDGE) {
       fetchBridgeData();
+    } else if (activeTab === DashboardTab.AI_TRAFFIC_MONITOR) {
+      fetchAiTrafficData();
     }
   }, [activeTab, ga4Auth?.property?.id, gscAuth?.site?.siteUrl, filters.dateRange]);
 
@@ -654,6 +722,7 @@ const fetchGa4Data = async () => {
       const dashboardName = activeTab === DashboardTab.ORGANIC_VS_PAID ? "Organic vs Paid Performance" : 
                            (activeTab === DashboardTab.SEO_BY_COUNTRY ? "SEO Performance by Country" : 
                            activeTab === DashboardTab.PPC_SEO_BRIDGE ? "PPC & SEO Bridge Intelligence" :
+                           activeTab === DashboardTab.AI_TRAFFIC_MONITOR ? "AI Traffic Tracker" :
                            "Deep URL and Keyword Analysis");
 
       if (activeTab === DashboardTab.ORGANIC_VS_PAID) {
@@ -677,6 +746,13 @@ const fetchGa4Data = async () => {
           Cannibalization Risks detected: ${riskCount} keywords where we rank Top 3 organically but still pay for ads.
           Growth Opportunities detected: ${opportunityCount} keywords where we rank 5-20 and could increase ad spend.
         `;
+      } else if (activeTab === DashboardTab.AI_TRAFFIC_MONITOR) {
+        const totalAi = aiTrafficData.reduce((acc, curr) => acc + curr.sessions, 0);
+        summary = `
+          Context: AI/LLM Traffic Analysis (ChatGPT, Perplexity, Gemini, etc.).
+          Total AI Referred Sessions: ${totalAi}.
+          Top Sources identified in list.
+        `;
       }
 
       let insights: string | undefined;
@@ -697,7 +773,7 @@ const fetchGa4Data = async () => {
     }
   };
 
-  const isAnythingLoading = isLoadingGa4 || isLoadingGsc || isLoadingBridge;
+  const isAnythingLoading = isLoadingGa4 || isLoadingGsc || isLoadingBridge || isLoadingAi;
   const filteredProperties = useMemo(() => availableProperties.filter(p => p.name.toLowerCase().includes(ga4Search.toLowerCase())), [availableProperties, ga4Search]);
   const filteredSites = useMemo(() => availableSites.filter(s => s.siteUrl.toLowerCase().includes(gscSearch.toLowerCase())), [availableSites, gscSearch]);
   const uniqueCountries = useMemo(() => {
@@ -761,7 +837,7 @@ const fetchGa4Data = async () => {
         <div className="flex items-center gap-2 mb-2">
           <span className={`w-2 h-2 rounded-full ${isAnythingLoading ? 'bg-amber-500 animate-ping' : 'bg-emerald-500'}`} />
           <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-            {isLoadingGa4 ? 'Syncing GA4...' : isLoadingGsc ? 'Syncing GSC...' : isLoadingBridge ? 'Joining Data...' : 'Dashboard Active'}
+            {isLoadingGa4 ? 'Syncing GA4...' : isLoadingGsc ? 'Syncing GSC...' : isLoadingBridge ? 'Joining Data...' : isLoadingAi ? 'Scanning AI...' : 'Dashboard Active'}
           </span>
         </div>
         <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">
@@ -769,6 +845,7 @@ const fetchGa4Data = async () => {
           {activeTab === DashboardTab.SEO_BY_COUNTRY && "SEO Performance by Country"}
           {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && "URL & Keyword Analysis"}
           {activeTab === DashboardTab.PPC_SEO_BRIDGE && "The Bridge: SEO vs PPC Intelligence"}
+          {activeTab === DashboardTab.AI_TRAFFIC_MONITOR && "AI Traffic Monitor"}
         </h2>
       </div>
     </div>
@@ -820,7 +897,7 @@ const fetchGa4Data = async () => {
               <div className="flex items-center gap-3">
                 {aiProvider === 'openai' ? <Cpu className="w-5 h-5 text-emerald-400" /> : <Sparkles className="w-5 h-5 text-indigo-400" />}
                 <div className="flex flex-col">
-                  <h3 className="text-xl font-black">Strategic Report: {activeTab === DashboardTab.ORGANIC_VS_PAID ? "Channels" : activeTab === DashboardTab.SEO_BY_COUNTRY ? "Markets" : activeTab === DashboardTab.PPC_SEO_BRIDGE ? "The Bridge" : "Deep Dive"}</h3>
+                  <h3 className="text-xl font-black">Strategic Report: {activeTab === DashboardTab.ORGANIC_VS_PAID ? "Channels" : activeTab === DashboardTab.SEO_BY_COUNTRY ? "Markets" : activeTab === DashboardTab.PPC_SEO_BRIDGE ? "The Bridge" : activeTab === DashboardTab.AI_TRAFFIC_MONITOR ? "AI Intelligence" : "Deep Dive"}</h3>
                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Generated by {aiProvider === 'openai' ? 'OpenAI GPT-4o-mini' : 'Google Gemini 3 Pro'}</p>
                 </div>
               </div>
@@ -838,6 +915,8 @@ const fetchGa4Data = async () => {
           {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && <SeoDeepDiveView keywords={filteredKeywordData} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isLoading={isAnythingLoading} comparisonEnabled={filters.comparison.enabled} />}
 
           {activeTab === DashboardTab.PPC_SEO_BRIDGE && <SeoPpcBridgeView data={bridgeData} dailyData={filteredDailyData} currencySymbol={currencySymbol} />}
+
+          {activeTab === DashboardTab.AI_TRAFFIC_MONITOR && <AiTrafficView data={aiTrafficData} currencySymbol={currencySymbol} />}
         </div>
 
         <div className="mt-12 flex justify-center pb-12">
@@ -847,7 +926,7 @@ const fetchGa4Data = async () => {
             className={`flex items-center gap-3 px-10 py-4 ${aiProvider === 'openai' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20' : 'bg-slate-950 hover:bg-slate-800 shadow-slate-900/20'} text-white rounded-3xl text-xs font-black shadow-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50`}
           >
             {loadingInsights ? <RefreshCw className="w-4 h-4 animate-spin" /> : (aiProvider === 'openai' ? <Cpu className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />)} 
-            Generate {activeTab === DashboardTab.ORGANIC_VS_PAID ? 'Channel' : activeTab === DashboardTab.SEO_BY_COUNTRY ? 'Market' : activeTab === DashboardTab.PPC_SEO_BRIDGE ? 'Bridge' : 'SEO'} Insights
+            Generate {activeTab === DashboardTab.ORGANIC_VS_PAID ? 'Channel' : activeTab === DashboardTab.SEO_BY_COUNTRY ? 'Market' : activeTab === DashboardTab.PPC_SEO_BRIDGE ? 'Bridge' : activeTab === DashboardTab.AI_TRAFFIC_MONITOR ? 'AI' : 'SEO'} Insights
           </button>
         </div>
       </main>

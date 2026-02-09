@@ -59,6 +59,16 @@ export interface BridgeData {
   status?: 'Exclude' | 'Increase' | 'Maintain' | 'Review';
 }
 
+export interface AiTrafficData {
+  date: string;
+  source: string;
+  landingPage: string;
+  sessions: number;
+  engagedSessions: number;
+  engagementRate: number;
+  revenue: number;
+}
+
 export interface DashboardFilters {
   dateRange: {
     start: string;
@@ -77,7 +87,8 @@ export enum DashboardTab {
   ORGANIC_VS_PAID = 'organic_vs_paid',
   SEO_BY_COUNTRY = 'seo_by_country',
   KEYWORD_DEEP_DIVE = 'keyword_deep_dive',
-  PPC_SEO_BRIDGE = 'ppc_seo_bridge'
+  PPC_SEO_BRIDGE = 'ppc_seo_bridge',
+  AI_TRAFFIC_MONITOR = 'ai_traffic_monitor'
 }
 
 export interface ComparisonMetrics {

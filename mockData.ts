@@ -1,5 +1,5 @@
 
-import { DailyData, KeywordData, ChannelType, QueryType, BridgeData } from './types';
+import { DailyData, KeywordData, ChannelType, QueryType, BridgeData, AiTrafficData } from './types';
 
 export const COUNTRIES = ['Spain', 'Mexico', 'United States', 'United Kingdom', 'France', 'Germany', 'Italy', 'Portugal'];
 const QUERY_TYPES: QueryType[] = ['Branded', 'Non-Branded'];
@@ -94,8 +94,6 @@ export const generateMockKeywordData = (): KeywordData[] => {
   });
 };
 
-// --- NEW BRIDGE MOCK DATA ---
-
 export const generateMockBridgeData = (): BridgeData[] => {
   const queries = [
     'nike running shoes', 'buy dumbbells', 'yoga mats online', 'best gym routine', 
@@ -116,11 +114,6 @@ export const generateMockBridgeData = (): BridgeData[] => {
     const hasOrganic = Math.random() > 0.1; // 90% chance of having organic data
     
     const organicRank = hasOrganic ? (Math.random() * 50) + 1 : null; // Rank 1 to 50 or Null
-    
-    // Simulate Logic for Categories
-    // Case 1: Cannibalization (High Rank, High Spend)
-    // Case 2: Opportunity (Mid Rank, Low CPA)
-    // Case 3: Defense (Low/No Rank, High Conv)
     
     const scenario = Math.random();
     let ppcCost = 0;
@@ -159,4 +152,48 @@ export const generateMockBridgeData = (): BridgeData[] => {
       ppcImpressions: Math.floor(ppcCost * 20)
     };
   });
+};
+
+export const generateMockAiTrafficData = (): AiTrafficData[] => {
+  const sources = ['chatgpt.com', 'bing.com', 'copilot.microsoft.com', 'perplexity.ai', 'gemini.google.com', 'claude.ai'];
+  const pages = [
+    '/blog/top-running-shoes-2024', '/shop/yoga/kits', '/guide/home-workouts', 
+    '/product/smart-dumbbell', '/blog/nutrition-tips', '/shop/sale'
+  ];
+
+  const data: AiTrafficData[] = [];
+  const now = new Date();
+
+  // Generate 30 days of data
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+
+    sources.forEach(source => {
+      // Perplexity and ChatGPT usually have higher engagement
+      const isHighQuality = source.includes('perplexity') || source.includes('chatgpt');
+      const baseSessions = isHighQuality ? Math.floor(Math.random() * 50) + 10 : Math.floor(Math.random() * 20) + 2;
+      
+      pages.forEach(page => {
+        if (Math.random() > 0.7) return; // Not every page gets traffic from every source every day
+
+        const sessions = Math.ceil(baseSessions * Math.random());
+        const engagementRate = isHighQuality ? 0.6 + (Math.random() * 0.3) : 0.3 + (Math.random() * 0.3);
+        const engagedSessions = Math.round(sessions * engagementRate);
+        const revenue = engagedSessions * (Math.random() * 5); // Some random revenue
+
+        data.push({
+          date: dateStr,
+          source,
+          landingPage: page,
+          sessions,
+          engagedSessions,
+          engagementRate: engagementRate * 100,
+          revenue
+        });
+      });
+    });
+  }
+  return data;
 };
