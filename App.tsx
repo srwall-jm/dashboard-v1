@@ -275,171 +275,153 @@ const App: React.FC = () => {
     }
   };
 
-// --- BRIDGE DATA FETCHING: CORREGIDO PARA CAMPAÑAS DSA/NON-BRANDED ---
+// --- BRIDGE DATA: ESTRATEGIA "URL COMO KEYWORD" ---
   const fetchBridgeData = async () => {
+    // 1. Validaciones
     if (!ga4Auth?.property || !ga4Auth.token || !gscAuth?.site || !gscAuth.token) {
         if (!bridgeData.length) setBridgeData(generateMockBridgeData());
         return;
     }
 
     setIsLoadingBridge(true);
-    console.log("🚀 STARTING BRIDGE SYNC...");
+    console.log("🚀 STARTING URL-TO-KEYWORD STRATEGY...");
 
     try {
         const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
         
-        // --- 1. GSC: OBTENER TRÁFICO ORGÁNICO ---
+        // --- A. GSC (ORGÁNICO) ---
         const gscResp = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 startDate: filters.dateRange.start,
                 endDate: filters.dateRange.end,
-                dimensions: ['query', 'page'], 
+                dimensions: ['page', 'query'], // Pedimos página y query
                 rowLimit: 5000 
             })
         });
         const gscDataRaw = await gscResp.json();
         
-        // --- FUNCIÓN DE LIMPIEZA NUCLEAR DE URL ---
-        // Esta función es vital para que coincidan tus campañas con tu SEO
-        const normalizeUrl = (url: string) => {
-            if (!url) return '';
+        // --- FUNCIÓN MAESTRA: EXTRACTOR DE KEYWORD DESDE URL ---
+        const extractKeywordFromUrl = (url: string) => {
+            if (!url) return 'home';
             let clean = url.toLowerCase();
-            // 1. Quitar protocolo y dominio
-            clean = clean.replace(/^https?:\/\/(www\.)?[^\/]+/, '');
-            // 2. Quitar query strings (?utm_source...)
-            clean = clean.split('?')[0];
-            // 3. Quitar anclas (#)
-            clean = clean.split('#')[0];
-            // 4. Quitar barra final si existe
-            if (clean.endsWith('/')) clean = clean.slice(0, -1);
-            // 5. Asegurar que empieza con /
-            if (!clean.startsWith('/')) clean = '/' + clean;
             
-            return clean;
+            // 1. Limpieza estándar de URL
+            clean = clean.replace(/^https?:\/\/(www\.)?[^\/]+/, '').split('?')[0].split('#')[0];
+            
+            // 2. Lógica específica para tus URLs de viajes
+            // Quitamos prefijos de idioma como /es/ o /en/
+            clean = clean.replace(/^\/[a-z]{2}\//, '/'); 
+            
+            // 3. Convertimos la ruta en texto legible (Tu "Keyword Proxy")
+            // "/vuelos-baratos-madrid" -> "vuelos baratos madrid"
+            let keywordProxy = clean.replace(/\//g, ' ').replace(/-/g, ' ').trim();
+            
+            return { cleanPath: clean, keywordProxy: keywordProxy };
         };
 
-        // Preparar datos orgánicos
-        const organicRows = (gscDataRaw.rows || []).map((row: any) => ({
-            query: row.keys[0],
-            cleanPath: normalizeUrl(row.keys[1]), // La llave maestra
-            rank: row.position,
-            clicks: row.clicks
-        }));
+        // Procesar filas de GSC
+        const organicRows = (gscDataRaw.rows || []).map((row: any) => {
+            const rawUrl = row.keys[0]; // Page
+            const query = row.keys[1];  // Query Real
+            const { cleanPath, keywordProxy } = extractKeywordFromUrl(rawUrl);
 
-        // --- 2. GA4: OBTENER GASTO DE CAMPAÑAS ---
-        // Pedimos 'sessionCampaignName' para ver tus nombres largos
+            return {
+                cleanPath,      // ID para unir con GA4
+                queryReal: query, // Lo que buscó el usuario realmente
+                keywordProxy,   // Lo que sacamos de la URL (para agrupar si quisiéramos)
+                rank: row.position,
+                clicks: row.clicks
+            };
+        });
+
+        // --- B. GA4 (PAGO - NIVEL URL) ---
+        // IMPORTANTE: Pedimos solo landingPage. No pedimos keyword de Ads.
         const ga4Resp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 dateRanges: [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }],
-                dimensions: [
-                    { name: 'landingPage' },
-                    { name: 'sessionCampaignName' } 
-                ],
+                dimensions: [ { name: 'landingPage' } ], // Solo URL
                 metrics: [
                     { name: 'advertiserAdCost' },
                     { name: 'sessions' },
                     { name: 'conversions' }
                 ],
-                // Filtramos para asegurarnos que traemos tus campañas de paid
                 dimensionFilter: {
                     filter: {
                         fieldName: 'sessionDefaultChannelGroup',
                         stringFilter: { matchType: 'CONTAINS', value: 'Paid' } 
                     }
                 },
-                limit: 10000 
+                limit: 10000
             })
         });
         const ga4DataRaw = await ga4Resp.json();
 
-        console.log("💰 GA4 RAW ROWS FOUND:", ga4DataRaw.rows?.length || 0);
-
-        // --- 3. AGRUPACIÓN POR URL (THE BUCKET STRATEGY) ---
-        // Como tienes campañas DSA y NonBranded que pueden solaparse en una URL,
-        // sumamos todo el coste asociado a esa URL.
-        const ga4UrlMap: Record<string, { cost: number, convs: number, sessions: number, campaigns: Set<string> }> = {};
+        // Mapa de Costes por URL Limpia
+        const ga4UrlMap: Record<string, { cost: number, convs: number, sessions: number }> = {};
 
         (ga4DataRaw.rows || []).forEach((row: any) => {
-            const rawPath = row.dimensionValues[0].value; 
-            const campaignName = row.dimensionValues[1].value; // Tus nombres largos
-            const cleanPath = normalizeUrl(rawPath); // Normalización idéntica a GSC
+            const rawPath = row.dimensionValues[0].value;
+            // Usamos LA MISMA función de extracción para limpiar la URL de GA4
+            const { cleanPath } = extractKeywordFromUrl(rawPath);
             
             const cost = parseFloat(row.metricValues[0].value) || 0;
             const sessions = parseInt(row.metricValues[1].value) || 0;
             const convs = parseFloat(row.metricValues[2].value) || 0;
 
             if (!ga4UrlMap[cleanPath]) {
-                ga4UrlMap[cleanPath] = { cost: 0, convs: 0, sessions: 0, campaigns: new Set() };
+                ga4UrlMap[cleanPath] = { cost: 0, convs: 0, sessions: 0 };
             }
-            
-            // Acumulamos métricas
+            // Acumulamos (Sumamos todo el dinero que fue a esta URL limpia)
             ga4UrlMap[cleanPath].cost += cost;
-            ga4UrlMap[cleanPath].sessions += sessions;
             ga4UrlMap[cleanPath].convs += convs;
-            
-            // Guardamos el nombre de la campaña (ignorando (not set))
-            if (campaignName && campaignName !== '(not set)') {
-                ga4UrlMap[cleanPath].campaigns.add(campaignName);
-            }
+            ga4UrlMap[cleanPath].sessions += sessions;
         });
 
-        // --- 4. JOIN FINAL Y CLASIFICACIÓN ---
+        // --- C. UNIFICACIÓN Y CÁLCULO DE CPA ---
         const bridgeResults: BridgeData[] = [];
-        let matchesFound = 0;
 
         organicRows.forEach(org => {
-            const paidData = ga4UrlMap[org.cleanPath];
-
-            if (paidData) matchesFound++;
-
-            const cost = paidData ? paidData.cost : 0;
-            const convs = paidData ? paidData.convs : 0;
-            const sessions = paidData ? paidData.sessions : 0;
+            // Buscamos si hay dinero gastado en esta URL exacta
+            const paid = ga4UrlMap[org.cleanPath]; 
             
-            // Formatear nombre de campaña para que no rompa la tabla
-            let campaignLabel = "None";
-            if (paidData && paidData.campaigns.size > 0) {
-                // Si hay solo una, mostramos el nombre (quizás recortado)
-                // Si hay varias (ej: branded + dsa), mostramos "Mixed"
-                const campaignsArray = Array.from(paidData.campaigns);
-                if (campaignsArray.length === 1) {
-                    campaignLabel = campaignsArray[0]; 
-                    // Opcional: Recortar si es muy largo visualmente
-                    // campaignLabel = campaignLabel.substring(0, 30) + '...';
-                } else {
-                    campaignLabel = "Multiple / DSA Mix";
-                }
-            } else if (cost > 0) {
-                campaignLabel = "Unidentified Campaign";
-            }
+            const cost = paid ? paid.cost : 0;
+            const convs = paid ? paid.convs : 0;
+            const sessions = paid ? paid.sessions : 0;
 
-            // Calculamos CPA
+            // Cálculos de CPA
             const ppcCpa = (cost > 0 && convs > 0) ? cost / convs : 0;
-            const blendedCpa = (cost > 0 && (org.clicks + convs) > 0) ? cost / (org.clicks + convs) : 0;
+            // Blended: Cuánto nos cuesta cada cliente si sumamos clics gratis + pagados
+            const blendedCpa = (cost > 0 && (org.clicks + convs) > 0) 
+                                ? cost / (org.clicks + convs) 
+                                : 0;
 
-            // Determinar Acción (Action Label)
+            // Determinar Acción
             let action = "MAINTAIN";
-            // Regla: Si soy Top 3 Orgánico Y estoy pagando dinero -> EXCLUDE
+            let governanceAlert = false;
+
+            // ALERTA ROJA: Rankeo Top 3 Orgánico Y estoy gastando dinero > 0
             if (org.rank <= 3.0 && cost > 0) {
-                action = "REVIEW"; // Candidato a dejar de pagar
+                action = "REVIEW (Cannibalization)";
+                governanceAlert = true; // Flag visual para poner en rojo
             } 
-            // Regla: Si estoy en página 2 (pos 11-20) Y el CPA es bueno -> INCREASE
-            else if (org.rank > 10.0 && org.rank < 20.0 && cost > 0) {
-                action = "INCREASE"; 
+            // OPORTUNIDAD: Rankeo mal (pág 2) pero no gasto nada. Debería invertir.
+            else if (org.rank > 10.0 && cost === 0) {
+                action = "INCREASE";
             }
 
-            // Solo mostramos filas relevantes (con tráfico orgánico decente o con gasto)
-            if (org.rank < 20 || cost > 0) {
+            // Filtro visual: Solo mostramos filas con actividad relevante
+            if (org.rank <= 20 || cost > 0) {
                 bridgeResults.push({
                     url: org.cleanPath,
-                    query: org.query,
+                    query: org.queryReal, // Mostramos la query real del usuario
+                    // Opcional: Podrías mostrar 'keywordProxy' si prefieres ver "vuelos madrid" limpio
                     organicRank: org.rank,
                     organicClicks: org.clicks,
-                    ppcCampaign: campaignLabel,
+                    ppcCampaign: cost > 0 ? "Active (Page Match)" : "None",
                     ppcCost: cost,
                     ppcConversions: convs,
                     ppcCpa: ppcCpa,
@@ -451,9 +433,7 @@ const App: React.FC = () => {
             }
         });
 
-        console.log(`✅ BRIDGE COMPLETE. Matches: ${matchesFound}. Total Organic Rows: ${organicRows.length}`);
-        
-        // Ordenar por Gasto PPC descendente para ver el dinero primero
+        // Ordenamos por Coste para ver dónde se va el dinero
         setBridgeData(bridgeResults.sort((a, b) => b.ppcCost - a.ppcCost));
 
     } catch (e) {
