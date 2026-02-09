@@ -275,24 +275,30 @@ const App: React.FC = () => {
     }
   };
 
-// --- BRIDGE DATA: SAFE MODE (SIN FILTROS DE API PARA EVITAR ERROR 400) ---
+// --- BRIDGE DATA: MOTOR DE ATRIBUCIÓN (SOLUCIÓN ERROR 400) ---
   const fetchBridgeData = async () => {
-    // 1. Validaciones
+    // 1. Validaciones básicas
     if (!ga4Auth?.property || !ga4Auth.token || !gscAuth?.site || !gscAuth.token) {
         if (!bridgeData.length) setBridgeData(generateMockBridgeData());
         return;
     }
 
     setIsLoadingBridge(true);
-    console.log("🚀 STARTING BRIDGE (SAFE MODE)...");
+    console.log("🚀 INICIANDO MOTOR DE ATRIBUCIÓN...");
 
     try {
         const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
-        
-        // --- A. GSC (ORGÁNICO) ---
-        // Verificamos fechas antes de enviar
-        if (!filters.dateRange.start || !filters.dateRange.end) throw new Error("Fechas inválidas");
+        const normalizeUrl = (url: string) => {
+            if (!url) return '';
+            return url.toLowerCase()
+                .replace(/^https?:\/\/(www\.)?[^\/]+/, '') // Quita dominio
+                .split('?')[0].split('#')[0]                // Quita params
+                .replace(/\/$/, '')                         // Quita slash final
+                .replace(/^\/[a-z]{2}\//, '/')              // Quita idioma /es/ si existe
+                .trim();
+        };
 
+        // --- A. GSC (ORGÁNICO) ---
         const gscResp = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
@@ -304,25 +310,8 @@ const App: React.FC = () => {
             })
         });
 
-        // 🚨 CAPTURA DE ERROR GSC DETALLADA
-        if (!gscResp.ok) {
-            const errText = await gscResp.text();
-            console.error("❌ GSC API ERROR:", errText);
-            throw new Error(`GSC Error: ${gscResp.status} - Verifica la consola`);
-        }
-        
+        if (!gscResp.ok) throw new Error("GSC API Failed");
         const gscDataRaw = await gscResp.json();
-        
-        // Normalizador de URL
-        const normalizeUrl = (url: string) => {
-            if (!url) return '';
-            return url.toLowerCase()
-                .replace(/^https?:\/\/(www\.)?[^\/]+/, '') // Quita dominio
-                .split('?')[0].split('#')[0]                // Quita params
-                .replace(/\/$/, '')                         // Quita slash final
-                .replace(/^\/[a-z]{2}\//, '/')              // Quita idioma /es/ si existe
-                .trim();
-        };
 
         const organicRows = (gscDataRaw.rows || []).map((row: any) => ({
             query: row.keys[1],
@@ -331,89 +320,141 @@ const App: React.FC = () => {
             clicks: row.clicks
         }));
 
-        // --- B. GA4 (PAGO) ---
-        // ESTRATEGIA SEGURA: Pedimos las dimensiones sin filtrar en la API para evitar conflictos
-        const ga4Resp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
+        // --- B. GA4: FASE 1 - OBTENER COSTES POR CAMPAÑA ---
+        // Esto soluciona el Error 400. Pedimos Coste + Campaña (Compatible)
+        const ga4CostResp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                dateRanges: [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }],
+                dimensions: [{ name: 'sessionCampaignName' }],
+                metrics: [
+                    { name: 'advertiserAdCost' }, 
+                    { name: 'sessions' } // Necesario para calcular Coste Por Sesión (CPS)
+                ],
+                dimensionFilter: {
+                    filter: {
+                        fieldName: 'sessionDefaultChannelGroup',
+                        stringFilter: { matchType: 'CONTAINS', value: 'Paid' }
+                    }
+                },
+                limit: 2000
+            })
+        });
+        
+        if (!ga4CostResp.ok) {
+             const errText = await ga4CostResp.text();
+             console.error("❌ GA4 COST ERROR:", errText);
+             throw new Error("Error fetching Campaign Costs");
+        }
+        
+        const costData = await ga4CostResp.json();
+        
+        // Mapa de Coste Por Sesión (CPS) de cada campaña
+        const campaignCpsMap: Record<string, number> = {};
+        (costData.rows || []).forEach((row: any) => {
+            const campaign = row.dimensionValues[0].value;
+            const cost = parseFloat(row.metricValues[0].value) || 0;
+            const sessions = parseInt(row.metricValues[1].value) || 0;
+            
+            // Si la campaña gastó dinero y tuvo visitas, calculamos cuánto cuesta cada visita
+            if (sessions > 0 && cost > 0) {
+                campaignCpsMap[campaign] = cost / sessions;
+            }
+        });
+        
+        console.log(`💰 CAMPAÑAS ANALIZADAS: ${Object.keys(campaignCpsMap).length}`);
+
+        // --- C. GA4: FASE 2 - OBTENER FLUJO DE TRÁFICO ---
+        // Pedimos Campaña + URL + Sesiones (Compatible)
+        const ga4TrafficResp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 dateRanges: [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }],
                 dimensions: [
                     { name: 'landingPage' },
-                    { name: 'sessionDefaultChannelGroup' } // Pedimos esto explícitamente para poder filtrar luego
+                    { name: 'sessionCampaignName' }
                 ],
                 metrics: [
-                    { name: 'advertiserAdCost' },
                     { name: 'sessions' },
                     { name: 'conversions' }
                 ],
-                // ⚠️ QUITAMOS dimensionFilter y metricFilter de aquí para evitar el Error 400
+                dimensionFilter: {
+                    filter: {
+                        fieldName: 'sessionDefaultChannelGroup',
+                        stringFilter: { matchType: 'CONTAINS', value: 'Paid' }
+                    }
+                },
                 limit: 10000
             })
         });
 
-        // 🚨 CAPTURA DE ERROR GA4 DETALLADA
-        if (!ga4Resp.ok) {
-            const errText = await ga4Resp.text();
-            console.error("❌ GA4 API ERROR:", errText); // <--- ESTO NOS DIRÁ LA CAUSA REAL SI FALLA
-            throw new Error(`GA4 Error: ${ga4Resp.status}`);
-        }
+        if (!ga4TrafficResp.ok) throw new Error("Error fetching Traffic Flow");
+        const trafficData = await ga4TrafficResp.json();
 
-        const ga4DataRaw = await ga4Resp.json();
-        console.log("💰 GA4 ROWS RECIBIDAS:", ga4DataRaw.rows?.length || 0);
+        // --- D. ATRIBUCIÓN (EL REPARTO) ---
+        // Asignamos el coste a las URLs basándonos en qué campaña las visitó
+        const urlMetricsMap: Record<string, { cost: number, convs: number, sessions: number, campaigns: Set<string> }> = {};
 
-        // Mapa de Costes
-        const ga4UrlMap: Record<string, { cost: number, convs: number, sessions: number }> = {};
-
-        (ga4DataRaw.rows || []).forEach((row: any) => {
-            const rawPath = row.dimensionValues[0].value;
-            const channel = row.dimensionValues[1].value; // Canal (Paid, Organic, etc.)
+        (trafficData.rows || []).forEach((row: any) => {
+            const rawUrl = row.dimensionValues[0].value;
+            const campaign = row.dimensionValues[1].value;
+            const sessions = parseInt(row.metricValues[0].value) || 0;
+            const convs = parseFloat(row.metricValues[1].value) || 0;
             
-            // FILTRO MANUAL EN JS (Más seguro que en API)
-            // Solo procesamos si el canal parece de pago
-            if (!channel.toLowerCase().includes('paid') && !channel.toLowerCase().includes('cpc')) {
-                return; 
-            }
+            const cleanPath = normalizeUrl(rawUrl);
+            const cps = campaignCpsMap[campaign] || 0; // Coste por sesión de ESTA campaña
+            const allocatedCost = sessions * cps; // Dinero atribuido a esta URL
 
-            const cleanPath = normalizeUrl(rawPath);
-            const cost = parseFloat(row.metricValues[0].value) || 0;
-            const sessions = parseInt(row.metricValues[1].value) || 0;
-            const convs = parseFloat(row.metricValues[2].value) || 0;
-
-            if (!ga4UrlMap[cleanPath]) {
-                ga4UrlMap[cleanPath] = { cost: 0, convs: 0, sessions: 0 };
+            if (!urlMetricsMap[cleanPath]) {
+                urlMetricsMap[cleanPath] = { cost: 0, convs: 0, sessions: 0, campaigns: new Set() };
             }
-            ga4UrlMap[cleanPath].cost += cost;
-            ga4UrlMap[cleanPath].sessions += sessions;
-            ga4UrlMap[cleanPath].convs += convs;
+            
+            urlMetricsMap[cleanPath].cost += allocatedCost;
+            urlMetricsMap[cleanPath].convs += convs;
+            urlMetricsMap[cleanPath].sessions += sessions;
+            if (campaign && campaign !== '(not set)') {
+                urlMetricsMap[cleanPath].campaigns.add(campaign);
+            }
         });
 
-        // --- C. UNIFICACIÓN ---
+        // --- E. JOIN FINAL (GSC + DATOS ATRIBUIDOS) ---
         const bridgeResults: BridgeData[] = [];
+        let matches = 0;
 
         organicRows.forEach(org => {
-            const paid = ga4UrlMap[org.cleanPath];
+            const paid = urlMetricsMap[org.cleanPath];
             const cost = paid ? paid.cost : 0;
             
-            // Lógica visual
+            // Acción recomendada
             let action = "MAINTAIN";
-            if (org.rank <= 3.0 && cost > 0) action = "REVIEW (Cannibalization)";
+            // Lógica de alerta corregida: Si rankeas top 3 y gastas > 1€ (para evitar ruido de decimales)
+            if (org.rank <= 3.0 && cost > 1) action = "REVIEW";
             else if (org.rank > 10.0 && cost === 0) action = "INCREASE";
 
-            // Solo mostramos si hay actividad relevante
+            // Nombre de campaña para mostrar
+            let campName = "None";
+            if (paid && paid.campaigns.size > 0) {
+                campName = Array.from(paid.campaigns).join(', ');
+                if (campName.length > 30) campName = "Multiple / Mixed";
+            } else if (cost > 0) {
+                 campName = "Unidentified Spend";
+            }
+
             if (org.rank <= 20 || cost > 0) {
-                // Cálculo de CPAs seguros (evitar división por cero)
+                if (paid) matches++;
+                
                 const ppcCpa = (cost > 0 && paid?.convs > 0) ? cost / paid.convs : 0;
                 const blendedCpa = (cost > 0 && (org.clicks + (paid?.convs || 0)) > 0) 
-                                   ? cost / (org.clicks + (paid?.convs || 0)) 
-                                   : 0;
+                                   ? cost / (org.clicks + (paid?.convs || 0)) : 0;
 
                 bridgeResults.push({
                     url: org.cleanPath,
                     query: org.query,
                     organicRank: org.rank,
                     organicClicks: org.clicks,
-                    ppcCampaign: cost > 0 ? "Active Paid Campaign" : "None",
+                    ppcCampaign: campName,
                     ppcCost: cost,
                     ppcConversions: paid?.convs || 0,
                     ppcCpa: ppcCpa,
@@ -425,13 +466,12 @@ const App: React.FC = () => {
             }
         });
 
-        // Ordenar por gasto
+        console.log(`✅ BRIDGE DONE. Matches: ${matches}.`);
         setBridgeData(bridgeResults.sort((a, b) => b.ppcCost - a.ppcCost));
 
     } catch (e: any) {
-        console.error("❌ ERROR FATAL EN BRIDGE:", e);
-        // No mostramos datos mock para obligar a ver el error real
-        // setBridgeData(generateMockBridgeData()); 
+        console.error("❌ FINAL ERROR:", e);
+        // setBridgeData(generateMockBridgeData()); // Descomentar solo si quieres datos falsos de emergencia
     } finally {
         setIsLoadingBridge(false);
     }
