@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Layers, Globe, Target, Cpu, Settings2, ExternalLink, LogOut, ChevronRight, Activity, Sparkles } from 'lucide-react';
+import { Layers, Globe, Target, Cpu, Settings2, ExternalLink, LogOut, ChevronRight, Activity, Sparkles, Cable } from 'lucide-react';
 import { DashboardTab, Ga4Property, GscSite } from '../types';
 
 const SidebarLink: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string }> = ({ active, onClick, icon, label }) => (
@@ -91,6 +91,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => setActiveTab(DashboardTab.KEYWORD_DEEP_DIVE)} 
             icon={<Target />} 
             label="Deep SEO Analysis" 
+          />
+           <SidebarLink 
+            active={activeTab === DashboardTab.PPC_SEO_BRIDGE} 
+            onClick={() => setActiveTab(DashboardTab.PPC_SEO_BRIDGE)} 
+            icon={<Cable />} 
+            label="PPC to SEO Bridge" 
           />
         </nav>
         

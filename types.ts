@@ -45,6 +45,20 @@ export interface KeywordData extends BaseMetrics {
   position?: number; // Added for SEO Ranking
 }
 
+export interface BridgeData {
+  url: string;
+  query: string;
+  organicRank: number | null;
+  organicClicks: number;
+  ppcCampaign: string;
+  ppcCost: number;
+  ppcConversions: number;
+  ppcCpa: number;
+  ppcClicks: number;
+  ppcImpressions: number;
+  status?: 'Exclude' | 'Increase' | 'Maintain' | 'Review';
+}
+
 export interface DashboardFilters {
   dateRange: {
     start: string;

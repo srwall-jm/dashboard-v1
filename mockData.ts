@@ -1,5 +1,5 @@
 
-import { DailyData, KeywordData, ChannelType, QueryType } from './types';
+import { DailyData, KeywordData, ChannelType, QueryType, BridgeData } from './types';
 
 export const COUNTRIES = ['Spain', 'Mexico', 'United States', 'United Kingdom', 'France', 'Germany', 'Italy', 'Portugal'];
 const QUERY_TYPES: QueryType[] = ['Branded', 'Non-Branded'];
@@ -95,20 +95,6 @@ export const generateMockKeywordData = (): KeywordData[] => {
 };
 
 // --- NEW BRIDGE MOCK DATA ---
-
-export interface BridgeData {
-  url: string;
-  query: string;
-  organicRank: number | null;
-  organicClicks: number;
-  ppcCampaign: string;
-  ppcCost: number;
-  ppcConversions: number;
-  ppcCpa: number;
-  ppcClicks: number;
-  ppcImpressions: number;
-  status?: 'Exclude' | 'Increase' | 'Maintain' | 'Review';
-}
 
 export const generateMockBridgeData = (): BridgeData[] => {
   const queries = [

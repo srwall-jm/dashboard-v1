@@ -3,10 +3,11 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   RefreshCw, Filter, Globe, Tag, AlertCircle, Sparkles, Cpu, Activity, Menu, X
 } from 'lucide-react';
-import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, QueryType } from './types';
+import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, QueryType, BridgeData } from './types';
 import { getDashboardInsights, getOpenAiInsights } from './geminiService';
 import GoogleLogin from './GoogleLogin'; 
 import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry } from './utils';
+import { generateMockBridgeData } from './mockData';
 
 // Import New Components and Views
 import { Sidebar } from './components/Sidebar';
@@ -14,6 +15,7 @@ import { DateRangeSelector } from './components/DateRangeSelector';
 import { OrganicVsPaidView } from './views/OrganicVsPaidView';
 import { SeoMarketplaceView } from './views/SeoMarketplaceView';
 import { SeoDeepDiveView } from './views/SeoDeepDiveView';
+import { SeoPpcBridgeView } from './views/SeoPpcBridgeView';
 
 const CLIENT_ID = "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com"; 
 const SCOPE_GA4 = "https://www.googleapis.com/auth/analytics.readonly";
@@ -54,6 +56,8 @@ const App: React.FC = () => {
   
   const [realDailyData, setRealDailyData] = useState<DailyData[]>([]);
   const [realKeywordData, setRealKeywordData] = useState<KeywordData[]>([]);
+  const [bridgeData, setBridgeData] = useState<BridgeData[]>([]); // New State for Bridge Data
+
   const [gscDailyTotals, setGscDailyTotals] = useState<any[]>([]);
   const [gscTotals, setGscTotals] = useState<{current: any, previous: any} | null>(null);
   
@@ -75,7 +79,8 @@ const App: React.FC = () => {
   const [tabInsights, setTabInsights] = useState<Record<string, string | null>>({
     [DashboardTab.ORGANIC_VS_PAID]: null,
     [DashboardTab.SEO_BY_COUNTRY]: null,
-    [DashboardTab.KEYWORD_DEEP_DIVE]: null
+    [DashboardTab.KEYWORD_DEEP_DIVE]: null,
+    [DashboardTab.PPC_SEO_BRIDGE]: null
   });
   const [loadingInsights, setLoadingInsights] = useState(false);
 
@@ -383,6 +388,13 @@ const fetchGa4Data = async () => {
   };
 
   useEffect(() => {
+    // Simulate Fetching Bridge Data when Tab is active
+    if (activeTab === DashboardTab.PPC_SEO_BRIDGE && bridgeData.length === 0) {
+      setBridgeData(generateMockBridgeData());
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
     const initializeOAuth = () => {
       if (typeof window !== 'undefined' && (window as any).google && (window as any).google.accounts) {
         tokenClientGa4.current = (window as any).google.accounts.oauth2.initTokenClient({
@@ -497,6 +509,7 @@ const fetchGa4Data = async () => {
       let summary = "";
       const dashboardName = activeTab === DashboardTab.ORGANIC_VS_PAID ? "Organic vs Paid Performance" : 
                            (activeTab === DashboardTab.SEO_BY_COUNTRY ? "SEO Performance by Country" : 
+                           activeTab === DashboardTab.PPC_SEO_BRIDGE ? "PPC & SEO Bridge Intelligence" :
                            "Deep URL and Keyword Analysis");
 
       if (activeTab === DashboardTab.ORGANIC_VS_PAID) {
@@ -510,6 +523,15 @@ const fetchGa4Data = async () => {
         summary = `
           Context: Market-level SEO efficiency.
           Organic GA4 Rev: ${currencySymbol}${channelStats.organic.current.revenue.toLocaleString()}.
+        `;
+      } else if (activeTab === DashboardTab.PPC_SEO_BRIDGE) {
+        // Summarize bridge data for AI
+        const riskCount = bridgeData.filter(b => b.organicRank !== null && b.organicRank <= 3 && b.ppcCost > 0).length;
+        const opportunityCount = bridgeData.filter(b => b.organicRank !== null && b.organicRank > 5 && b.organicRank <= 20).length;
+        summary = `
+          Context: Integrated SEO and PPC Intelligence.
+          Cannibalization Risks detected: ${riskCount} keywords where we rank Top 3 organically but still pay for ads.
+          Growth Opportunities detected: ${opportunityCount} keywords where we rank 5-20 and could increase ad spend.
         `;
       }
 
@@ -602,6 +624,7 @@ const fetchGa4Data = async () => {
           {activeTab === DashboardTab.ORGANIC_VS_PAID && "Organic vs Paid Performance"}
           {activeTab === DashboardTab.SEO_BY_COUNTRY && "SEO Performance by Country"}
           {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && "URL & Keyword Analysis"}
+          {activeTab === DashboardTab.PPC_SEO_BRIDGE && "The Bridge: SEO vs PPC Intelligence"}
         </h2>
       </div>
     </div>
@@ -653,7 +676,7 @@ const fetchGa4Data = async () => {
               <div className="flex items-center gap-3">
                 {aiProvider === 'openai' ? <Cpu className="w-5 h-5 text-emerald-400" /> : <Sparkles className="w-5 h-5 text-indigo-400" />}
                 <div className="flex flex-col">
-                  <h3 className="text-xl font-black">Strategic Report: {activeTab === DashboardTab.ORGANIC_VS_PAID ? "Channels" : activeTab === DashboardTab.SEO_BY_COUNTRY ? "Markets" : "Deep Dive"}</h3>
+                  <h3 className="text-xl font-black">Strategic Report: {activeTab === DashboardTab.ORGANIC_VS_PAID ? "Channels" : activeTab === DashboardTab.SEO_BY_COUNTRY ? "Markets" : activeTab === DashboardTab.PPC_SEO_BRIDGE ? "The Bridge" : "Deep Dive"}</h3>
                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Generated by {aiProvider === 'openai' ? 'OpenAI GPT-4o-mini' : 'Google Gemini 3 Pro'}</p>
                 </div>
               </div>
@@ -669,6 +692,8 @@ const fetchGa4Data = async () => {
           {activeTab === DashboardTab.SEO_BY_COUNTRY && <SeoMarketplaceView data={filteredDailyData} keywordData={filteredKeywordData} gscDailyTotals={gscDailyTotals} gscTotals={gscTotals} aggregate={aggregateData} comparisonEnabled={filters.comparison.enabled} currencySymbol={currencySymbol} grouping={grouping} isBranded={isBranded} queryTypeFilter={filters.queryType} countryFilter={filters.country} />}
           
           {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && <SeoDeepDiveView keywords={filteredKeywordData} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isLoading={isAnythingLoading} comparisonEnabled={filters.comparison.enabled} />}
+
+          {activeTab === DashboardTab.PPC_SEO_BRIDGE && <SeoPpcBridgeView data={bridgeData} dailyData={filteredDailyData} currencySymbol={currencySymbol} />}
         </div>
 
         <div className="mt-12 flex justify-center pb-12">
@@ -678,7 +703,7 @@ const fetchGa4Data = async () => {
             className={`flex items-center gap-3 px-10 py-4 ${aiProvider === 'openai' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20' : 'bg-slate-950 hover:bg-slate-800 shadow-slate-900/20'} text-white rounded-3xl text-xs font-black shadow-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50`}
           >
             {loadingInsights ? <RefreshCw className="w-4 h-4 animate-spin" /> : (aiProvider === 'openai' ? <Cpu className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />)} 
-            Generate {activeTab === DashboardTab.ORGANIC_VS_PAID ? 'Channel' : activeTab === DashboardTab.SEO_BY_COUNTRY ? 'Market' : 'SEO'} Insights
+            Generate {activeTab === DashboardTab.ORGANIC_VS_PAID ? 'Channel' : activeTab === DashboardTab.SEO_BY_COUNTRY ? 'Market' : activeTab === DashboardTab.PPC_SEO_BRIDGE ? 'Bridge' : 'SEO'} Insights
           </button>
         </div>
       </main>
