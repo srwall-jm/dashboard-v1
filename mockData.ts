@@ -155,7 +155,9 @@ export const generateMockBridgeData = (): BridgeData[] => {
 };
 
 export const generateMockAiTrafficData = (): AiTrafficData[] => {
-  const sources = ['chatgpt.com', 'bing.com', 'copilot.microsoft.com', 'perplexity.ai', 'gemini.google.com', 'claude.ai'];
+  // Only the requested sources
+  const sources = ['chatgpt.com', 'perplexity.ai', 'gemini.google.com', 'claude.ai'];
+  
   const pages = [
     '/blog/top-running-shoes-2024', '/shop/yoga/kits', '/guide/home-workouts', 
     '/product/smart-dumbbell', '/blog/nutrition-tips', '/shop/sale'
@@ -171,7 +173,7 @@ export const generateMockAiTrafficData = (): AiTrafficData[] => {
     const dateStr = d.toISOString().split('T')[0];
 
     sources.forEach(source => {
-      // Perplexity and ChatGPT usually have higher engagement
+      // Perplexity and ChatGPT usually have higher engagement in mock scenarios
       const isHighQuality = source.includes('perplexity') || source.includes('chatgpt');
       const baseSessions = isHighQuality ? Math.floor(Math.random() * 50) + 10 : Math.floor(Math.random() * 20) + 2;
       

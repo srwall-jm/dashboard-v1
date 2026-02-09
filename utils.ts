@@ -24,8 +24,8 @@ export const COUNTRY_CODE_TO_NAME: Record<string, string> = {
 };
 
 // Configuration for AI Traffic Sources
-// Easy to extend: just add '|grok|llama' etc.
-export const AI_SOURCE_REGEX_STRING = '(chatgpt|openai|gemini|bard|bing|copilot|perplexity|claude|anthropic|grok|llama)';
+// Strictly restricted to requested domains
+export const AI_SOURCE_REGEX_STRING = '(chatgpt\\.com|perplexity\\.ai|claude\\.ai|gemini\\.google\\.com)';
 
 export const normalizeCountry = (val: string): string => {
   if (!val) return 'Other';
