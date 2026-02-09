@@ -144,22 +144,33 @@ export const generateMockBridgeData = (): BridgeData[] => {
 
     const ppcCpa = ppcConversions > 0 ? ppcCost / ppcConversions : 0;
     const organicClicks = rank && rank < 10 ? Math.floor(Math.random() * 1000) : Math.floor(Math.random() * 50);
+    const organicSessions = Math.floor(organicClicks * 1.3); // GA4 Sessions usually higher than GSC clicks
     
-    const blendedDenominator = organicClicks + ppcConversions;
-    const blendedCostRatio = blendedDenominator > 0 ? ppcCost / blendedDenominator : 0;
+    // Paid Sessions Logic
+    const ppcSessions = Math.floor(ppcCost / (0.5 + Math.random()));
+    const blendedDenominator = organicSessions + ppcSessions;
+    const blendedCostRatio = blendedDenominator > 0 ? ppcSessions / blendedDenominator : 0;
+    
+    // Logic for Action Label
+    let action = "MAINTAIN";
+    if (rank && rank <= 3.0 && blendedCostRatio > 0.4) action = "CRITICAL (Overlap)";
+    else if (rank && rank <= 3.0 && ppcSessions > 0) action = "REVIEW";
+    else if (rank && rank > 10.0 && ppcSessions === 0) action = "INCREASE";
 
     return {
       url: pages[i % pages.length],
       query: isPMax ? '(not provided)' : queries[i % queries.length],
       organicRank: rank,
       organicClicks: organicClicks,
+      organicSessions: organicSessions, // GA4 Metric
       ppcCampaign: campaigns[i % campaigns.length],
       ppcCost,
       ppcConversions,
       ppcCpa,
-      ppcClicks: Math.floor(ppcCost / (0.5 + Math.random())),
+      ppcSessions: ppcSessions, // GA4 Paid Sessions
       ppcImpressions: Math.floor(ppcCost * 20),
-      blendedCostRatio
+      blendedCostRatio,
+      actionLabel: action
     };
   });
 };

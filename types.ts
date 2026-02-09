@@ -83,15 +83,16 @@ export interface BridgeData {
   url: string;
   query: string;
   organicRank: number | null;
-  organicClicks: number;
+  organicClicks: number; // GSC Clicks (Kept for reference/CTR context only)
+  organicSessions: number; // GA4 Sessions (Primary Metric)
   ppcCampaign: string;
   ppcCost: number;
   ppcConversions: number;
   ppcCpa: number;
-  ppcClicks: number;
+  ppcSessions: number; // GA4 Paid Sessions (Primary Metric)
   ppcImpressions: number;
   blendedCostRatio: number;
-  actionLabel?: string;
+  actionLabel: string;
   status?: string;
   ppcSourceMedium?: string;
 }

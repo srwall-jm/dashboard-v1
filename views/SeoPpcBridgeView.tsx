@@ -1,9 +1,10 @@
+
 import React, { useMemo, useState } from 'react';
 import { 
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, BarChart, Bar, LineChart, Line, Legend, LabelList
 } from 'recharts';
 import { 
-  AlertOctagon, Zap, ShieldCheck, FileText, ExternalLink, Search, Filter, ChevronDown, ChevronRight, CornerDownRight, BarChart2
+  AlertOctagon, Zap, ShieldCheck, FileText, ExternalLink, Search, Filter, ChevronDown, ChevronRight, CornerDownRight, BarChart2, TrendingUp, DollarSign
 } from 'lucide-react';
 import { BridgeData, DailyData } from '../types';
 import { exportToCSV } from '../utils';
@@ -25,7 +26,7 @@ const QueryDetailRow: React.FC<{ query: string, rank: number | null, clicks: num
       ) : '-'}
     </td>
     <td className="text-right pr-8 py-2 text-[10px] text-slate-500 font-mono">
-       {clicks.toLocaleString()} clicks
+       {clicks.toLocaleString()} clicks (GSC)
     </td>
     <td colSpan={3} className="py-2"></td>
   </tr>
@@ -75,21 +76,55 @@ export const SeoPpcBridgeView: React.FC<{
   const kpis = useMemo(() => {
     const excludeCount = data.filter(d => d.actionLabel.includes('CRITICAL') || d.actionLabel.includes('REVIEW')).length;
     const increaseCount = data.filter(d => d.actionLabel === 'INCREASE').length;
+    const totalOrganicSessions = data.reduce((acc, curr) => acc + curr.organicSessions, 0);
+    const totalPaidSessions = data.reduce((acc, curr) => acc + curr.ppcSessions, 0);
+
     return {
-      exclude: { count: excludeCount, volume: data.reduce((acc, curr) => curr.actionLabel.includes('CRITICAL') ? acc + curr.ppcClicks : acc, 0) },
+      exclude: { count: excludeCount, volume: data.reduce((acc, curr) => curr.actionLabel.includes('CRITICAL') ? acc + curr.ppcSessions : acc, 0) },
       increase: { count: increaseCount },
-      maintain: { count: data.length - excludeCount - increaseCount }
+      maintain: { count: data.length - excludeCount - increaseCount },
+      traffic: { organic: totalOrganicSessions, paid: totalPaidSessions }
     };
   }, [data]);
 
   const savingsData = useMemo(() => [
-    { name: 'Total Paid Traffic', value: data.reduce((acc, c) => acc + c.ppcClicks, 0) },
-    { name: 'Cannibalized Traffic', value: kpis.exclude.volume }
+    { name: 'Total Paid Sessions', value: data.reduce((acc, c) => acc + c.ppcSessions, 0) },
+    { name: 'Cannibalized Sessions', value: kpis.exclude.volume }
   ], [data, kpis]);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
       
+      {/* SECTION A: TRAFFIC VISIBILITY SCORECARD */}
+      <div className="bg-slate-900 p-8 rounded-[32px] text-white shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-8 opacity-10">
+            <TrendingUp size={120} />
+        </div>
+        <div className="relative z-10 flex flex-col md:flex-row justify-between gap-8">
+            <div>
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Total Visibility (Analysed URLs)</h4>
+                <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-black">{kpis.traffic.organic.toLocaleString()}</span>
+                    <span className="text-sm font-bold text-emerald-400">Organic Sessions</span>
+                </div>
+            </div>
+            <div className="md:text-right">
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Paid Investment</h4>
+                <div className="flex items-baseline gap-2 md:justify-end">
+                    <span className="text-3xl font-black">{kpis.traffic.paid.toLocaleString()}</span>
+                    <span className="text-sm font-bold text-indigo-400">Paid Sessions</span>
+                </div>
+            </div>
+            <div className="md:text-right">
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Organic Ratio</h4>
+                <div className="flex items-baseline gap-2 md:justify-end">
+                    <span className="text-3xl font-black">{((kpis.traffic.organic / (kpis.traffic.organic + kpis.traffic.paid || 1)) * 100).toFixed(1)}%</span>
+                    <span className="text-sm font-bold text-slate-500">of Total Traffic</span>
+                </div>
+            </div>
+        </div>
+      </div>
+
       {/* SECTION B: KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <KpiCard title="Critical Overlap" value={kpis.exclude.count} icon={<AlertOctagon />} color="rose" comparison={undefined} />
@@ -111,9 +146,11 @@ export const SeoPpcBridgeView: React.FC<{
                   if (active && payload && payload.length) {
                     const d = payload[0].payload;
                     return (
-                      <div className="bg-slate-900 text-white p-2 rounded text-xs">
-                        <p className="font-bold">{d.url}</p>
-                        <p>Share: {(d.blendedCostRatio*100).toFixed(0)}%</p>
+                      <div className="bg-slate-900 text-white p-3 rounded-xl border border-white/10 shadow-xl">
+                        <p className="font-bold text-xs mb-1">{d.url}</p>
+                        <p className="text-[10px] text-slate-300">Paid Share: {(d.blendedCostRatio*100).toFixed(0)}%</p>
+                        <p className="text-[10px] text-emerald-400">Org. Sessions: {d.organicSessions.toLocaleString()}</p>
+                        <p className="text-[10px] text-indigo-400">Paid Sessions: {d.ppcSessions.toLocaleString()}</p>
                       </div>
                     );
                   } return null;
@@ -130,12 +167,12 @@ export const SeoPpcBridgeView: React.FC<{
 
         {/* Graph 2 */}
         <div className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm">
-           <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Wasted Volume</h4>
+           <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Wasted Volume (Sessions)</h4>
            <div className="h-[200px]">
              <ResponsiveContainer width="100%" height="100%">
                <BarChart data={savingsData} layout="vertical" margin={{left: 0}}>
                   <XAxis type="number" hide />
-                  <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 9, fontWeight: 700}} />
+                  <YAxis dataKey="name" type="category" width={110} tick={{fontSize: 9, fontWeight: 700}} />
                   <Tooltip cursor={{fill: 'transparent'}} />
                   <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={24}>
                     <Cell fill="#cbd5e1" />
@@ -153,7 +190,7 @@ export const SeoPpcBridgeView: React.FC<{
         <div className="flex justify-between items-center mb-6">
             <div>
               <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Traffic Source Audit</h4>
-              <p className="text-[11px] font-bold text-slate-600">Comparing Raw Volumes: SEO vs PPC</p>
+              <p className="text-[11px] font-bold text-slate-600">Comparing GA4 Sessions: Organic vs Paid</p>
             </div>
              <button 
                 onClick={() => exportToCSV(data, "PPC_SEO_Export")} 
@@ -170,9 +207,9 @@ export const SeoPpcBridgeView: React.FC<{
                 <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">URL / Campaign</th>
                 <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Top Rank</th>
                 
-                {/* NUEVAS COLUMNAS DE TRÁFICO REAL */}
-                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">SEO Clicks</th>
-                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">PPC Sessions</th>
+                {/* MODIFICACIÓN: COLUMNA DE SESIONES ORGÁNICAS */}
+                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Organic Sessions (GA4)</th>
+                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Paid Sessions (GA4)</th>
                 <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right text-amber-600">Paid Share</th>
                 
                 <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
@@ -205,17 +242,17 @@ export const SeoPpcBridgeView: React.FC<{
                       </span>
                     </td>
                     
-                    {/* COLUMNA: SEO VOL (Dato Crudo) */}
+                    {/* COLUMNA: SEO VOL (Dato Orgánico GA4) */}
                     <td className="py-3 px-4 text-right">
                        <span className="text-[10px] font-bold text-emerald-600">
-                         {row.organicClicks.toLocaleString()}
+                         {row.organicSessions.toLocaleString()}
                        </span>
                     </td>
 
-                    {/* COLUMNA: PPC VOL (Dato Crudo) */}
+                    {/* COLUMNA: PPC VOL (Dato Pagado GA4) */}
                     <td className="py-3 px-4 text-right">
                        <span className="text-[10px] font-bold text-indigo-600">
-                         {row.ppcClicks.toLocaleString()}
+                         {row.ppcSessions.toLocaleString()}
                        </span>
                     </td>
 

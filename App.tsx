@@ -276,7 +276,7 @@ const App: React.FC = () => {
     }
   };
 
-// --- BRIDGE DATA: FIX CVR REAL (ADIÓS AL 90%) ---
+// --- BRIDGE DATA: GA4 SESSIONS (ORGANIC vs PAID) ---
   const fetchBridgeData = async () => {
     if (!ga4Auth?.property || !ga4Auth.token || !gscAuth?.site || !gscAuth.token) {
         if (!bridgeData.length) setBridgeData(generateMockBridgeData());
@@ -284,7 +284,7 @@ const App: React.FC = () => {
     }
 
     setIsLoadingBridge(true);
-    // console.log("🚀 STARTING BRIDGE WITH REAL CVR METRIC...");
+    // console.log("🚀 STARTING BRIDGE: GA4 SESSIONS VS GA4 PAID SESSIONS...");
 
     try {
         const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
@@ -304,7 +304,7 @@ const App: React.FC = () => {
             return clean.split('?')[0].split('#')[0].replace(/\/$/, '').replace(/^\/[a-z]{2}\//, '/'); 
         };
 
-        // --- A. GSC (SEO) ---
+        // --- A. GSC (Solo para Ranking y Top Query) ---
         const gscResp = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
@@ -317,18 +317,16 @@ const App: React.FC = () => {
         });
 
         const gscDataRaw = await gscResp.json();
-        
-        // Calcular total orgánico por URL para el Share
-        const urlOrganicTotalMap: Record<string, number> = {};
-        const organicRows = (gscDataRaw.rows || []).map((row: any) => {
-            const path = getPath(row.keys[0]);
-            const clicks = row.clicks;
-            if (!urlOrganicTotalMap[path]) urlOrganicTotalMap[path] = 0;
-            urlOrganicTotalMap[path] += clicks;
-            return { query: row.keys[1], cleanPath: path, rank: row.position, clicks: clicks };
-        });
+        // Solo guardamos datos de GSC para pintar la Query y el Rank. El volumen SEO vendrá de GA4.
+        const organicRows = (gscDataRaw.rows || []).map((row: any) => ({
+            query: row.keys[1],
+            cleanPath: getPath(row.keys[0]),
+            rank: row.position,
+            gscClicks: row.clicks // Mantenemos clicks por referencia, pero no para cálculo
+        }));
 
-        // --- B. GA4 (SOLO TRÁFICO Y TASA DE CONVERSIÓN) ---
+        // --- B. GA4 (SESIONES ORGÁNICAS Y PAGADAS) ---
+        // Solicitamos Default Channel Group para distinguir limpiamente Organic vs Paid
         const ga4Resp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
@@ -336,11 +334,11 @@ const App: React.FC = () => {
                 dateRanges: [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }],
                 dimensions: [
                     { name: 'landingPage' },
-                    { name: 'sessionCampaignName' }
+                    { name: 'sessionDefaultChannelGroup' },
+                    { name: 'sessionCampaignName' } // Para tener detalle de campaña PPC
                 ],
                 metrics: [
                     { name: 'sessions' },
-                    // CAMBIO CLAVE: Pedimos la tasa ya calculada, no el total bruto
                     { name: 'sessionConversionRate' } 
                 ],
                 limit: 10000
@@ -350,59 +348,66 @@ const App: React.FC = () => {
         if (!ga4Resp.ok) throw new Error("GA4 API Error");
         const ga4Data = await ga4Resp.json();
 
-        // --- C. PROCESAMIENTO ---
-        const getCampaignType = (name: string): string => {
-            const n = name.toLowerCase();
-            if (n === '(not set)' || n === 'none') return 'Unknown';
-            if (n.includes('dsa')) return '🤖 DSA (Dynamic)';
-            if (n.includes('branded') && !n.includes('non')) return '🛡️ Brand';
-            if (n.includes('nonbranded')) return '🌍 Generic';
-            if (n.includes('pmax') || n.includes('performance max')) return '⚡ PMax';
-            return 'Other Paid';
-        };
-
-        // Mapa: Guardamos Sesiones y la Tasa Ponderada
-        const urlPaidMap: Record<string, { sessions: number, weightedCvr: number, campaigns: Set<string> }> = {};
+        // Mapa: Guardamos Sesiones Orgánicas y Pagadas por URL
+        const urlMap: Record<string, { organicSessions: number, paidSessions: number, weightedCvr: number, campaigns: Set<string> }> = {};
 
         (ga4Data.rows || []).forEach((row: any) => {
             const rawUrl = row.dimensionValues[0].value;
-            const campaignName = row.dimensionValues[1].value;
+            const channelGroup = row.dimensionValues[1].value.toLowerCase();
+            const campaignName = row.dimensionValues[2].value;
             
             const sessions = parseInt(row.metricValues[0].value) || 0;
-            // GA4 devuelve esto como 0.052 (5.2%)
             const rate = parseFloat(row.metricValues[1].value) || 0; 
 
-            const type = getCampaignType(campaignName);
+            const path = getPath(rawUrl);
             
-            if (type !== 'Unknown' && type !== 'Other Paid' && !campaignName.includes('email')) {
-                const path = getPath(rawUrl);
+            if (!urlMap[path]) {
+                urlMap[path] = { organicSessions: 0, paidSessions: 0, weightedCvr: 0, campaigns: new Set() };
+            }
+
+            // LOGICA DE CLASIFICACIÓN GA4
+            if (channelGroup.includes('organic')) {
+                urlMap[path].organicSessions += sessions;
+            } else if (channelGroup.includes('paid') || channelGroup.includes('cpc') || channelGroup.includes('ppc')) {
+                urlMap[path].paidSessions += sessions;
+                urlMap[path].weightedCvr += (rate * sessions);
                 
-                if (!urlPaidMap[path]) {
-                    urlPaidMap[path] = { sessions: 0, weightedCvr: 0, campaigns: new Set() };
-                }
-                urlPaidMap[path].sessions += sessions;
+                // Limpieza nombre campaña
+                let campType = "Other Paid";
+                const n = campaignName.toLowerCase();
+                if (n.includes('pmax')) campType = "⚡ PMax";
+                else if (n.includes('brand')) campType = "🛡️ Brand";
+                else if (n.includes('generic') || n.includes('non')) campType = "🌍 Generic";
+                else if (n !== '(not set)') campType = campaignName; // Si no encaja, usar nombre real (ej: "Search - Sale")
                 
-                // Acumulamos "sesiones convertidoras" teóricas para luego hacer la media
-                urlPaidMap[path].weightedCvr += (rate * sessions); 
-                urlPaidMap[path].campaigns.add(type);
+                urlMap[path].campaigns.add(campType);
             }
         });
 
         // --- D. CRUCE FINAL ---
         const bridgeResults: BridgeData[] = [];
+        const processedUrls = new Set<string>();
 
         organicRows.forEach(org => {
-            const paid = urlPaidMap[org.cleanPath];
-            const paidSessions = paid ? paid.sessions : 0;
+            // Evitar duplicados si GSC devuelve multiples queries para la misma URL (que lo hace)
+            // En este view agrupamos por URL, así que tomamos la primera query (top query) que suele venir ordenada por GSC
+            if (processedUrls.has(org.cleanPath)) return;
             
-            // 1. CVR REAL (Media ponderada)
-            // Si hubo 100 visitas al 5% y 100 visitas al 0%, la media es 2.5%
-            const realCvr = (paid && paidSessions > 0) ? (paid.weightedCvr / paidSessions) : 0;
+            const ga4Stats = urlMap[org.cleanPath];
+            const organicSessions = ga4Stats ? ga4Stats.organicSessions : 0;
+            const paidSessions = ga4Stats ? ga4Stats.paidSessions : 0;
 
-            // 2. PAID SHARE (Dependencia)
-            const totalOrganic = urlOrganicTotalMap[org.cleanPath] || org.clicks;
-            const totalTraffic = paidSessions + totalOrganic;
-            const paidShare = totalTraffic > 0 ? (paidSessions / totalTraffic) : 0;
+            // Si no hay tráfico en absoluto (ni orgánico ni pagado en GA4), quizás es una url muy long tail de GSC, la ignoramos para limpiar tabla
+            if (organicSessions === 0 && paidSessions === 0) return;
+
+            processedUrls.add(org.cleanPath);
+            
+            // 1. CVR REAL (Media ponderada de tráfico pagado)
+            const realCvr = (paidSessions > 0) ? (ga4Stats!.weightedCvr / paidSessions) : 0;
+
+            // 2. SHARE usando SESIONES (No Clics)
+            const totalSessions = organicSessions + paidSessions;
+            const paidShare = totalSessions > 0 ? (paidSessions / totalSessions) : 0;
 
             // Lógica Action
             let action = "MAINTAIN";
@@ -411,26 +416,23 @@ const App: React.FC = () => {
             else if (org.rank > 10.0 && paidSessions === 0) action = "INCREASE";
 
             let campDisplay = "None";
-            if (paid && paid.campaigns.size > 0) campDisplay = Array.from(paid.campaigns).join(' + ');
+            if (ga4Stats && ga4Stats.campaigns.size > 0) campDisplay = Array.from(ga4Stats.campaigns).join(' + ');
 
-            if (org.rank <= 20 || paidSessions > 0) {
-                bridgeResults.push({
-                    url: org.cleanPath,
-                    query: org.query,
-                    organicRank: org.rank,
-                    organicClicks: org.clicks,
-                    ppcCampaign: campDisplay,
-                    ppcCost: 0,
-                    
-                    ppcConversions: 0, // Ya no usamos conversiones brutas
-                    ppcCpa: realCvr,   // Aquí va el % REAL (ej: 0.035)
-                    blendedCostRatio: paidShare, 
-
-                    ppcClicks: paidSessions,
-                    ppcImpressions: paidSessions * 10,
-                    actionLabel: action
-                });
-            }
+            bridgeResults.push({
+                url: org.cleanPath,
+                query: org.query,
+                organicRank: org.rank,
+                organicClicks: org.gscClicks, // Guardamos el dato GSC por si acaso, pero no es la métrica principal
+                organicSessions: organicSessions, // AQUÍ ESTÁ LA NUEVA MÉTRICA
+                ppcCampaign: campDisplay,
+                ppcCost: 0,
+                ppcConversions: 0,
+                ppcCpa: realCvr,
+                blendedCostRatio: paidShare, 
+                ppcSessions: paidSessions, // Esto es "Paid Sessions"
+                ppcImpressions: paidSessions * 10,
+                actionLabel: action
+            });
         });
 
         setBridgeData(bridgeResults.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
@@ -772,11 +774,11 @@ const fetchGa4Data = async () => {
         `;
       } else if (activeTab === DashboardTab.PPC_SEO_BRIDGE) {
         // Summarize bridge data for AI
-        const riskCount = bridgeData.filter(b => b.organicRank !== null && b.organicRank <= 3 && b.ppcCost > 0).length;
+        const riskCount = bridgeData.filter(b => b.organicRank !== null && b.organicRank <= 3 && b.ppcSessions > 0).length;
         const opportunityCount = bridgeData.filter(b => b.organicRank !== null && b.organicRank > 5 && b.organicRank <= 20).length;
         summary = `
-          Context: Integrated SEO and PPC Intelligence.
-          Cannibalization Risks detected: ${riskCount} keywords where we rank Top 3 organically but still pay for ads.
+          Context: Integrated SEO and PPC Intelligence using Session Comparison.
+          Cannibalization Risks detected: ${riskCount} keywords where we rank Top 3 organically but still pay for Sessions.
           Growth Opportunities detected: ${opportunityCount} keywords where we rank 5-20 and could increase ad spend.
         `;
       } else if (activeTab === DashboardTab.AI_TRAFFIC_MONITOR) {
