@@ -276,6 +276,7 @@ const App: React.FC = () => {
   };
 
   // --- BRIDGE DATA FETCHING LOGIC (UPDATED WITH STRICT NORMALIZATION) ---
+// --- BRIDGE DATA FETCHING LOGIC (CORREGIDA) ---
   const fetchBridgeData = async () => {
     if (!ga4Auth?.property || !ga4Auth.token || !gscAuth?.site || !gscAuth.token) {
         if (!bridgeData.length) setBridgeData(generateMockBridgeData());
@@ -286,7 +287,7 @@ const App: React.FC = () => {
     try {
         const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
         
-        // 1. Fetch GSC Organic Data (Query + Page)
+        // 1. Fetch GSC Organic Data
         const gscResp = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
@@ -299,19 +300,18 @@ const App: React.FC = () => {
         });
         const gscDataRaw = await gscResp.json();
         
-        // Create Map for Organic Data: Key = NormalizedPath + "|" + Query
-        // Step 1: Normalize URL using improved extractPath
+        // Mapa Orgánico
         const organicMap: Record<string, { rank: number, clicks: number }> = {};
         
         (gscDataRaw.rows || []).forEach((row: any) => {
             const query = row.keys[0].toLowerCase().trim();
-            const pagePath = extractPath(row.keys[1]); // STRICT Normalization
-            const key = `${pagePath}|${query}`;
+            const pagePath = extractPath(row.keys[1]); 
+            // Usamos un separador menos común que | por si acaso
+            const key = `${pagePath}##${query}`; 
             organicMap[key] = { rank: row.position, clicks: row.clicks };
         });
 
-        // 2. Fetch GA4 Paid Data (Landing Page + Term + Cost + SourceMedium)
-        // Step 2: Configure the Blend (Using sessionSourceMedium for PMax diagnosis)
+        // 2. Fetch GA4 Paid Data
         const ga4Resp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
@@ -321,7 +321,7 @@ const App: React.FC = () => {
                     { name: 'landingPage' },
                     { name: 'sessionGoogleAdsKeyword' }, 
                     { name: 'sessionCampaignName' },
-                    { name: 'sessionSourceMedium' } // Critical for PMax/None diagnosis
+                    { name: 'sessionSourceMedium' }
                 ],
                 metrics: [
                     { name: 'advertiserAdCost' },
@@ -339,55 +339,113 @@ const App: React.FC = () => {
         });
         const ga4DataRaw = await ga4Resp.json();
 
-        // Map GA4 data to a quick lookup map as well
-        const ga4Map: Record<string, { cost: number, convs: number, sessions: number, campaign: string, sourceMedium: string }> = {};
+        // Mapa PPC: Guardamos dos niveles (Exacto y Solo URL)
+        const ga4ExactMap: Record<string, any> = {};
+        const ga4UrlMap: Record<string, any> = {}; // Fallback para PMax/Not Set
 
         (ga4DataRaw.rows || []).forEach((row: any) => {
             const rawPath = row.dimensionValues[0].value; 
-            const path = extractPath(rawPath); // STRICT Normalization for GA4 URL too
+            const path = extractPath(rawPath);
             
             let term = row.dimensionValues[1].value; 
             const campaign = row.dimensionValues[2].value;
             const sourceMedium = row.dimensionValues[3].value;
             
+            // Detectar PMax o términos vacíos
             const isUnknownTerm = !term || term === '(not provided)' || term === '(not set)';
             term = isUnknownTerm ? '(not provided)' : term.toLowerCase().trim();
 
-            const key = `${path}|${term}`;
-            
-            // Handle PMax Fallback logic for campaign name
             let finalCampaign = campaign;
             if ((!campaign || campaign === '(not set)' || campaign === 'None') && sourceMedium.includes('cpc')) {
-               finalCampaign = `Auto: ${sourceMedium}`; // Label as Auto/PMax derived
+               finalCampaign = `Auto: ${sourceMedium}`;
             }
 
-            if (!ga4Map[key]) ga4Map[key] = { cost: 0, convs: 0, sessions: 0, campaign: finalCampaign, sourceMedium };
-            ga4Map[key].cost += parseFloat(row.metricValues[0].value) || 0;
-            ga4Map[key].convs += parseFloat(row.metricValues[1].value) || 0;
-            ga4Map[key].sessions += parseInt(row.metricValues[2].value) || 0;
+            const metrics = {
+                cost: parseFloat(row.metricValues[0].value) || 0,
+                convs: parseFloat(row.metricValues[1].value) || 0,
+                sessions: parseInt(row.metricValues[2].value) || 0,
+                campaign: finalCampaign,
+                sourceMedium
+            };
+
+            // 1. Guardar match exacto
+            const exactKey = `${path}##${term}`;
+            if (!ga4ExactMap[exactKey]) ga4ExactMap[exactKey] = { ...metrics };
+            else {
+                ga4ExactMap[exactKey].cost += metrics.cost;
+                ga4ExactMap[exactKey].convs += metrics.convs;
+                ga4ExactMap[exactKey].sessions += metrics.sessions;
+            }
+
+            // 2. Acumular a nivel de URL (Bucket general para esa página)
+            if (!ga4UrlMap[path]) ga4UrlMap[path] = { ...metrics };
+            else {
+                ga4UrlMap[path].cost += metrics.cost;
+                ga4UrlMap[path].convs += metrics.convs;
+                ga4UrlMap[path].sessions += metrics.sessions;
+                // Si la campaña es distinta, marcamos como "Mixed" o nos quedamos la última
+                if (ga4UrlMap[path].campaign !== finalCampaign) ga4UrlMap[path].campaign = "Multiple / Mixed";
+            }
         });
 
-        // 3. JOIN Logic (Union of keys)
-        const allKeys = new Set([...Object.keys(organicMap), ...Object.keys(ga4Map)]);
+        // 3. JOIN INTELIGENTE
         const bridgeResults: BridgeData[] = [];
+        
+        // Recorremos primero datos orgánicos (GSC)
+        Object.keys(organicMap).forEach(key => {
+            const [path, query] = key.split('##');
+            const org = organicMap[key];
+            
+            // Intento 1: Match Exacto (URL + Query)
+            let paid = ga4ExactMap[key];
 
-        allKeys.forEach(key => {
-            const [path, query] = key.split('|');
-            const org = organicMap[key] || { rank: null, clicks: 0 };
-            const paid = ga4Map[key] || { cost: 0, convs: 0, sessions: 0, campaign: 'None', sourceMedium: '' };
+            // Intento 2: Si no hay match exacto, buscamos si hay gasto en esa URL (Fallback)
+            // Solo aplicamos el coste de la URL si NO encontramos match exacto, 
+            // para mostrar "Oye, en esta URL estás gastando dinero, aunque no sea esta keyword exacta"
+            if (!paid && ga4UrlMap[path]) {
+                paid = {
+                    ...ga4UrlMap[path],
+                    campaign: `${ga4UrlMap[path].campaign} (URL Match)`, // Indicamos que es match por URL
+                    // Opcional: Podrías dividir el coste por el número de keywords orgánicas para no duplicar visualmente
+                    // Pero para alertas, mejor mostrar el coste total de la landing.
+                };
+            }
 
-            // Step 3: Calculate Blended CPA / Cost Ratio
-            // Formula: SUM(Ads Cost) / ( SUM(Organic Clicks) + SUM(Ads Conversions) )
+            // Si no hay nada, objeto vacío
+            if (!paid) {
+                paid = { cost: 0, convs: 0, sessions: 0, campaign: 'None', sourceMedium: '' };
+            }
+
             const blendedDenominator = org.clicks + paid.convs;
             const blendedCostRatio = blendedDenominator > 0 ? paid.cost / blendedDenominator : 0;
 
-            // Only add if there is SOME activity (Organic or Paid)
-            if (org.clicks > 0 || paid.sessions > 0) {
-                 bridgeResults.push({
+            bridgeResults.push({
+                url: path,
+                query: query,
+                organicRank: org.rank,
+                organicClicks: org.clicks,
+                ppcCampaign: paid.campaign,
+                ppcSourceMedium: paid.sourceMedium,
+                ppcCost: paid.cost,
+                ppcConversions: paid.convs,
+                ppcCpa: paid.convs > 0 ? paid.cost / paid.convs : 0,
+                ppcClicks: paid.sessions,
+                ppcImpressions: paid.sessions * 10,
+                blendedCostRatio: blendedCostRatio
+            });
+        });
+
+        // También deberíamos añadir las filas que SOLO tienen PPC y nada de SEO (Oportunidades perdidas)
+        // (Opcional, pero recomendado para ver dónde gastas sin tener SEO)
+        Object.keys(ga4ExactMap).forEach(key => {
+            if (!organicMap[key]) {
+                const [path, query] = key.split('##');
+                const paid = ga4ExactMap[key];
+                bridgeResults.push({
                     url: path,
-                    query: query,
-                    organicRank: org.rank,
-                    organicClicks: org.clicks,
+                    query: query + " (Ads Only)",
+                    organicRank: null,
+                    organicClicks: 0,
                     ppcCampaign: paid.campaign,
                     ppcSourceMedium: paid.sourceMedium,
                     ppcCost: paid.cost,
@@ -395,12 +453,11 @@ const App: React.FC = () => {
                     ppcCpa: paid.convs > 0 ? paid.cost / paid.convs : 0,
                     ppcClicks: paid.sessions,
                     ppcImpressions: paid.sessions * 10,
-                    blendedCostRatio: blendedCostRatio
+                    blendedCostRatio: 0
                 });
             }
         });
 
-        // Sort by Cost descending to show biggest spenders first
         setBridgeData(bridgeResults.sort((a, b) => b.ppcCost - a.ppcCost));
 
     } catch (e) {
