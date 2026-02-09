@@ -1,4 +1,3 @@
-
 import { DailyData, KeywordData, ChannelType, QueryType, BridgeData, AiTrafficData } from './types';
 
 export const COUNTRIES = ['Spain', 'Mexico', 'United States', 'United Kingdom', 'France', 'Germany', 'Italy', 'Portugal'];
@@ -138,18 +137,23 @@ export const generateMockBridgeData = (): BridgeData[] => {
     }
 
     const ppcCpa = ppcConversions > 0 ? ppcCost / ppcConversions : 0;
+    const organicClicks = rank && rank < 10 ? Math.floor(Math.random() * 1000) : Math.floor(Math.random() * 50);
+    
+    const blendedDenominator = organicClicks + ppcConversions;
+    const blendedCostRatio = blendedDenominator > 0 ? ppcCost / blendedDenominator : 0;
 
     return {
       url: pages[i % pages.length],
       query: isPMax ? '(not provided)' : queries[i % queries.length],
       organicRank: rank,
-      organicClicks: rank && rank < 10 ? Math.floor(Math.random() * 1000) : Math.floor(Math.random() * 50),
+      organicClicks: organicClicks,
       ppcCampaign: campaigns[i % campaigns.length],
       ppcCost,
       ppcConversions,
       ppcCpa,
       ppcClicks: Math.floor(ppcCost / (0.5 + Math.random())),
-      ppcImpressions: Math.floor(ppcCost * 20)
+      ppcImpressions: Math.floor(ppcCost * 20),
+      blendedCostRatio
     };
   });
 };

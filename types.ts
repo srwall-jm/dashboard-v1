@@ -51,11 +51,13 @@ export interface BridgeData {
   organicRank: number | null;
   organicClicks: number;
   ppcCampaign: string;
+  ppcSourceMedium?: string; // Added for PMax diagnosis
   ppcCost: number;
   ppcConversions: number;
   ppcCpa: number;
   ppcClicks: number;
   ppcImpressions: number;
+  blendedCostRatio: number; // New Metric: Cost / (Org Clicks + Paid Convs)
   status?: 'Exclude' | 'Increase' | 'Maintain' | 'Review';
 }
 

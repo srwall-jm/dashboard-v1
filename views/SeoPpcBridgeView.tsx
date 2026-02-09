@@ -160,7 +160,8 @@ export const SeoPpcBridgeView: React.FC<{
                       <div className="bg-slate-900 text-white p-3 rounded-xl border border-white/10 shadow-xl">
                         <p className="text-[10px] font-black uppercase tracking-widest mb-1">{d.query}</p>
                         <p className="text-[9px]">Rank: <span className="font-bold text-emerald-400">{d.organicRank || 'N/A'}</span></p>
-                        <p className="text-[9px]">CPA: <span className="font-bold text-indigo-400">{currencySymbol}{d.ppcCpa.toFixed(2)}</span></p>
+                        <p className="text-[9px]">PPC CPA: <span className="font-bold text-indigo-400">{currencySymbol}{d.ppcCpa.toFixed(2)}</span></p>
+                        <p className="text-[9px]">Blended Cost: <span className="font-bold text-amber-400">{currencySymbol}{d.blendedCostRatio.toFixed(2)}</span></p>
                         <p className="text-[9px]">Action: <span className="font-bold">{d.status}</span></p>
                       </div>
                     );
@@ -246,7 +247,8 @@ export const SeoPpcBridgeView: React.FC<{
                 <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">URL / Query</th>
                 <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Org. Rank</th>
                 <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">PPC Campaign</th>
-                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Blended CPA</th>
+                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">PPC CPA</th>
+                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right text-amber-600">Blended Cost</th>
                 <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
               </tr>
             </thead>
@@ -270,8 +272,21 @@ export const SeoPpcBridgeView: React.FC<{
                       </span>
                     ) : <span className="text-[10px] text-slate-300 font-bold">-</span>}
                   </td>
-                  <td className="py-3 px-4 text-[10px] font-bold text-slate-600">{row.ppcCampaign}</td>
+                  <td className="py-3 px-4">
+                    <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-slate-600">{row.ppcCampaign}</span>
+                        {/* Show SourceMedium if campaign is suspicious */}
+                        {row.ppcCampaign.includes('Auto:') && (
+                           <span className="text-[8px] text-slate-400 italic">Source: {row.ppcSourceMedium}</span>
+                        )}
+                    </div>
+                  </td>
                   <td className="py-3 px-4 text-right text-[10px] font-black text-slate-800">{currencySymbol}{row.ppcCpa.toFixed(2)}</td>
+                  <td className="py-3 px-4 text-right">
+                     <div className="inline-block px-2 py-1 bg-amber-50 rounded-lg border border-amber-100">
+                        <span className="text-[10px] font-black text-amber-700">{currencySymbol}{row.blendedCostRatio.toFixed(2)}</span>
+                     </div>
+                  </td>
                   <td className="py-3 px-4 text-right">
                     <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tight 
                       ${row.status === 'Exclude' ? 'bg-rose-100 text-rose-600' : 
@@ -283,7 +298,7 @@ export const SeoPpcBridgeView: React.FC<{
                 </tr>
               )) : (
                 <tr>
-                   <td colSpan={5} className="py-12 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                   <td colSpan={6} className="py-12 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                      No matches found for "{urlFilter}"
                    </td>
                 </tr>
