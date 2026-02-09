@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Layers, Globe, Target, Cpu, Settings2, ExternalLink, LogOut, ChevronRight, Activity, Sparkles, Cable, Bot } from 'lucide-react';
-import { DashboardTab, Ga4Property, GscSite, GoogleAdsCustomer } from '../types';
+import { DashboardTab, Ga4Property, GscSite } from '../types';
 
 const SidebarLink: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string }> = ({ active, onClick, icon, label }) => (
   <button
@@ -31,15 +31,6 @@ interface SidebarProps {
   user: any;
   ga4Auth: any;
   gscAuth: any;
-  // Ads Props
-  adsAuth?: any;
-  handleConnectAds?: () => void;
-  setAdsAuth?: (auth: any) => void;
-  availableAdsCustomers?: GoogleAdsCustomer[];
-  filteredAdsCustomers?: GoogleAdsCustomer[];
-  adsSearch?: string;
-  setAdsSearch?: (s: string) => void;
-  
   handleConnectGa4: () => void;
   handleConnectGsc: () => void;
   handleLogout: () => void;
@@ -57,9 +48,9 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({
   isOpen, setIsOpen, activeTab, setActiveTab, aiProvider, setAiProvider, openaiKey, setOpenaiKey,
-  brandRegexStr, setBrandRegexStr, user, ga4Auth, gscAuth, adsAuth, handleConnectGa4, handleConnectGsc, handleConnectAds, handleLogout,
-  ga4Search, setGa4Search, gscSearch, setGscSearch, adsSearch, setAdsSearch, availableProperties, availableSites, availableAdsCustomers, setGa4Auth, setGscAuth, setAdsAuth,
-  filteredProperties, filteredSites, filteredAdsCustomers
+  brandRegexStr, setBrandRegexStr, user, ga4Auth, gscAuth, handleConnectGa4, handleConnectGsc, handleLogout,
+  ga4Search, setGa4Search, gscSearch, setGscSearch, availableProperties, availableSites, setGa4Auth, setGscAuth,
+  filteredProperties, filteredSites
 }) => {
   return (
     <aside className={`fixed inset-y-0 left-0 w-80 bg-slate-950 text-white flex flex-col z-50 shadow-2xl transition-all duration-300 ease-in-out transform ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
@@ -172,24 +163,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <select className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 outline-none" value={gscAuth?.site?.siteUrl || ''} onChange={e => setGscAuth({...gscAuth, site: availableSites.find(s => s.siteUrl === e.target.value) || null})}>
                         {filteredSites.map(s => <option key={s.siteUrl} value={s.siteUrl}>{s.siteUrl}</option>)}
                       </select>
-                    </div>
-                  )}
-               </div>
-               {/* Google Ads */}
-               <div className="space-y-2">
-                  <label className="text-[8px] font-black uppercase text-slate-500 tracking-widest block">Google Ads</label>
-                  {!adsAuth?.token ? (
-                    <button onClick={handleConnectAds} className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Connect Ads</button>
-                  ) : (
-                    <div className="space-y-1.5">
-                       {setAdsSearch && (
-                        <input type="text" placeholder="Search Account..." value={adsSearch} onChange={e => setAdsSearch(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-lg text-[9px] px-2 py-1.5 outline-none" />
-                       )}
-                       {filteredAdsCustomers && (
-                        <select className="w-full bg-slate-900 border border-white/10 rounded-lg text-[10px] p-2 outline-none" value={adsAuth?.customer?.resourceName || ''} onChange={e => setAdsAuth && setAdsAuth({...adsAuth, customer: availableAdsCustomers?.find(c => c.resourceName === e.target.value) || null})}>
-                            {filteredAdsCustomers.map(c => <option key={c.resourceName} value={c.resourceName}>{c.name}</option>)}
-                        </select>
-                       )}
                     </div>
                   )}
                </div>
