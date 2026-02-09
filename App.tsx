@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   RefreshCw, Filter, Globe, Tag, AlertCircle, Sparkles, Cpu, Activity, Menu, X
 } from 'lucide-react';
-import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, QueryType, BridgeData, AiTrafficData } from './types';
+import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, GoogleAdsCustomer, QueryType, BridgeData, AiTrafficData } from './types';
 import { getDashboardInsights, getOpenAiInsights } from './geminiService';
 import GoogleLogin from './GoogleLogin'; 
 import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry, extractPath, AI_SOURCE_REGEX_STRING } from './utils';
@@ -21,6 +21,7 @@ import { AiTrafficView } from './views/AiTrafficView';
 const CLIENT_ID = "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com"; 
 const SCOPE_GA4 = "https://www.googleapis.com/auth/analytics.readonly";
 const SCOPE_GSC = "https://www.googleapis.com/auth/webmasters.readonly";
+const SCOPE_ADS = "https://www.googleapis.com/auth/adwords"; // Google Ads Scope
 
 const PRIORITY_DIMENSIONS = [
   'sessionDefaultChannelGroup',
@@ -46,14 +47,22 @@ const App: React.FC = () => {
     const saved = sessionStorage.getItem('gsc_auth');
     return saved ? JSON.parse(saved) : null;
   });
+
+  const [adsAuth, setAdsAuth] = useState<{ token: string; customer: GoogleAdsCustomer | null } | null>(() => {
+    const saved = sessionStorage.getItem('ads_auth');
+    return saved ? JSON.parse(saved) : null;
+  });
   
   const [availableProperties, setAvailableProperties] = useState<Ga4Property[]>([]);
   const [availableSites, setAvailableSites] = useState<GscSite[]>([]);
+  const [availableAdsCustomers, setAvailableAdsCustomers] = useState<GoogleAdsCustomer[]>([]);
+
   const [availableDimensions, setAvailableDimensions] = useState<{ label: string; value: string }[]>([]);
   const [currencySymbol, setCurrencySymbol] = useState('£');
   
   const [ga4Search, setGa4Search] = useState('');
   const [gscSearch, setGscSearch] = useState('');
+  const [adsSearch, setAdsSearch] = useState('');
   
   const [realDailyData, setRealDailyData] = useState<DailyData[]>([]);
   const [realKeywordData, setRealKeywordData] = useState<KeywordData[]>([]);
@@ -107,6 +116,7 @@ const App: React.FC = () => {
 
   const tokenClientGa4 = useRef<any>(null);
   const tokenClientGsc = useRef<any>(null);
+  const tokenClientAds = useRef<any>(null);
 
   const isBranded = (text: string) => {
     if (!text || text.trim() === '') return false;
@@ -210,6 +220,37 @@ const App: React.FC = () => {
     } catch (e) {
       console.error(e);
       setError("Error connecting to Search Console API.");
+    }
+  };
+
+  const fetchGoogleAdsCustomers = async (token: string) => {
+    try {
+      // Fetch accessible customers. Note: Without a Developer Token, we can only list accessible customers.
+      // We cannot query detailed account names via GoogleAdsService without a Dev Token and approved access.
+      const resp = await fetch('https://googleads.googleapis.com/v17/customers:listAccessibleCustomers', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!resp.ok) throw new Error(`Google Ads Status: ${resp.status}`);
+      
+      const data = await resp.json();
+      const customers: GoogleAdsCustomer[] = (data.resourceNames || []).map((resName: string) => {
+        const id = resName.split('/')[1];
+        return {
+          id: id,
+          resourceName: resName,
+          name: `Account ${id}` // Fallback name as we can't query detail without Dev Token
+        };
+      });
+
+      setAvailableAdsCustomers(customers);
+      if (customers.length > 0 && !adsAuth?.customer) {
+        setAdsAuth({ token, customer: customers[0] });
+      }
+    } catch (e) {
+      console.error(e);
+      // Don't show critical error for Ads as it might be CORS blocked in some envs
+      console.warn("Could not fetch Google Ads customers. CORS or Permissions issue.");
     }
   };
 
@@ -686,6 +727,19 @@ const fetchGa4Data = async () => {
             }
           },
         });
+        tokenClientAds.current = (window as any).google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: SCOPE_ADS,
+          prompt: '',
+          callback: (resp: any) => {
+            if (resp.access_token) {
+              const newAuth = { token: resp.access_token, customer: adsAuth?.customer || null };
+              setAdsAuth(newAuth);
+              sessionStorage.setItem('ads_auth', JSON.stringify(newAuth));
+              fetchGoogleAdsCustomers(resp.access_token);
+            }
+          },
+        });
       } else { setTimeout(initializeOAuth, 500); }
     };
     initializeOAuth();
@@ -703,14 +757,16 @@ const fetchGa4Data = async () => {
   };
 
   const handleLogout = () => {
-    setUser(null); setGa4Auth(null); setGscAuth(null);
+    setUser(null); setGa4Auth(null); setGscAuth(null); setAdsAuth(null);
     localStorage.removeItem('seo_suite_user');
     sessionStorage.removeItem('ga4_auth');
     sessionStorage.removeItem('gsc_auth');
+    sessionStorage.removeItem('ads_auth');
   };
 
   const handleConnectGa4 = () => { if (tokenClientGa4.current) tokenClientGa4.current.requestAccessToken(); };
   const handleConnectGsc = () => { if (tokenClientGsc.current) tokenClientGsc.current.requestAccessToken(); };
+  const handleConnectAds = () => { if (tokenClientAds.current) tokenClientAds.current.requestAccessToken(); };
 
   useEffect(() => { 
     if (ga4Auth?.token && ga4Auth.property) {
@@ -740,6 +796,15 @@ const fetchGa4Data = async () => {
       return countryMatch && queryMatch;
     }).map(k => ({ ...k, queryType: (isBranded(k.keyword) ? 'Branded' : 'Non-Branded') as QueryType }));
   }, [realKeywordData, filters, brandRegexStr]);
+  
+  const filteredProperties = useMemo(() => availableProperties.filter(p => p.name.toLowerCase().includes(ga4Search.toLowerCase())), [availableProperties, ga4Search]);
+  const filteredSites = useMemo(() => availableSites.filter(s => s.siteUrl.toLowerCase().includes(gscSearch.toLowerCase())), [availableSites, gscSearch]);
+  const filteredAdsCustomers = useMemo(() => availableAdsCustomers.filter(c => c.name.toLowerCase().includes(adsSearch.toLowerCase()) || c.id.includes(adsSearch)), [availableAdsCustomers, adsSearch]);
+  
+  const uniqueCountries = useMemo(() => {
+    const set = new Set([...realDailyData.map(d => d.country), ...realKeywordData.map(k => k.country)]);
+    return Array.from(set).filter(c => c && c !== 'Other' && c !== 'Unknown').sort();
+  }, [realDailyData, realKeywordData]);
 
   const channelStats = useMemo(() => {
     const total = aggregateData(filteredDailyData);
@@ -825,12 +890,6 @@ const fetchGa4Data = async () => {
   };
 
   const isAnythingLoading = isLoadingGa4 || isLoadingGsc || isLoadingBridge || isLoadingAi;
-  const filteredProperties = useMemo(() => availableProperties.filter(p => p.name.toLowerCase().includes(ga4Search.toLowerCase())), [availableProperties, ga4Search]);
-  const filteredSites = useMemo(() => availableSites.filter(s => s.siteUrl.toLowerCase().includes(gscSearch.toLowerCase())), [availableSites, gscSearch]);
-  const uniqueCountries = useMemo(() => {
-    const set = new Set([...realDailyData.map(d => d.country), ...realKeywordData.map(k => k.country)]);
-    return Array.from(set).filter(c => c && c !== 'Other' && c !== 'Unknown').sort();
-  }, [realDailyData, realKeywordData]);
 
   useEffect(() => { localStorage.setItem('ai_provider', aiProvider); }, [aiProvider]);
   useEffect(() => { localStorage.setItem('openai_api_key', openaiKey); }, [openaiKey]);
@@ -874,6 +933,14 @@ const fetchGa4Data = async () => {
         availableProperties={availableProperties} availableSites={availableSites}
         setGa4Auth={setGa4Auth} setGscAuth={setGscAuth}
         filteredProperties={filteredProperties} filteredSites={filteredSites}
+        // Ads Props
+        adsAuth={adsAuth}
+        handleConnectAds={handleConnectAds}
+        setAdsAuth={setAdsAuth}
+        availableAdsCustomers={availableAdsCustomers}
+        filteredAdsCustomers={filteredAdsCustomers}
+        adsSearch={adsSearch}
+        setAdsSearch={setAdsSearch}
       />
 
 <main className={`flex-1 transition-all duration-300 ease-in-out p-5 md:p-8 xl:p-12 overflow-x-hidden ${isSidebarOpen ? 'xl:ml-80' : 'ml-0'}`}>
