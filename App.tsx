@@ -275,30 +275,29 @@ const App: React.FC = () => {
     }
   };
 
-// --- BRIDGE DATA: MOTOR DE ATRIBUCIÓN (SOLUCIÓN ERROR 400) ---
+// --- BRIDGE DATA: FINAL CON PARSEO DE TUS CAMPAÑAS REALES ---
   const fetchBridgeData = async () => {
-    // 1. Validaciones básicas
     if (!ga4Auth?.property || !ga4Auth.token || !gscAuth?.site || !gscAuth.token) {
         if (!bridgeData.length) setBridgeData(generateMockBridgeData());
         return;
     }
 
     setIsLoadingBridge(true);
-    console.log("🚀 INICIANDO MOTOR DE ATRIBUCIÓN...");
+    console.log("🚀 STARTING BRIDGE WITH CUSTOM CAMPAIGN PARSING...");
 
     try {
         const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
         const normalizeUrl = (url: string) => {
             if (!url) return '';
             return url.toLowerCase()
-                .replace(/^https?:\/\/(www\.)?[^\/]+/, '') // Quita dominio
-                .split('?')[0].split('#')[0]                // Quita params
-                .replace(/\/$/, '')                         // Quita slash final
-                .replace(/^\/[a-z]{2}\//, '/')              // Quita idioma /es/ si existe
+                .replace(/^https?:\/\/(www\.)?[^\/]+/, '')
+                .split('?')[0].split('#')[0]
+                .replace(/\/$/, '')
+                .replace(/^\/[a-z]{2}\//, '/') 
                 .trim();
         };
 
-        // --- A. GSC (ORGÁNICO) ---
+        // --- 1. GSC (ORGÁNICO) ---
         const gscResp = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
@@ -320,8 +319,7 @@ const App: React.FC = () => {
             clicks: row.clicks
         }));
 
-        // --- B. GA4: FASE 1 - OBTENER COSTES POR CAMPAÑA ---
-        // Esto soluciona el Error 400. Pedimos Coste + Campaña (Compatible)
+        // --- 2. GA4: OBTENER COSTES (FILTRADO POR GASTO > 0) ---
         const ga4CostResp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
@@ -330,43 +328,49 @@ const App: React.FC = () => {
                 dimensions: [{ name: 'sessionCampaignName' }],
                 metrics: [
                     { name: 'advertiserAdCost' }, 
-                    { name: 'sessions' } // Necesario para calcular Coste Por Sesión (CPS)
+                    { name: 'sessions' }
                 ],
-                dimensionFilter: {
+                metricFilter: {
                     filter: {
-                        fieldName: 'sessionDefaultChannelGroup',
-                        stringFilter: { matchType: 'CONTAINS', value: 'Paid' }
+                        fieldName: 'advertiserAdCost',
+                        numericFilter: { operation: 'GREATER_THAN', value: { int64Value: '0' } }
                     }
                 },
-                limit: 2000
+                limit: 5000
             })
         });
         
-        if (!ga4CostResp.ok) {
-             const errText = await ga4CostResp.text();
-             console.error("❌ GA4 COST ERROR:", errText);
-             throw new Error("Error fetching Campaign Costs");
-        }
-        
         const costData = await ga4CostResp.json();
         
-        // Mapa de Coste Por Sesión (CPS) de cada campaña
+        // Mapa de Coste Por Sesión (CPS)
         const campaignCpsMap: Record<string, number> = {};
+        
+        // --- NUEVA LÓGICA: Detección de Tipo de Campaña ---
+        const getCampaignType = (name: string): string => {
+            const n = name.toLowerCase();
+            if (n.includes('dsa')) return 'DSA (Dynamic)';
+            if (n.includes('branded') && !n.includes('nonbranded')) return 'Branded Search';
+            if (n.includes('nonbranded')) return 'Non-Branded / Generic';
+            if (n.includes('social') || n.includes('facebook') || n.includes('instagram')) return 'Paid Social';
+            if (n.includes('email')) return 'Email Marketing';
+            if (n.includes('display') || n.includes('criteo')) return 'Display / Retargeting';
+            if (n.includes('demandgen')) return 'Demand Gen';
+            if (n.includes('metasearcher') || n.includes('skyscanner')) return 'Metasearch';
+            if (n.includes('pmax') || n.includes('performance max')) return 'Performance Max';
+            return 'Other Paid';
+        };
+
         (costData.rows || []).forEach((row: any) => {
             const campaign = row.dimensionValues[0].value;
             const cost = parseFloat(row.metricValues[0].value) || 0;
             const sessions = parseInt(row.metricValues[1].value) || 0;
             
-            // Si la campaña gastó dinero y tuvo visitas, calculamos cuánto cuesta cada visita
             if (sessions > 0 && cost > 0) {
                 campaignCpsMap[campaign] = cost / sessions;
             }
         });
-        
-        console.log(`💰 CAMPAÑAS ANALIZADAS: ${Object.keys(campaignCpsMap).length}`);
 
-        // --- C. GA4: FASE 2 - OBTENER FLUJO DE TRÁFICO ---
-        // Pedimos Campaña + URL + Sesiones (Compatible)
+        // --- 3. GA4: FLUJO DE TRÁFICO ---
         const ga4TrafficResp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
@@ -380,22 +384,14 @@ const App: React.FC = () => {
                     { name: 'sessions' },
                     { name: 'conversions' }
                 ],
-                dimensionFilter: {
-                    filter: {
-                        fieldName: 'sessionDefaultChannelGroup',
-                        stringFilter: { matchType: 'CONTAINS', value: 'Paid' }
-                    }
-                },
                 limit: 10000
             })
         });
 
-        if (!ga4TrafficResp.ok) throw new Error("Error fetching Traffic Flow");
         const trafficData = await ga4TrafficResp.json();
 
-        // --- D. ATRIBUCIÓN (EL REPARTO) ---
-        // Asignamos el coste a las URLs basándonos en qué campaña las visitó
-        const urlMetricsMap: Record<string, { cost: number, convs: number, sessions: number, campaigns: Set<string> }> = {};
+        // --- 4. ATRIBUCIÓN ---
+        const urlMetricsMap: Record<string, { cost: number, convs: number, sessions: number, types: Set<string> }> = {};
 
         (trafficData.rows || []).forEach((row: any) => {
             const rawUrl = row.dimensionValues[0].value;
@@ -403,48 +399,44 @@ const App: React.FC = () => {
             const sessions = parseInt(row.metricValues[0].value) || 0;
             const convs = parseFloat(row.metricValues[1].value) || 0;
             
-            const cleanPath = normalizeUrl(rawUrl);
-            const cps = campaignCpsMap[campaign] || 0; // Coste por sesión de ESTA campaña
-            const allocatedCost = sessions * cps; // Dinero atribuido a esta URL
-
-            if (!urlMetricsMap[cleanPath]) {
-                urlMetricsMap[cleanPath] = { cost: 0, convs: 0, sessions: 0, campaigns: new Set() };
-            }
+            const cps = campaignCpsMap[campaign];
             
-            urlMetricsMap[cleanPath].cost += allocatedCost;
-            urlMetricsMap[cleanPath].convs += convs;
-            urlMetricsMap[cleanPath].sessions += sessions;
-            if (campaign && campaign !== '(not set)') {
-                urlMetricsMap[cleanPath].campaigns.add(campaign);
+            if (cps !== undefined) {
+                const cleanPath = normalizeUrl(rawUrl);
+                const allocatedCost = sessions * cps;
+                const type = getCampaignType(campaign); // Usamos el tipo limpio
+
+                if (!urlMetricsMap[cleanPath]) {
+                    urlMetricsMap[cleanPath] = { cost: 0, convs: 0, sessions: 0, types: new Set() };
+                }
+                
+                urlMetricsMap[cleanPath].cost += allocatedCost;
+                urlMetricsMap[cleanPath].convs += convs;
+                urlMetricsMap[cleanPath].sessions += sessions;
+                urlMetricsMap[cleanPath].types.add(type);
             }
         });
 
-        // --- E. JOIN FINAL (GSC + DATOS ATRIBUIDOS) ---
+        // --- 5. JOIN FINAL ---
         const bridgeResults: BridgeData[] = [];
-        let matches = 0;
 
         organicRows.forEach(org => {
             const paid = urlMetricsMap[org.cleanPath];
             const cost = paid ? paid.cost : 0;
             
-            // Acción recomendada
             let action = "MAINTAIN";
-            // Lógica de alerta corregida: Si rankeas top 3 y gastas > 1€ (para evitar ruido de decimales)
+            // Lógica de Alerta con tus campañas:
+            // Si rankeo #1 (Branded u orgánico fuerte) Y estoy pagando dinero -> REVISAR
             if (org.rank <= 3.0 && cost > 1) action = "REVIEW";
             else if (org.rank > 10.0 && cost === 0) action = "INCREASE";
 
-            // Nombre de campaña para mostrar
-            let campName = "None";
-            if (paid && paid.campaigns.size > 0) {
-                campName = Array.from(paid.campaigns).join(', ');
-                if (campName.length > 30) campName = "Multiple / Mixed";
-            } else if (cost > 0) {
-                 campName = "Unidentified Spend";
+            let campDisplay = "None";
+            if (paid && paid.types.size > 0) {
+                // Mostramos los tipos de campaña en lugar de los nombres largos
+                campDisplay = Array.from(paid.types).join(' + ');
             }
 
             if (org.rank <= 20 || cost > 0) {
-                if (paid) matches++;
-                
                 const ppcCpa = (cost > 0 && paid?.convs > 0) ? cost / paid.convs : 0;
                 const blendedCpa = (cost > 0 && (org.clicks + (paid?.convs || 0)) > 0) 
                                    ? cost / (org.clicks + (paid?.convs || 0)) : 0;
@@ -454,7 +446,7 @@ const App: React.FC = () => {
                     query: org.query,
                     organicRank: org.rank,
                     organicClicks: org.clicks,
-                    ppcCampaign: campName,
+                    ppcCampaign: campDisplay, // "DSA + Branded Search"
                     ppcCost: cost,
                     ppcConversions: paid?.convs || 0,
                     ppcCpa: ppcCpa,
@@ -466,12 +458,11 @@ const App: React.FC = () => {
             }
         });
 
-        console.log(`✅ BRIDGE DONE. Matches: ${matches}.`);
+        console.log(`✅ BRIDGE DONE WITH CUSTOM PARSING.`);
         setBridgeData(bridgeResults.sort((a, b) => b.ppcCost - a.ppcCost));
 
     } catch (e: any) {
         console.error("❌ FINAL ERROR:", e);
-        // setBridgeData(generateMockBridgeData()); // Descomentar solo si quieres datos falsos de emergencia
     } finally {
         setIsLoadingBridge(false);
     }
