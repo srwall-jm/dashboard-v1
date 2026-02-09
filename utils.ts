@@ -40,11 +40,42 @@ export const normalizeCountry = (val: string): string => {
   return val.toUpperCase();
 };
 
+// "The Master Key" Normalizer
+// 1. Removes Protocol & Domain
+// 2. Removes Query Parameters (?gclid=...)
+// 3. Removes Trailing Slash
+// 4. Lowercases
 export const extractPath = (url: string): string => {
   try {
-    if (!url.startsWith('http')) return url.startsWith('/') ? url : `/${url}`;
-    const urlObj = new URL(url);
-    return urlObj.pathname + urlObj.search;
+    let path = url;
+
+    // 1. Remove Protocol & Domain (if absolute URL)
+    if (url.startsWith('http')) {
+      try {
+        const urlObj = new URL(url);
+        path = urlObj.pathname; 
+      } catch {
+        // Fallback regex if URL constructor fails
+        path = url.replace(/^https?:\/\/[^\/]+/, '');
+      }
+    }
+
+    // 2. Remove Query Parameters (The GA4 Fix)
+    // Equivalent to REGEXP_REPLACE(Page path, "\\?.*", "")
+    path = path.split('?')[0];
+
+    // 3. Remove Trailing Slash (The Consistency Fix)
+    // Equivalent to REGEXP_REPLACE(..., "/$", "")
+    if (path.endsWith('/') && path.length > 1) {
+      path = path.slice(0, -1);
+    }
+
+    // 4. Ensure Leading Slash (Standardization)
+    if (!path.startsWith('/')) {
+        path = '/' + path;
+    }
+
+    return path.toLowerCase().trim();
   } catch (e) {
     return url;
   }

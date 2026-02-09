@@ -275,7 +275,7 @@ const App: React.FC = () => {
     }
   };
 
-  // --- BRIDGE DATA FETCHING LOGIC (UPDATED WITH BLENDED FORMULA & URL NORMALIZATION) ---
+  // --- BRIDGE DATA FETCHING LOGIC (UPDATED WITH STRICT NORMALIZATION) ---
   const fetchBridgeData = async () => {
     if (!ga4Auth?.property || !ga4Auth.token || !gscAuth?.site || !gscAuth.token) {
         if (!bridgeData.length) setBridgeData(generateMockBridgeData());
@@ -300,12 +300,12 @@ const App: React.FC = () => {
         const gscDataRaw = await gscResp.json();
         
         // Create Map for Organic Data: Key = NormalizedPath + "|" + Query
-        // Step 1: Normalize URL (The "Master Key") -> Using extractPath from utils which removes domain
+        // Step 1: Normalize URL using improved extractPath
         const organicMap: Record<string, { rank: number, clicks: number }> = {};
         
         (gscDataRaw.rows || []).forEach((row: any) => {
             const query = row.keys[0].toLowerCase().trim();
-            const pagePath = extractPath(row.keys[1]); // Normalize GSC URL
+            const pagePath = extractPath(row.keys[1]); // STRICT Normalization
             const key = `${pagePath}|${query}`;
             organicMap[key] = { rank: row.position, clicks: row.clicks };
         });
@@ -343,7 +343,9 @@ const App: React.FC = () => {
         const ga4Map: Record<string, { cost: number, convs: number, sessions: number, campaign: string, sourceMedium: string }> = {};
 
         (ga4DataRaw.rows || []).forEach((row: any) => {
-            const path = row.dimensionValues[0].value; // GA4 usually provides path
+            const rawPath = row.dimensionValues[0].value; 
+            const path = extractPath(rawPath); // STRICT Normalization for GA4 URL too
+            
             let term = row.dimensionValues[1].value; 
             const campaign = row.dimensionValues[2].value;
             const sourceMedium = row.dimensionValues[3].value;
@@ -365,10 +367,7 @@ const App: React.FC = () => {
             ga4Map[key].sessions += parseInt(row.metricValues[2].value) || 0;
         });
 
-        // 3. JOIN Logic (Full Outer Join conceptually for the table)
-        // But per request "Left Outer Join" (Show all Organic, add Paid where matches) + Paid Orphans (usually desired)
-        // We will do a union of keys to ensure we catch everything.
-        
+        // 3. JOIN Logic (Union of keys)
         const allKeys = new Set([...Object.keys(organicMap), ...Object.keys(ga4Map)]);
         const bridgeResults: BridgeData[] = [];
 
