@@ -275,70 +275,75 @@ const App: React.FC = () => {
     }
   };
 
- // --- BRIDGE DATA FETCHING: URL-CENTRIC (PMAX FRIENDLY) ---
+ // --- FUNCIÓN BRIDGE CORREGIDA Y SIMPLIFICADA ---
   const fetchBridgeData = async () => {
-    // 1. Verificación de seguridad básica
+    // 1. Chequeo de seguridad
     if (!ga4Auth?.property || !ga4Auth.token || !gscAuth?.site || !gscAuth.token) {
         if (!bridgeData.length) setBridgeData(generateMockBridgeData());
         return;
     }
 
     setIsLoadingBridge(true);
+    console.log("🚀 INICIANDO BRIDGE FETCH...");
+
     try {
         const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
         
-        // --- PASO A: OBTENER DATOS ORGÁNICOS (GSC) ---
-        // Aquí SÍ pedimos 'query' porque queremos ver el término específico
+        // --- A. OBTENER DATOS GSC (ORGÁNICO) ---
         const gscResp = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 startDate: filters.dateRange.start,
                 endDate: filters.dateRange.end,
-                dimensions: ['query', 'page'], // Mantenemos query para la columna izquierda
-                rowLimit: 5000 
+                dimensions: ['query', 'page'], 
+                rowLimit: 3000 
             })
         });
         const gscDataRaw = await gscResp.json();
         
-        // Mapa temporal para guardar datos orgánicos
-        const organicRows: { path: string, query: string, rank: number, clicks: number }[] = [];
-        
+        // Función de Limpieza "Nuclear"
+        const normalizeUrl = (url: string) => {
+            if (!url) return '';
+            return url
+                .toLowerCase()
+                .replace(/^https?:\/\/(www\.)?[^\/]+/, '') // Quita dominio (https://web.com)
+                .split('?')[0]                              // Quita parámetros (?gclid=...)
+                .split('#')[0]                              // Quita anclas (#section)
+                .replace(/\/$/, '')                         // Quita barra final (/)
+                .trim();
+        };
+
+        const organicRows: any[] = [];
         (gscDataRaw.rows || []).forEach((row: any) => {
-            const query = row.keys[0].toLowerCase().trim();
-            const rawUrl = row.keys[1];
-            // IMPORTANTE: Normalizar URL (quitar dominio y protocolos)
-            const pagePath = extractPath(rawUrl); 
-            
             organicRows.push({
-                path: pagePath, // Llave de unión
-                query: query,   // Dato visible (Proxy)
+                query: row.keys[0],
+                rawUrl: row.keys[1],
+                cleanPath: normalizeUrl(row.keys[1]), // Usamos la URL limpia como ID
                 rank: row.position,
                 clicks: row.clicks
             });
         });
 
-        // --- PASO B: OBTENER DATOS DE PAGO (GA4) ---
-        // IMPORTANTE: Aquí NO pedimos 'keyword'. Agrupamos por URL para capturar PMax.
+        // --- B. OBTENER DATOS GA4 (PAGO) ---
+        // IMPORTANTE: Pedimos SOLO landingPage para agrupar todo el coste ahí
         const ga4Resp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 dateRanges: [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }],
                 dimensions: [
-                    { name: 'landingPage' },          // Solo URL
-                    { name: 'sessionCampaignName' },  // Para saber si es PMax
-                    { name: 'sessionSourceMedium' }
+                    { name: 'landingPage' } // Solo URL, sin desglosar por campaña aun
                 ],
                 metrics: [
                     { name: 'advertiserAdCost' },
-                    { name: 'conversions' },
-                    { name: 'sessions' }
+                    { name: 'sessions' },
+                    { name: 'conversions' }
                 ],
                 dimensionFilter: {
                     filter: {
                         fieldName: 'sessionDefaultChannelGroup',
-                        stringFilter: { matchType: 'CONTAINS', value: 'Paid' } 
+                        stringFilter: { matchType: 'CONTAINS', value: 'Paid' } // Filtramos solo tráfico de pago
                     }
                 },
                 limit: 5000
@@ -346,87 +351,82 @@ const App: React.FC = () => {
         });
         const ga4DataRaw = await ga4Resp.json();
 
-        // Mapa de Costos por URL (The Bucket)
-        // Key: URL Path -> Value: Metrics
-        const ga4PageMap: Record<string, { cost: number, convs: number, sessions: number, campaign: string }> = {};
+        console.log("💰 GA4 RAW ROWS:", ga4DataRaw.rows?.length || 0);
+
+        // Mapa de Costes (The Bucket)
+        const ga4CostMap: Record<string, { cost: number, convs: number, sessions: number }> = {};
 
         (ga4DataRaw.rows || []).forEach((row: any) => {
             const rawPath = row.dimensionValues[0].value; 
-            const path = extractPath(rawPath); // Misma normalización que en GSC
+            const cleanPath = normalizeUrl(rawPath); // Misma limpieza nuclear
             
-            const campaignName = row.dimensionValues[1].value;
-            const sourceMedium = row.dimensionValues[2].value;
-
-            // Detectar nombre de campaña amigable
-            let finalCampaign = campaignName;
-            if ((!finalCampaign || finalCampaign === '(not set)') && sourceMedium.includes('cpc')) {
-               finalCampaign = 'PMax / Auto'; // Etiqueta genérica para campañas sin nombre claro
-            }
-
             const metrics = {
                 cost: parseFloat(row.metricValues[0].value) || 0,
-                convs: parseFloat(row.metricValues[1].value) || 0,
-                sessions: parseInt(row.metricValues[2].value) || 0,
-                campaign: finalCampaign
+                sessions: parseInt(row.metricValues[1].value) || 0,
+                convs: parseFloat(row.metricValues[2].value) || 0
             };
 
-            // Acumular costos si hay múltiples campañas apuntando a la misma URL
-            if (!ga4PageMap[path]) {
-                ga4PageMap[path] = metrics;
-            } else {
-                ga4PageMap[path].cost += metrics.cost;
-                ga4PageMap[path].convs += metrics.convs;
-                ga4PageMap[path].sessions += metrics.sessions;
-                // Si hay varias campañas, indicarlo
-                if (ga4PageMap[path].campaign !== finalCampaign) {
-                    ga4PageMap[path].campaign = "Multiple Campaigns"; 
-                }
+            // Acumular (porque varias URLs sucias pueden llevar a la misma limpia)
+            if (!ga4CostMap[cleanPath]) {
+                ga4CostMap[cleanPath] = { cost: 0, convs: 0, sessions: 0 };
             }
+            ga4CostMap[cleanPath].cost += metrics.cost;
+            ga4CostMap[cleanPath].sessions += metrics.sessions;
+            ga4CostMap[cleanPath].convs += metrics.convs;
         });
 
-        // --- PASO C: JOIN & LOGIC (EL PUENTE) ---
+        // --- C. UNIR TABLAS (THE JOIN) ---
         const bridgeResults: BridgeData[] = [];
+        let matchesFound = 0;
 
-        // Iteramos sobre las queries orgánicas (GSC)
         organicRows.forEach(org => {
-            // Buscamos si esta URL está gastando dinero en Ads (Lookup en el mapa)
-            const paidMetrics = ga4PageMap[org.path] || { cost: 0, convs: 0, sessions: 0, campaign: 'None' };
+            // Buscamos coincidencia exacta de la ruta limpia
+            const paid = ga4CostMap[org.cleanPath];
 
-            // Cálculo de métricas combinadas
-            const blendedDenominator = org.clicks + paidMetrics.convs; // Simplificación
+            if (paid) matchesFound++;
+
+            // Si hay datos de pago, los usamos. Si no, ceros.
+            const cost = paid ? paid.cost : 0;
+            const convs = paid ? paid.convs : 0;
+            const sessions = paid ? paid.sessions : 0;
             
-            // Lógica de Acción (Cannibalization Logic)
-            // Si rankeo bien (Top 3) Y estoy pagando dinero en esta página -> REVIEW
-            let action = "MAINTAIN";
-            if (org.rank <= 3.0 && paidMetrics.cost > 0) {
-                action = "REVIEW"; // Alerta de Canibalización
-            } else if (org.rank > 5.0 && org.rank < 20.0 && paidMetrics.cost === 0) {
-                action = "INCREASE"; // Oportunidad SEO sin explotar
-            }
+            // Lógica para detectar campaña PMax (Simulada, ya que agrupamos)
+            const campaignLabel = cost > 0 ? "Paid Campaign / PMax" : "None";
 
-            bridgeResults.push({
-                url: org.path,
-                query: org.query, // La query orgánica específica
-                organicRank: org.rank,
-                organicClicks: org.clicks,
-                // Datos de PPC (Nivel Página)
-                ppcCampaign: paidMetrics.campaign,
-                ppcCost: paidMetrics.cost, 
-                ppcConversions: paidMetrics.convs,
-                ppcCpa: paidMetrics.convs > 0 ? paidMetrics.cost / paidMetrics.convs : 0,
-                ppcClicks: paidMetrics.sessions,
-                ppcImpressions: paidMetrics.sessions * 10, // Estimación
-                blendedCostRatio: 0, // Puedes recalcular esto si lo usas
-                actionLabel: action // Nuevo campo para colorear el botón UI
-            });
+            // Lógica de CPA Blended
+            // Coste Total / (Clics SEO + Conversiones Ads) -> Aproximación de eficiencia
+            const blendedCpa = (cost > 0 && (org.clicks + convs) > 0) 
+                ? cost / (org.clicks + convs) // Coste por "Acción Combinada"
+                : 0;
+
+            // Lógica de PPC CPA
+            const ppcCpa = (cost > 0 && convs > 0) ? cost / convs : 0;
+
+            // Solo añadimos filas relevantes (Rank Top 20 o con Gasto)
+            if (org.rank <= 20 || cost > 0) {
+                bridgeResults.push({
+                    url: org.cleanPath, // Mostramos la ruta limpia
+                    query: org.query,
+                    organicRank: org.rank,
+                    organicClicks: org.clicks,
+                    ppcCampaign: campaignLabel, 
+                    ppcCost: cost,
+                    ppcConversions: convs,
+                    ppcCpa: ppcCpa,
+                    ppcClicks: sessions,
+                    ppcImpressions: sessions * 10,
+                    blendedCostRatio: blendedCpa
+                });
+            }
         });
 
-        // Ordenar por gasto de PPC para ver dónde se va el dinero primero
+        console.log(`✅ MATCHES REALIZADOS: ${matchesFound} de ${organicRows.length} filas orgánicas.`);
+        
+        // Ordenar: Primero donde más gastamos dinero, para ver ineficiencias
         setBridgeData(bridgeResults.sort((a, b) => b.ppcCost - a.ppcCost));
 
     } catch (e) {
-        console.error("Error fetching Bridge Data", e);
-        // Fallback a datos mock si falla
+        console.error("❌ Error en Bridge Data:", e);
         setBridgeData(generateMockBridgeData());
     } finally {
         setIsLoadingBridge(false);
