@@ -6,7 +6,7 @@ import {
 import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, QueryType, BridgeData } from './types';
 import { getDashboardInsights, getOpenAiInsights } from './geminiService';
 import GoogleLogin from './GoogleLogin'; 
-import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry } from './utils';
+import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry, extractPath } from './utils';
 import { generateMockBridgeData } from './mockData';
 
 // Import New Components and Views
@@ -63,6 +63,7 @@ const App: React.FC = () => {
   
   const [isLoadingGa4, setIsLoadingGa4] = useState(false);
   const [isLoadingGsc, setIsLoadingGsc] = useState(false);
+  const [isLoadingBridge, setIsLoadingBridge] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [brandRegexStr, setBrandRegexStr] = useState('shop|brand|pro|sports');
@@ -207,6 +208,149 @@ const App: React.FC = () => {
       setError("Error connecting to Search Console API.");
     }
   };
+
+  // --- BRIDGE DATA FETCHING LOGIC ---
+  const fetchBridgeData = async () => {
+    if (!ga4Auth?.property || !ga4Auth.token || !gscAuth?.site || !gscAuth.token) {
+        if (!bridgeData.length) setBridgeData(generateMockBridgeData());
+        return;
+    }
+
+    setIsLoadingBridge(true);
+    try {
+        const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
+        
+        // 1. Fetch GSC Organic Data (Query + Page)
+        const gscResp = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                startDate: filters.dateRange.start,
+                endDate: filters.dateRange.end,
+                dimensions: ['query', 'page'],
+                rowLimit: 2000 // Limit for performance
+            })
+        });
+        const gscDataRaw = await gscResp.json();
+        
+        // Create Map for Organic Data: Key = Path + "|" + Query
+        const organicMap: Record<string, { rank: number, clicks: number }> = {};
+        
+        (gscDataRaw.rows || []).forEach((row: any) => {
+            const query = row.keys[0].toLowerCase().trim();
+            const pagePath = extractPath(row.keys[1]);
+            const key = `${pagePath}|${query}`;
+            organicMap[key] = { rank: row.position, clicks: row.clicks };
+        });
+
+        // 2. Fetch GA4 Paid Data (Landing Page + Term + Cost)
+        // Note: advertiserAdCost requires Google Ads linking. Fallback to just sessions/conversions if cost is 0.
+        const ga4Resp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                dateRanges: [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }],
+                dimensions: [
+                    { name: 'landingPage' },
+                    { name: 'sessionManualTerm' }, // Search term
+                    { name: 'sessionCampaignName' }
+                ],
+                metrics: [
+                    { name: 'advertiserAdCost' },
+                    { name: 'conversions' }, // or transactions
+                    { name: 'sessions' }
+                ],
+                dimensionFilter: {
+                    filter: {
+                        fieldName: 'sessionDefaultChannelGroup',
+                        stringFilter: { matchType: 'CONTAINS', value: 'Paid' } // Filter for Paid Search
+                    }
+                },
+                limit: 2000
+            })
+        });
+        const ga4DataRaw = await ga4Resp.json();
+
+        // 3. JOIN Logic
+        const bridgeResults: BridgeData[] = [];
+        const processedKeys = new Set<string>();
+
+        // Iterate Paid Data first
+        (ga4DataRaw.rows || []).forEach((row: any) => {
+            const path = row.dimensionValues[0].value;
+            let term = row.dimensionValues[1].value;
+            const campaign = row.dimensionValues[2].value;
+            
+            // Handle (not provided) or PMax grouping
+            const isUnknownTerm = !term || term === '(not provided)' || term === '(not set)';
+            term = isUnknownTerm ? '(not provided)' : term.toLowerCase().trim();
+
+            const cost = parseFloat(row.metricValues[0].value) || 0;
+            const conversions = parseFloat(row.metricValues[1].value) || 0;
+            const sessions = parseInt(row.metricValues[2].value) || 0;
+
+            const key = `${path}|${term}`;
+            processedKeys.add(key);
+
+            let organicStats = { rank: null as number | null, clicks: 0 };
+
+            // Try exact match
+            if (organicMap[key]) {
+                organicStats = organicMap[key];
+            } else if (isUnknownTerm) {
+                // Logic for PMax/Grouping: Find ANY organic data for this URL to compare URL-level performance
+                // Note: In a real app, this would be an aggregation. For now, we take null rank to indicate "Mixed".
+                 organicStats = { rank: null, clicks: 0 }; 
+            }
+
+            bridgeResults.push({
+                url: path,
+                query: term,
+                organicRank: organicStats.rank,
+                organicClicks: organicStats.clicks,
+                ppcCampaign: campaign,
+                ppcCost: cost,
+                ppcConversions: conversions,
+                ppcCpa: conversions > 0 ? cost / conversions : 0,
+                ppcClicks: sessions, // Proxy for clicks if not imported
+                ppcImpressions: sessions * 10 // Mock impression estimate
+            });
+        });
+
+        // Add Remaining Organic Data (Opportunities: High Rank, No Spend)
+        Object.keys(organicMap).forEach(key => {
+            if (!processedKeys.has(key)) {
+                const [path, query] = key.split('|');
+                // Only add if rank is decent (< 20) to avoid noise
+                if (organicMap[key].rank <= 20) {
+                    bridgeResults.push({
+                        url: path,
+                        query: query,
+                        organicRank: organicMap[key].rank,
+                        organicClicks: organicMap[key].clicks,
+                        ppcCampaign: 'None',
+                        ppcCost: 0,
+                        ppcConversions: 0,
+                        ppcCpa: 0,
+                        ppcClicks: 0,
+                        ppcImpressions: 0
+                    });
+                }
+            }
+        });
+
+        // Sort by impact (Cost or Rank)
+        setBridgeData(bridgeResults.sort((a, b) => b.ppcCost - a.ppcCost));
+
+    } catch (e) {
+        console.error("Error fetching Bridge Data", e);
+        // Fallback to mock data if API fails (e.g. no cost data permissions)
+        setBridgeData(generateMockBridgeData());
+    } finally {
+        setIsLoadingBridge(false);
+    }
+  };
+
 
 const fetchGa4Data = async () => {
     if (!ga4Auth?.property || !ga4Auth.token) return;
@@ -388,11 +532,11 @@ const fetchGa4Data = async () => {
   };
 
   useEffect(() => {
-    // Simulate Fetching Bridge Data when Tab is active
-    if (activeTab === DashboardTab.PPC_SEO_BRIDGE && bridgeData.length === 0) {
-      setBridgeData(generateMockBridgeData());
+    // Fetch Bridge Data when Tab is active
+    if (activeTab === DashboardTab.PPC_SEO_BRIDGE) {
+      fetchBridgeData();
     }
-  }, [activeTab]);
+  }, [activeTab, ga4Auth?.property?.id, gscAuth?.site?.siteUrl, filters.dateRange]);
 
   useEffect(() => {
     const initializeOAuth = () => {
@@ -553,7 +697,7 @@ const fetchGa4Data = async () => {
     }
   };
 
-  const isAnythingLoading = isLoadingGa4 || isLoadingGsc;
+  const isAnythingLoading = isLoadingGa4 || isLoadingGsc || isLoadingBridge;
   const filteredProperties = useMemo(() => availableProperties.filter(p => p.name.toLowerCase().includes(ga4Search.toLowerCase())), [availableProperties, ga4Search]);
   const filteredSites = useMemo(() => availableSites.filter(s => s.siteUrl.toLowerCase().includes(gscSearch.toLowerCase())), [availableSites, gscSearch]);
   const uniqueCountries = useMemo(() => {
@@ -617,7 +761,7 @@ const fetchGa4Data = async () => {
         <div className="flex items-center gap-2 mb-2">
           <span className={`w-2 h-2 rounded-full ${isAnythingLoading ? 'bg-amber-500 animate-ping' : 'bg-emerald-500'}`} />
           <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-            {isLoadingGa4 ? 'Syncing GA4...' : isLoadingGsc ? 'Syncing GSC...' : 'Dashboard Active'}
+            {isLoadingGa4 ? 'Syncing GA4...' : isLoadingGsc ? 'Syncing GSC...' : isLoadingBridge ? 'Joining Data...' : 'Dashboard Active'}
           </span>
         </div>
         <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">

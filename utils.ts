@@ -36,6 +36,16 @@ export const normalizeCountry = (val: string): string => {
   return val.toUpperCase();
 };
 
+export const extractPath = (url: string): string => {
+  try {
+    if (!url.startsWith('http')) return url.startsWith('/') ? url : `/${url}`;
+    const urlObj = new URL(url);
+    return urlObj.pathname + urlObj.search;
+  } catch (e) {
+    return url;
+  }
+};
+
 export const formatDate = (date: Date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
