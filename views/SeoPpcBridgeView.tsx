@@ -1,10 +1,9 @@
-
 import React, { useMemo, useState } from 'react';
 import { 
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine, Label, BarChart, Bar, LineChart, Line, Legend, LabelList
 } from 'recharts';
 import { 
-  AlertOctagon, Zap, ShieldCheck, TrendingUp, DollarSign, FileText, ExternalLink, Search, Filter
+  AlertOctagon, Zap, ShieldCheck, TrendingUp, DollarSign, FileText, ExternalLink, Search, Filter, Percent, Activity
 } from 'lucide-react';
 import { BridgeData, DailyData } from '../types';
 import { exportToCSV } from '../utils';
@@ -19,23 +18,27 @@ export const SeoPpcBridgeView: React.FC<{
 }> = ({ data, dailyData, currencySymbol }) => {
   const [urlFilter, setUrlFilter] = useState('');
 
-  // Process data for rules with URL Filtering
+  // Process data for rules with URL Filtering & NEW TRAFFIC LOGIC
   const processedData = useMemo(() => {
     return data
       .filter(item => item.url.toLowerCase().includes(urlFilter.toLowerCase()))
       .map(item => {
         let status: 'Exclude' | 'Increase' | 'Maintain' | 'Review' = 'Review';
         
-        // Rule 1: EXCLUDE (High Rank & High Cost)
-        if (item.organicRank !== null && item.organicRank <= 3 && item.ppcCost > 0) {
+        // --- NUEVA LÓGICA BASADA EN TRÁFICO Y DEPENDENCIA ---
+        
+        // Rule 1: EXCLUDE / REVIEW (High Rank & High Paid Share)
+        // Si rankeas Top 3 Y más del 50% de tu tráfico es pagado -> ALTO RIESGO
+        if (item.organicRank !== null && item.organicRank <= 3 && item.blendedCostRatio > 0.50) {
           status = 'Exclude';
         } 
-        // Rule 2: INCREASE (Mid Rank & Good CPA - assuming Good CPA < 50 for mock)
-        else if (item.organicRank !== null && item.organicRank > 5 && item.organicRank <= 20 && item.ppcCpa < 50) {
+        // Rule 2: INCREASE (Low Rank & Low Paid Traffic)
+        // Si rankeas mal (pág 2) y no recibes tráfico pagado -> OPORTUNIDAD
+        else if (item.organicRank !== null && item.organicRank > 10 && item.ppcClicks === 0) {
           status = 'Increase';
         }
-        // Rule 3: MAINTAIN (Poor Rank & Good Conversions)
-        else if ((item.organicRank === null || item.organicRank > 20) && item.ppcConversions > 0) {
+        // Rule 3: MAINTAIN (Good performance or mixed)
+        else if (item.organicRank !== null && item.organicRank <= 10) {
           status = 'Maintain';
         }
 
@@ -49,8 +52,9 @@ export const SeoPpcBridgeView: React.FC<{
     const maintainItems = processedData.filter(d => d.status === 'Maintain');
 
     return {
-      exclude: { count: excludeItems.length, cost: excludeItems.reduce((acc, curr) => acc + curr.ppcCost, 0) },
-      increase: { count: increaseItems.length, potential: increaseItems.length * 10 }, // Dummy potential logic
+      // Usamos clicks/sesiones como métrica de volumen ya que no tenemos coste
+      exclude: { count: excludeItems.length, volume: excludeItems.reduce((acc, curr) => acc + curr.ppcClicks, 0) },
+      increase: { count: increaseItems.length, potential: increaseItems.length * 10 }, 
       maintain: { count: maintainItems.length, conversions: maintainItems.reduce((acc, curr) => acc + curr.ppcConversions, 0) }
     };
   }, [processedData]);
@@ -66,10 +70,10 @@ export const SeoPpcBridgeView: React.FC<{
     return Object.values(map).sort((a,b) => a.date.localeCompare(b.date));
   }, [dailyData]);
 
-  // Section D: Potential Savings (Monthly Projection)
+  // Section D: Traffic Impact (Modified from Spend)
   const savingsData = useMemo(() => [
-    { name: 'Current Spend', value: processedData.reduce((acc, c) => acc + c.ppcCost, 0) },
-    { name: 'Potential Savings', value: kpis.exclude.cost }
+    { name: 'Total Paid Traffic', value: processedData.reduce((acc, c) => acc + c.ppcClicks, 0) },
+    { name: 'Cannibalized Traffic', value: kpis.exclude.volume }
   ], [processedData, kpis]);
 
   return (
@@ -90,7 +94,7 @@ export const SeoPpcBridgeView: React.FC<{
                   type="text" 
                   value={urlFilter}
                   onChange={(e) => setUrlFilter(e.target.value)}
-                  placeholder="Filter by URL path (e.g. /product, /vuelos)"
+                  placeholder="Filter by URL path..."
                   className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-400"
                 />
              </div>
@@ -116,21 +120,21 @@ export const SeoPpcBridgeView: React.FC<{
       {/* SECTION B: Action Cards (The Brain) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <KpiCard 
-          title="Cannibalization Risks (Exclude)" 
+          title="High Overlap (Exclude)" 
           value={kpis.exclude.count} 
           icon={<AlertOctagon />} 
           color="rose"
           comparison={undefined}
         />
         <KpiCard 
-          title="Expansion Opportunities (Increase)" 
+          title="Expansion Opportunities" 
           value={kpis.increase.count} 
           icon={<Zap />} 
           color="blue"
           comparison={undefined}
         />
         <KpiCard 
-          title="Defense Keywords (Maintain)" 
+          title="Balanced / Maintain" 
           value={kpis.maintain.count} 
           icon={<ShieldCheck />} 
           color="emerald"
@@ -143,8 +147,8 @@ export const SeoPpcBridgeView: React.FC<{
         <div className="lg:col-span-2 bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
           <div className="flex justify-between items-center mb-6">
             <div>
-              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Opportunity Matrix (Scatter)</h4>
-              <p className="text-[11px] font-bold text-slate-600">X: Organic Rank (Inv) vs Y: PPC CPA | Size: Impressions</p>
+              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Dependency Matrix</h4>
+              <p className="text-[11px] font-bold text-slate-600">X: Organic Rank vs Y: Paid CVR %</p>
             </div>
           </div>
           <div className="h-[350px]">
@@ -152,7 +156,8 @@ export const SeoPpcBridgeView: React.FC<{
               <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis type="number" dataKey="organicRank" name="Organic Rank" reversed domain={[1, 50]} label={{ value: 'Organic Position (Reversed)', position: 'bottom', fontSize: 10 }} />
-                <YAxis type="number" dataKey="ppcCpa" name="CPA" unit={currencySymbol} label={{ value: 'PPC CPA', angle: -90, position: 'left', fontSize: 10 }} />
+                {/* Note: using ppcCpa which now holds CVR */}
+                <YAxis type="number" dataKey="ppcCpa" name="CVR" unit="%" tickFormatter={(val) => `${(val * 100).toFixed(0)}`} label={{ value: 'Paid Conv. Rate', angle: -90, position: 'left', fontSize: 10 }} />
                 <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }) => {
                   if (active && payload && payload.length) {
                     const d = payload[0].payload;
@@ -160,17 +165,15 @@ export const SeoPpcBridgeView: React.FC<{
                       <div className="bg-slate-900 text-white p-3 rounded-xl border border-white/10 shadow-xl">
                         <p className="text-[10px] font-black uppercase tracking-widest mb-1">{d.query}</p>
                         <p className="text-[9px]">Rank: <span className="font-bold text-emerald-400">{d.organicRank || 'N/A'}</span></p>
-                        <p className="text-[9px]">PPC CPA: <span className="font-bold text-indigo-400">{currencySymbol}{d.ppcCpa.toFixed(2)}</span></p>
-                        <p className="text-[9px]">Blended Cost: <span className="font-bold text-amber-400">{currencySymbol}{d.blendedCostRatio.toFixed(2)}</span></p>
-                        <p className="text-[9px]">Action: <span className="font-bold">{d.status}</span></p>
+                        <p className="text-[9px]">Paid CVR: <span className="font-bold text-indigo-400">{(d.ppcCpa * 100).toFixed(2)}%</span></p>
+                        <p className="text-[9px]">Paid Share: <span className="font-bold text-amber-400">{(d.blendedCostRatio * 100).toFixed(0)}%</span></p>
+                        <p className="text-[9px]">Status: <span className="font-bold">{d.status}</span></p>
                       </div>
                     );
                   }
                   return null;
                 }} />
-                {/* Reference Lines for Zones */}
                 <ReferenceLine x={3} stroke="red" strokeDasharray="3 3" label={{ value: "Top 3", position: 'insideTopLeft', fill: 'red', fontSize: 10 }} />
-                <ReferenceLine y={50} stroke="orange" strokeDasharray="3 3" label={{ value: "Target CPA", position: 'insideTopRight', fill: 'orange', fontSize: 10 }} />
                 
                 <Scatter name="Queries" data={processedData} fill="#8884d8">
                   {processedData.map((entry, index) => (
@@ -186,11 +189,11 @@ export const SeoPpcBridgeView: React.FC<{
           </div>
         </div>
 
-        {/* SECTION D: Financial Impact Monitor */}
+        {/* SECTION D: Traffic Volume Monitor */}
         <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm flex flex-col">
            <div className="mb-6">
-              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Financial Impact</h4>
-              <p className="text-[11px] font-bold text-slate-600">Wasted Spend due to Cannibalization</p>
+              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Traffic Overlap</h4>
+              <p className="text-[11px] font-bold text-slate-600">Paid Sessions on Top SEO Pages</p>
            </div>
            <div className="flex-1 min-h-[200px]">
              <ResponsiveContainer width="100%" height="100%">
@@ -202,7 +205,7 @@ export const SeoPpcBridgeView: React.FC<{
                       if (active && payload && payload.length) {
                         return (
                           <div className="bg-slate-900 text-white p-2 rounded-lg text-xs font-bold">
-                            {currencySymbol}{payload[0].value.toLocaleString()}
+                            {payload[0].value.toLocaleString()} Sessions
                           </div>
                         )
                       }
@@ -210,18 +213,18 @@ export const SeoPpcBridgeView: React.FC<{
                   }}/>
                   <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={32}>
                     <Cell fill="#cbd5e1" />
-                    <Cell fill="#f43f5e" /> {/* Red for Savings */}
-                    <LabelList dataKey="value" position="right" formatter={(val: number) => `${currencySymbol}${val.toLocaleString()}`} style={{fontSize: 10, fontWeight: 900, fill: '#334155'}} />
+                    <Cell fill="#f43f5e" /> {/* Red for Cannibalization */}
+                    <LabelList dataKey="value" position="right" formatter={(val: number) => val.toLocaleString()} style={{fontSize: 10, fontWeight: 900, fill: '#334155'}} />
                   </Bar>
                </BarChart>
              </ResponsiveContainer>
            </div>
            <div className="mt-4 p-4 bg-rose-50 rounded-2xl border border-rose-100">
               <div className="flex items-center gap-2 text-rose-700 mb-1">
-                <DollarSign size={16} />
-                <span className="text-[10px] font-black uppercase tracking-widest">Potential Monthly Saving</span>
+                <Activity size={16} />
+                <span className="text-[10px] font-black uppercase tracking-widest">Potential Cannibalization</span>
               </div>
-              <p className="text-2xl font-black text-rose-600">{currencySymbol}{kpis.exclude.cost.toLocaleString()}</p>
+              <p className="text-2xl font-black text-rose-600">{kpis.exclude.volume.toLocaleString()} <span className="text-xs font-bold text-rose-400">Sessions</span></p>
            </div>
         </div>
       </div>
@@ -247,8 +250,11 @@ export const SeoPpcBridgeView: React.FC<{
                 <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">URL / Query</th>
                 <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Org. Rank</th>
                 <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">PPC Campaign</th>
-                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">PPC CPA</th>
-                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right text-amber-600">Blended Cost</th>
+                
+                {/* NUEVAS COLUMNAS */}
+                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">PAID CVR %</th>
+                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right text-amber-600">PAID SHARE %</th>
+                
                 <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
               </tr>
             </thead>
@@ -256,14 +262,14 @@ export const SeoPpcBridgeView: React.FC<{
               {processedData.length > 0 ? processedData.slice(0, 50).map((row, idx) => (
                 <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                   <td className="py-3 px-4 max-w-xs">
-                     <div className="flex flex-col">
+                      <div className="flex flex-col">
                         <div className="flex items-center gap-2 text-[10px] font-bold text-slate-800 break-all">
                           <ExternalLink size={10} className="text-indigo-400 flex-shrink-0" /> {row.url}
                         </div>
                         <div className="flex items-center gap-2 text-[9px] text-slate-500 mt-1 pl-4">
                           <Search size={10} /> {row.query}
                         </div>
-                     </div>
+                      </div>
                   </td>
                   <td className="py-3 px-4 text-center">
                     {row.organicRank ? (
@@ -274,19 +280,29 @@ export const SeoPpcBridgeView: React.FC<{
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex flex-col">
+                        {/* Aquí mostramos el nombre embellecido de la campaña */}
                         <span className="text-[10px] font-bold text-slate-600">{row.ppcCampaign}</span>
-                        {/* Show SourceMedium if campaign is suspicious */}
-                        {row.ppcCampaign.includes('Auto:') && (
-                           <span className="text-[8px] text-slate-400 italic">Source: {row.ppcSourceMedium}</span>
-                        )}
                     </div>
                   </td>
-                  <td className="py-3 px-4 text-right text-[10px] font-black text-slate-800">{currencySymbol}{row.ppcCpa.toFixed(2)}</td>
+                  
+                  {/* COLUMNA PAID CVR (Antes PPC CPA) */}
                   <td className="py-3 px-4 text-right">
-                     <div className="inline-block px-2 py-1 bg-amber-50 rounded-lg border border-amber-100">
-                        <span className="text-[10px] font-black text-amber-700">{currencySymbol}{row.blendedCostRatio.toFixed(2)}</span>
+                     <div className="text-[10px] font-black text-slate-800">
+                        {/* Multiplicamos por 100 para ver porcentaje */}
+                        {(row.ppcCpa * 100).toFixed(1)}%
                      </div>
                   </td>
+
+                  {/* COLUMNA PAID SHARE (Antes Blended Cost) */}
+                  <td className="py-3 px-4 text-right">
+                      <div className="inline-block px-2 py-1 bg-amber-50 rounded-lg border border-amber-100">
+                         <span className="text-[10px] font-black text-amber-700">
+                            {/* Multiplicamos por 100 para ver porcentaje */}
+                            {(row.blendedCostRatio * 100).toFixed(0)}%
+                         </span>
+                      </div>
+                  </td>
+
                   <td className="py-3 px-4 text-right">
                     <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tight 
                       ${row.status === 'Exclude' ? 'bg-rose-100 text-rose-600' : 
