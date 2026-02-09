@@ -1,3 +1,4 @@
+
 import { DailyData, KeywordData, ChannelType, QueryType, BridgeData, AiTrafficData } from './types';
 
 export const COUNTRIES = ['Spain', 'Mexico', 'United States', 'United Kingdom', 'France', 'Germany', 'Italy', 'Portugal'];
@@ -39,6 +40,8 @@ export const generateMockDailyData = (): DailyData[] => {
             channel,
             country,
             queryType: qType,
+            landingPage: '(not set)',
+            dateRangeLabel: 'current',
             sessions,
             clicks,
             impressions,
@@ -67,6 +70,7 @@ export const generateMockKeywordData = (): KeywordData[] => {
     '/home', '/maquinaria/cardio', '/yoga/mats', '/fitness/catalogo',
     '/guias/entrenamiento', '/accesorios/running'
   ];
+  const now = new Date();
 
   return Array.from({ length: 150 }).map((_, i) => {
     const sessions = Math.floor(Math.random() * 5000) + 500;
@@ -78,7 +82,9 @@ export const generateMockKeywordData = (): KeywordData[] => {
     return {
       keyword: keywords[i % keywords.length] + (i > 10 ? ` ${i}` : ''),
       landingPage: pages[i % pages.length],
+      date: now.toISOString().split('T')[0],
       country,
+      dateRangeLabel: 'current',
       queryType: i % 4 === 0 ? 'Branded' : 'Non-Branded',
       impressions,
       clicks,
