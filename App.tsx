@@ -275,9 +275,9 @@ const App: React.FC = () => {
     }
   };
 
-  // --- BRIDGE DATA FETCHING LOGIC (UPDATED WITH STRICT NORMALIZATION) ---
-// --- BRIDGE DATA FETCHING LOGIC (CORREGIDA) ---
+ // --- BRIDGE DATA FETCHING: URL-CENTRIC (PMAX FRIENDLY) ---
   const fetchBridgeData = async () => {
+    // 1. Verificación de seguridad básica
     if (!ga4Auth?.property || !ga4Auth.token || !gscAuth?.site || !gscAuth.token) {
         if (!bridgeData.length) setBridgeData(generateMockBridgeData());
         return;
@@ -287,40 +287,47 @@ const App: React.FC = () => {
     try {
         const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
         
-        // 1. Fetch GSC Organic Data
+        // --- PASO A: OBTENER DATOS ORGÁNICOS (GSC) ---
+        // Aquí SÍ pedimos 'query' porque queremos ver el término específico
         const gscResp = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 startDate: filters.dateRange.start,
                 endDate: filters.dateRange.end,
-                dimensions: ['query', 'page'],
+                dimensions: ['query', 'page'], // Mantenemos query para la columna izquierda
                 rowLimit: 5000 
             })
         });
         const gscDataRaw = await gscResp.json();
         
-        // Mapa Orgánico
-        const organicMap: Record<string, { rank: number, clicks: number }> = {};
+        // Mapa temporal para guardar datos orgánicos
+        const organicRows: { path: string, query: string, rank: number, clicks: number }[] = [];
         
         (gscDataRaw.rows || []).forEach((row: any) => {
             const query = row.keys[0].toLowerCase().trim();
-            const pagePath = extractPath(row.keys[1]); 
-            // Usamos un separador menos común que | por si acaso
-            const key = `${pagePath}##${query}`; 
-            organicMap[key] = { rank: row.position, clicks: row.clicks };
+            const rawUrl = row.keys[1];
+            // IMPORTANTE: Normalizar URL (quitar dominio y protocolos)
+            const pagePath = extractPath(rawUrl); 
+            
+            organicRows.push({
+                path: pagePath, // Llave de unión
+                query: query,   // Dato visible (Proxy)
+                rank: row.position,
+                clicks: row.clicks
+            });
         });
 
-        // 2. Fetch GA4 Paid Data
+        // --- PASO B: OBTENER DATOS DE PAGO (GA4) ---
+        // IMPORTANTE: Aquí NO pedimos 'keyword'. Agrupamos por URL para capturar PMax.
         const ga4Resp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 dateRanges: [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }],
                 dimensions: [
-                    { name: 'landingPage' },
-                    { name: 'sessionGoogleAdsKeyword' }, 
-                    { name: 'sessionCampaignName' },
+                    { name: 'landingPage' },          // Solo URL
+                    { name: 'sessionCampaignName' },  // Para saber si es PMax
                     { name: 'sessionSourceMedium' }
                 ],
                 metrics: [
@@ -339,129 +346,87 @@ const App: React.FC = () => {
         });
         const ga4DataRaw = await ga4Resp.json();
 
-        // Mapa PPC: Guardamos dos niveles (Exacto y Solo URL)
-        const ga4ExactMap: Record<string, any> = {};
-        const ga4UrlMap: Record<string, any> = {}; // Fallback para PMax/Not Set
+        // Mapa de Costos por URL (The Bucket)
+        // Key: URL Path -> Value: Metrics
+        const ga4PageMap: Record<string, { cost: number, convs: number, sessions: number, campaign: string }> = {};
 
         (ga4DataRaw.rows || []).forEach((row: any) => {
             const rawPath = row.dimensionValues[0].value; 
-            const path = extractPath(rawPath);
+            const path = extractPath(rawPath); // Misma normalización que en GSC
             
-            let term = row.dimensionValues[1].value; 
-            const campaign = row.dimensionValues[2].value;
-            const sourceMedium = row.dimensionValues[3].value;
-            
-            // Detectar PMax o términos vacíos
-            const isUnknownTerm = !term || term === '(not provided)' || term === '(not set)';
-            term = isUnknownTerm ? '(not provided)' : term.toLowerCase().trim();
+            const campaignName = row.dimensionValues[1].value;
+            const sourceMedium = row.dimensionValues[2].value;
 
-            let finalCampaign = campaign;
-            if ((!campaign || campaign === '(not set)' || campaign === 'None') && sourceMedium.includes('cpc')) {
-               finalCampaign = `Auto: ${sourceMedium}`;
+            // Detectar nombre de campaña amigable
+            let finalCampaign = campaignName;
+            if ((!finalCampaign || finalCampaign === '(not set)') && sourceMedium.includes('cpc')) {
+               finalCampaign = 'PMax / Auto'; // Etiqueta genérica para campañas sin nombre claro
             }
 
             const metrics = {
                 cost: parseFloat(row.metricValues[0].value) || 0,
                 convs: parseFloat(row.metricValues[1].value) || 0,
                 sessions: parseInt(row.metricValues[2].value) || 0,
-                campaign: finalCampaign,
-                sourceMedium
+                campaign: finalCampaign
             };
 
-            // 1. Guardar match exacto
-            const exactKey = `${path}##${term}`;
-            if (!ga4ExactMap[exactKey]) ga4ExactMap[exactKey] = { ...metrics };
-            else {
-                ga4ExactMap[exactKey].cost += metrics.cost;
-                ga4ExactMap[exactKey].convs += metrics.convs;
-                ga4ExactMap[exactKey].sessions += metrics.sessions;
-            }
-
-            // 2. Acumular a nivel de URL (Bucket general para esa página)
-            if (!ga4UrlMap[path]) ga4UrlMap[path] = { ...metrics };
-            else {
-                ga4UrlMap[path].cost += metrics.cost;
-                ga4UrlMap[path].convs += metrics.convs;
-                ga4UrlMap[path].sessions += metrics.sessions;
-                // Si la campaña es distinta, marcamos como "Mixed" o nos quedamos la última
-                if (ga4UrlMap[path].campaign !== finalCampaign) ga4UrlMap[path].campaign = "Multiple / Mixed";
+            // Acumular costos si hay múltiples campañas apuntando a la misma URL
+            if (!ga4PageMap[path]) {
+                ga4PageMap[path] = metrics;
+            } else {
+                ga4PageMap[path].cost += metrics.cost;
+                ga4PageMap[path].convs += metrics.convs;
+                ga4PageMap[path].sessions += metrics.sessions;
+                // Si hay varias campañas, indicarlo
+                if (ga4PageMap[path].campaign !== finalCampaign) {
+                    ga4PageMap[path].campaign = "Multiple Campaigns"; 
+                }
             }
         });
 
-        // 3. JOIN INTELIGENTE
+        // --- PASO C: JOIN & LOGIC (EL PUENTE) ---
         const bridgeResults: BridgeData[] = [];
-        
-        // Recorremos primero datos orgánicos (GSC)
-        Object.keys(organicMap).forEach(key => {
-            const [path, query] = key.split('##');
-            const org = organicMap[key];
+
+        // Iteramos sobre las queries orgánicas (GSC)
+        organicRows.forEach(org => {
+            // Buscamos si esta URL está gastando dinero en Ads (Lookup en el mapa)
+            const paidMetrics = ga4PageMap[org.path] || { cost: 0, convs: 0, sessions: 0, campaign: 'None' };
+
+            // Cálculo de métricas combinadas
+            const blendedDenominator = org.clicks + paidMetrics.convs; // Simplificación
             
-            // Intento 1: Match Exacto (URL + Query)
-            let paid = ga4ExactMap[key];
-
-            // Intento 2: Si no hay match exacto, buscamos si hay gasto en esa URL (Fallback)
-            // Solo aplicamos el coste de la URL si NO encontramos match exacto, 
-            // para mostrar "Oye, en esta URL estás gastando dinero, aunque no sea esta keyword exacta"
-            if (!paid && ga4UrlMap[path]) {
-                paid = {
-                    ...ga4UrlMap[path],
-                    campaign: `${ga4UrlMap[path].campaign} (URL Match)`, // Indicamos que es match por URL
-                    // Opcional: Podrías dividir el coste por el número de keywords orgánicas para no duplicar visualmente
-                    // Pero para alertas, mejor mostrar el coste total de la landing.
-                };
+            // Lógica de Acción (Cannibalization Logic)
+            // Si rankeo bien (Top 3) Y estoy pagando dinero en esta página -> REVIEW
+            let action = "MAINTAIN";
+            if (org.rank <= 3.0 && paidMetrics.cost > 0) {
+                action = "REVIEW"; // Alerta de Canibalización
+            } else if (org.rank > 5.0 && org.rank < 20.0 && paidMetrics.cost === 0) {
+                action = "INCREASE"; // Oportunidad SEO sin explotar
             }
-
-            // Si no hay nada, objeto vacío
-            if (!paid) {
-                paid = { cost: 0, convs: 0, sessions: 0, campaign: 'None', sourceMedium: '' };
-            }
-
-            const blendedDenominator = org.clicks + paid.convs;
-            const blendedCostRatio = blendedDenominator > 0 ? paid.cost / blendedDenominator : 0;
 
             bridgeResults.push({
-                url: path,
-                query: query,
+                url: org.path,
+                query: org.query, // La query orgánica específica
                 organicRank: org.rank,
                 organicClicks: org.clicks,
-                ppcCampaign: paid.campaign,
-                ppcSourceMedium: paid.sourceMedium,
-                ppcCost: paid.cost,
-                ppcConversions: paid.convs,
-                ppcCpa: paid.convs > 0 ? paid.cost / paid.convs : 0,
-                ppcClicks: paid.sessions,
-                ppcImpressions: paid.sessions * 10,
-                blendedCostRatio: blendedCostRatio
+                // Datos de PPC (Nivel Página)
+                ppcCampaign: paidMetrics.campaign,
+                ppcCost: paidMetrics.cost, 
+                ppcConversions: paidMetrics.convs,
+                ppcCpa: paidMetrics.convs > 0 ? paidMetrics.cost / paidMetrics.convs : 0,
+                ppcClicks: paidMetrics.sessions,
+                ppcImpressions: paidMetrics.sessions * 10, // Estimación
+                blendedCostRatio: 0, // Puedes recalcular esto si lo usas
+                actionLabel: action // Nuevo campo para colorear el botón UI
             });
         });
 
-        // También deberíamos añadir las filas que SOLO tienen PPC y nada de SEO (Oportunidades perdidas)
-        // (Opcional, pero recomendado para ver dónde gastas sin tener SEO)
-        Object.keys(ga4ExactMap).forEach(key => {
-            if (!organicMap[key]) {
-                const [path, query] = key.split('##');
-                const paid = ga4ExactMap[key];
-                bridgeResults.push({
-                    url: path,
-                    query: query + " (Ads Only)",
-                    organicRank: null,
-                    organicClicks: 0,
-                    ppcCampaign: paid.campaign,
-                    ppcSourceMedium: paid.sourceMedium,
-                    ppcCost: paid.cost,
-                    ppcConversions: paid.convs,
-                    ppcCpa: paid.convs > 0 ? paid.cost / paid.convs : 0,
-                    ppcClicks: paid.sessions,
-                    ppcImpressions: paid.sessions * 10,
-                    blendedCostRatio: 0
-                });
-            }
-        });
-
+        // Ordenar por gasto de PPC para ver dónde se va el dinero primero
         setBridgeData(bridgeResults.sort((a, b) => b.ppcCost - a.ppcCost));
 
     } catch (e) {
         console.error("Error fetching Bridge Data", e);
+        // Fallback a datos mock si falla
         setBridgeData(generateMockBridgeData());
     } finally {
         setIsLoadingBridge(false);
