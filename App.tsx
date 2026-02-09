@@ -276,46 +276,35 @@ const App: React.FC = () => {
     }
   };
 
-// --- BRIDGE DATA: FIX DEFINITIVO (PATH MATCHING & MANUAL CVR) ---
+// --- BRIDGE DATA: FIX CVR REAL (ADIÓS AL 90%) ---
   const fetchBridgeData = async () => {
-    // 1. Validaciones
     if (!ga4Auth?.property || !ga4Auth.token || !gscAuth?.site || !gscAuth.token) {
         if (!bridgeData.length) setBridgeData(generateMockBridgeData());
         return;
     }
 
     setIsLoadingBridge(true);
-    console.log("🚀 STARTING BRIDGE WITH AGGRESSIVE PATH MATCHING...");
+    // console.log("🚀 STARTING BRIDGE WITH REAL CVR METRIC...");
 
     try {
         const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
         
-        // --- FUNCIÓN DE LIMPIEZA AGRESIVA (SOLO PATH) ---
-        // Esto soluciona el problema del 100% de Paid Share
+        // Función de limpieza de URL (Path)
         const getPath = (url: string) => {
             if (!url) return '';
             let clean = url.toLowerCase().trim();
-            
-            // Si empieza por http, extraemos solo el path
             if (clean.startsWith('http')) {
                 try {
                     const urlObj = new URL(clean);
                     clean = urlObj.pathname;
                 } catch (e) {
-                    // Fallback si falla URL parser
                     clean = clean.replace(/^https?:\/\/(www\.)?[^\/]+/, '');
                 }
             }
-            
-            // Limpiezas finales comunes
-            return clean
-                .split('?')[0]  // Quitar params
-                .split('#')[0]  // Quitar hash
-                .replace(/\/$/, '') // Quitar barra final
-                .replace(/^\/[a-z]{2}\//, '/'); // OPCIONAL: Quitar idioma /es/ para unificar mercados (comenta si no quieres esto)
+            return clean.split('?')[0].split('#')[0].replace(/\/$/, '').replace(/^\/[a-z]{2}\//, '/'); 
         };
 
-        // --- A. GSC (ORGÁNICO) ---
+        // --- A. GSC (SEO) ---
         const gscResp = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
@@ -329,37 +318,30 @@ const App: React.FC = () => {
 
         const gscDataRaw = await gscResp.json();
         
-        // Mapa para sumar todo el tráfico orgánico de la URL (Path)
+        // Calcular total orgánico por URL para el Share
         const urlOrganicTotalMap: Record<string, number> = {};
-        
         const organicRows = (gscDataRaw.rows || []).map((row: any) => {
-            const path = getPath(row.keys[0]); // Usamos la nueva función
+            const path = getPath(row.keys[0]);
             const clicks = row.clicks;
-            
             if (!urlOrganicTotalMap[path]) urlOrganicTotalMap[path] = 0;
             urlOrganicTotalMap[path] += clicks;
-
-            return {
-                query: row.keys[1],
-                cleanPath: path,
-                rank: row.position,
-                clicks: clicks
-            };
+            return { query: row.keys[1], cleanPath: path, rank: row.position, clicks: clicks };
         });
 
-        // --- B. GA4 (TRÁFICO + CONVERSIONES BRUTAS) ---
+        // --- B. GA4 (SOLO TRÁFICO Y TASA DE CONVERSIÓN) ---
         const ga4Resp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 dateRanges: [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }],
                 dimensions: [
-                    { name: 'landingPage' }, // GA4 suele dar solo el path aquí
+                    { name: 'landingPage' },
                     { name: 'sessionCampaignName' }
                 ],
                 metrics: [
                     { name: 'sessions' },
-                    { name: 'conversions' } // Pedimos el total, lo dividiremos nosotros
+                    // CAMBIO CLAVE: Pedimos la tasa ya calculada, no el total bruto
+                    { name: 'sessionConversionRate' } 
                 ],
                 limit: 10000
             })
@@ -368,7 +350,7 @@ const App: React.FC = () => {
         if (!ga4Resp.ok) throw new Error("GA4 API Error");
         const ga4Data = await ga4Resp.json();
 
-        // --- C. PROCESAMIENTO GA4 ---
+        // --- C. PROCESAMIENTO ---
         const getCampaignType = (name: string): string => {
             const n = name.toLowerCase();
             if (n === '(not set)' || n === 'none') return 'Unknown';
@@ -379,25 +361,29 @@ const App: React.FC = () => {
             return 'Other Paid';
         };
 
-        const urlPaidMap: Record<string, { sessions: number, convs: number, campaigns: Set<string> }> = {};
+        // Mapa: Guardamos Sesiones y la Tasa Ponderada
+        const urlPaidMap: Record<string, { sessions: number, weightedCvr: number, campaigns: Set<string> }> = {};
 
         (ga4Data.rows || []).forEach((row: any) => {
-            const rawUrl = row.dimensionValues[0].value; // GA4 da /ruta
+            const rawUrl = row.dimensionValues[0].value;
             const campaignName = row.dimensionValues[1].value;
+            
             const sessions = parseInt(row.metricValues[0].value) || 0;
-            const convs = parseFloat(row.metricValues[1].value) || 0;
+            // GA4 devuelve esto como 0.052 (5.2%)
+            const rate = parseFloat(row.metricValues[1].value) || 0; 
 
             const type = getCampaignType(campaignName);
             
-            // Filtramos solo tráfico relevante de pago
             if (type !== 'Unknown' && type !== 'Other Paid' && !campaignName.includes('email')) {
-                const path = getPath(rawUrl); // Limpiamos igual que en GSC
+                const path = getPath(rawUrl);
                 
                 if (!urlPaidMap[path]) {
-                    urlPaidMap[path] = { sessions: 0, convs: 0, campaigns: new Set() };
+                    urlPaidMap[path] = { sessions: 0, weightedCvr: 0, campaigns: new Set() };
                 }
                 urlPaidMap[path].sessions += sessions;
-                urlPaidMap[path].convs += convs;
+                
+                // Acumulamos "sesiones convertidoras" teóricas para luego hacer la media
+                urlPaidMap[path].weightedCvr += (rate * sessions); 
                 urlPaidMap[path].campaigns.add(type);
             }
         });
@@ -408,30 +394,19 @@ const App: React.FC = () => {
         organicRows.forEach(org => {
             const paid = urlPaidMap[org.cleanPath];
             const paidSessions = paid ? paid.sessions : 0;
-            const paidConvs = paid ? paid.convs : 0;
             
-            // 1. CÁLCULO CVR MANUAL (Arregla el %)
-            // Conversiones / Sesiones. (Ej: 5 conv / 100 ses = 0.05)
-            // Si usabas 'conversions' y te daba 600%, es que GA4 cuenta muchos eventos.
-            // Esto dará el dato real matemático.
-            const paidCvr = paidSessions > 0 ? (paidConvs / paidSessions) : 0;
+            // 1. CVR REAL (Media ponderada)
+            // Si hubo 100 visitas al 5% y 100 visitas al 0%, la media es 2.5%
+            const realCvr = (paid && paidSessions > 0) ? (paid.weightedCvr / paidSessions) : 0;
 
-            // 2. CÁLCULO SHARE % (Arregla el 100%)
-            // Buscamos el total orgánico usando el PATH limpio
-            const totalOrganicClicksForUrl = urlOrganicTotalMap[org.cleanPath] || org.clicks;
-            const totalTraffic = paidSessions + totalOrganicClicksForUrl;
-            
-            // Si totalOrganicClicksForUrl es > 0, esto YA NO puede ser 100% (a menos que PPC sea gigante)
-            const paidDependency = totalTraffic > 0 ? (paidSessions / totalTraffic) : 0;
+            // 2. PAID SHARE (Dependencia)
+            const totalOrganic = urlOrganicTotalMap[org.cleanPath] || org.clicks;
+            const totalTraffic = paidSessions + totalOrganic;
+            const paidShare = totalTraffic > 0 ? (paidSessions / totalTraffic) : 0;
 
-            // Debug en consola para ver si cruzan
-            if (org.rank <= 3 && paidSessions > 0 && Math.random() > 0.95) {
-                console.log(`MATCH DEBUG: ${org.cleanPath} | SEO: ${totalOrganicClicksForUrl} | PPC: ${paidSessions} | Share: ${paidDependency}`);
-            }
-
-            // Lógica de Acción
+            // Lógica Action
             let action = "MAINTAIN";
-            if (org.rank <= 3.0 && paidDependency > 0.4) action = "CRITICAL (Overlap)";
+            if (org.rank <= 3.0 && paidShare > 0.4) action = "CRITICAL (Overlap)";
             else if (org.rank <= 3.0 && paidSessions > 0) action = "REVIEW";
             else if (org.rank > 10.0 && paidSessions === 0) action = "INCREASE";
 
@@ -446,10 +421,10 @@ const App: React.FC = () => {
                     organicClicks: org.clicks,
                     ppcCampaign: campDisplay,
                     ppcCost: 0,
-                    ppcConversions: paidConvs,
                     
-                    ppcCpa: paidCvr,           
-                    blendedCostRatio: paidDependency, 
+                    ppcConversions: 0, // Ya no usamos conversiones brutas
+                    ppcCpa: realCvr,   // Aquí va el % REAL (ej: 0.035)
+                    blendedCostRatio: paidShare, 
 
                     ppcClicks: paidSessions,
                     ppcImpressions: paidSessions * 10,
@@ -458,7 +433,6 @@ const App: React.FC = () => {
             }
         });
 
-        console.log(`✅ BRIDGE DONE. Rows: ${bridgeResults.length}`);
         setBridgeData(bridgeResults.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
 
     } catch (e) {
