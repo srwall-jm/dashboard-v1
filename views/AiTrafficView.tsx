@@ -3,7 +3,7 @@ import React, { useMemo } from 'react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
-import { Bot, Zap, TrendingUp, Clock, FileText } from 'lucide-react';
+import { Bot, Zap, TrendingUp, Sparkles, MessageSquare, Search, Brain, FileText } from 'lucide-react';
 import { AiTrafficData } from '../types';
 import { KpiCard } from '../components/KpiCard';
 import { EmptyState } from '../components/EmptyState';
@@ -14,28 +14,38 @@ export const AiTrafficView: React.FC<{
   currencySymbol: string;
 }> = ({ data, currencySymbol }) => {
 
-  // 1. Scorecard Aggregations
+  // 1. Scorecard Aggregations (Global)
   const scorecards = useMemo(() => {
     const totalSessions = data.reduce((acc, curr) => acc + curr.sessions, 0);
     const totalEngaged = data.reduce((acc, curr) => acc + curr.engagedSessions, 0);
     const avgEngagement = totalSessions > 0 ? (totalEngaged / totalSessions) * 100 : 0;
     
-    // Calculate Top Source
-    const sourceMap: Record<string, number> = {};
-    data.forEach(d => {
-        sourceMap[d.source] = (sourceMap[d.source] || 0) + d.sessions;
-    });
-    const topSourceEntry = Object.entries(sourceMap).sort((a,b) => b[1] - a[1])[0];
-    const topSource = topSourceEntry ? topSourceEntry[0] : 'None';
-
-    return { totalSessions, avgEngagement, topSource };
+    return { totalSessions, avgEngagement };
   }, [data]);
 
-  // 2. Trend Chart Data (Time Series by Source)
+  // 2. Specific LLM Stats (Breakdown)
+  const llmStats = useMemo(() => {
+    const stats = {
+        chatgpt: 0,
+        perplexity: 0,
+        gemini: 0,
+        claude: 0
+    };
+
+    data.forEach(d => {
+        const s = d.source.toLowerCase();
+        if (s.includes('chatgpt')) stats.chatgpt += d.sessions;
+        else if (s.includes('perplexity')) stats.perplexity += d.sessions;
+        else if (s.includes('gemini')) stats.gemini += d.sessions;
+        else if (s.includes('claude')) stats.claude += d.sessions;
+    });
+
+    return stats;
+  }, [data]);
+
+  // 3. Trend Chart Data (Time Series by Source)
   const trendData = useMemo(() => {
-    // Collect all dates
     const dates = Array.from(new Set(data.map(d => d.date))).sort();
-    // Collect all unique sources for lines
     const sources = Array.from(new Set(data.map(d => d.source)));
 
     return dates.map(date => {
@@ -48,7 +58,7 @@ export const AiTrafficView: React.FC<{
     });
   }, [data]);
 
-  // 3. Table Data (Landing Page Impact)
+  // 4. Table Data (Landing Page Impact)
   const tableData = useMemo(() => {
     const map: Record<string, { page: string; sessions: number; engaged: number; duration: number }> = {};
     
@@ -56,8 +66,6 @@ export const AiTrafficView: React.FC<{
         if (!map[d.landingPage]) map[d.landingPage] = { page: d.landingPage, sessions: 0, engaged: 0, duration: 0 };
         map[d.landingPage].sessions += d.sessions;
         map[d.landingPage].engaged += d.engagedSessions;
-        // Mocking duration accumulation as we don't have it in the base type, using engagement as proxy for now or 0
-        // In real app, API would provide averageSessionDuration
     });
 
     return Object.values(map)
@@ -68,41 +76,65 @@ export const AiTrafficView: React.FC<{
         .sort((a, b) => b.sessions - a.sessions);
   }, [data]);
 
-  // Colors for lines
   const COLORS = ['#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#06b6d4'];
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
       
-      {/* Section B: Scorecards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Section A: Global Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <KpiCard 
-          title="Total AI Sessions" 
+          title="Total AI Referred Sessions" 
           value={scorecards.totalSessions.toLocaleString()} 
           icon={<Bot />} 
-          color="violet"
+          color="slate"
         />
         <KpiCard 
-          title="AI Engagement Rate" 
+          title="Avg. AI Engagement Rate" 
           value={`${scorecards.avgEngagement.toFixed(2)}%`} 
           icon={<Zap />} 
-          color="emerald"
+          color="slate"
           isPercent
-        />
-        <KpiCard 
-          title="Top AI Source" 
-          value={scorecards.topSource} 
-          icon={<TrendingUp />} 
-          color="amber"
         />
       </div>
 
-      {/* Section A: Trend Chart */}
+      {/* Section B: Individual LLM Breakdown */}
+      <div>
+        <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 px-2">Traffic by Engine</h4>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <KpiCard 
+            title="ChatGPT" 
+            value={llmStats.chatgpt.toLocaleString()} 
+            icon={<MessageSquare />} 
+            color="emerald"
+            />
+            <KpiCard 
+            title="Perplexity" 
+            value={llmStats.perplexity.toLocaleString()} 
+            icon={<Search />} 
+            color="sky"
+            />
+            <KpiCard 
+            title="Gemini" 
+            value={llmStats.gemini.toLocaleString()} 
+            icon={<Sparkles />} 
+            color="violet"
+            />
+            <KpiCard 
+            title="Claude" 
+            value={llmStats.claude.toLocaleString()} 
+            icon={<Brain />} 
+            color="amber"
+            />
+        </div>
+      </div>
+
+      {/* Section C: Trend Chart */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">AI Traffic Over Time</h4>
-            <p className="text-[11px] font-bold text-slate-600">Session Volume by Source (ChatGPT, Gemini, etc.)</p>
+            <p className="text-[11px] font-bold text-slate-600">Session Volume by Source</p>
           </div>
         </div>
         <div className="h-[350px]">
@@ -135,7 +167,7 @@ export const AiTrafficView: React.FC<{
         </div>
       </div>
 
-      {/* Section C: Landing Page Table */}
+      {/* Section D: Landing Page Table */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex justify-between items-center mb-8">
             <div>
