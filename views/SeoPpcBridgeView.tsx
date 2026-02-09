@@ -1,18 +1,17 @@
 import React, { useMemo, useState } from 'react';
 import { 
-  ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine, BarChart, Bar, LineChart, Line, Legend, LabelList
+  ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, BarChart, Bar, LineChart, Line, Legend, LabelList
 } from 'recharts';
 import { 
-  AlertOctagon, Zap, ShieldCheck, FileText, ExternalLink, Search, Filter, ChevronDown, ChevronRight, CornerDownRight
+  AlertOctagon, Zap, ShieldCheck, FileText, ExternalLink, Search, Filter, ChevronDown, ChevronRight, CornerDownRight, BarChart2
 } from 'lucide-react';
 import { BridgeData, DailyData } from '../types';
 import { exportToCSV } from '../utils';
 import { KpiCard } from '../components/KpiCard';
-import { EmptyState } from '../components/EmptyState';
 import { ComparisonTooltip } from '../components/ComparisonTooltip';
 
-// Helper component for expanded rows
-const QueryDetailRow: React.FC<{ query: string, rank: number | null, action: string }> = ({ query, rank, action }) => (
+// Helper component for expanded rows (Shows Keyword Detail)
+const QueryDetailRow: React.FC<{ query: string, rank: number | null, clicks: number }> = ({ query, rank, clicks }) => (
   <tr className="bg-slate-50/80 border-b border-slate-100/50">
     <td className="pl-12 py-2 flex items-center gap-2 text-[10px] text-slate-500 font-medium">
       <CornerDownRight size={10} className="text-slate-300" />
@@ -25,12 +24,10 @@ const QueryDetailRow: React.FC<{ query: string, rank: number | null, action: str
         </span>
       ) : '-'}
     </td>
-    <td colSpan={3} className="py-2"></td>
-    <td className="text-right pr-4 py-2">
-      <span className={`text-[9px] font-bold uppercase ${action.includes('CRITICAL') || action.includes('EXCLUDE') ? 'text-rose-600' : 'text-slate-400'}`}>
-        {action}
-      </span>
+    <td className="text-right pr-8 py-2 text-[10px] text-slate-500 font-mono">
+       {clicks.toLocaleString()} clicks
     </td>
+    <td colSpan={3} className="py-2"></td>
   </tr>
 );
 
@@ -44,37 +41,29 @@ export const SeoPpcBridgeView: React.FC<{
 
   // 1. GROUP DATA BY URL
   const groupedData = useMemo(() => {
-    const groups: Record<string, BridgeData & { queries: { q: string, r: number | null, a: string }[] }> = {};
+    const groups: Record<string, BridgeData & { queries: { q: string, r: number | null, c: number }[] }> = {};
 
     data.forEach(item => {
-      // Filtrar si hay búsqueda
       if (urlFilter && !item.url.toLowerCase().includes(urlFilter.toLowerCase())) return;
 
       if (!groups[item.url]) {
         groups[item.url] = { 
           ...item, 
-          queries: [] // Array para guardar las keywords hijas
+          queries: [] 
         };
       }
       
-      // Añadimos la query a la lista de hijos
+      // Agregamos la query hijo
       groups[item.url].queries.push({
         q: item.query,
         r: item.organicRank,
-        a: item.actionLabel
+        c: item.organicClicks
       });
-      
-      // Actualizamos lógica de estado del PADRE (Si alguna query es crítica, el padre es crítico)
-      // Esto es opcional, pero ayuda a destacar URLs con problemas mixtos
-      if (item.actionLabel.includes('CRITICAL') || item.actionLabel.includes('REVIEW')) {
-         // Podríamos forzar un estado visual aquí si quisiéramos
-      }
     });
 
     return Object.values(groups).sort((a, b) => b.blendedCostRatio - a.blendedCostRatio);
   }, [data, urlFilter]);
 
-  // Toggle expand/collapse
   const toggleRow = (url: string) => {
     const newSet = new Set(expandedRows);
     if (newSet.has(url)) newSet.delete(url);
@@ -82,7 +71,7 @@ export const SeoPpcBridgeView: React.FC<{
     setExpandedRows(newSet);
   };
 
-  // KPIs Logic (Same as before)
+  // KPIs Logic
   const kpis = useMemo(() => {
     const excludeCount = data.filter(d => d.actionLabel.includes('CRITICAL') || d.actionLabel.includes('REVIEW')).length;
     const increaseCount = data.filter(d => d.actionLabel === 'INCREASE').length;
@@ -93,17 +82,6 @@ export const SeoPpcBridgeView: React.FC<{
     };
   }, [data]);
 
-  // Chart Data
-  const trendData = useMemo(() => {
-    const map: Record<string, { date: string, organic: number, paid: number }> = {};
-    dailyData.filter(d => d.dateRangeLabel === 'current').forEach(d => {
-      if(!map[d.date]) map[d.date] = { date: d.date, organic: 0, paid: 0 };
-      if(d.channel.toLowerCase().includes('organic')) map[d.date].organic += d.sessions;
-      if(d.channel.toLowerCase().includes('paid')) map[d.date].paid += d.sessions;
-    });
-    return Object.values(map).sort((a,b) => a.date.localeCompare(b.date));
-  }, [dailyData]);
-
   const savingsData = useMemo(() => [
     { name: 'Total Paid Traffic', value: data.reduce((acc, c) => acc + c.ppcClicks, 0) },
     { name: 'Cannibalized Traffic', value: kpis.exclude.volume }
@@ -112,41 +90,6 @@ export const SeoPpcBridgeView: React.FC<{
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
       
-      {/* SECTION A: Macro Trends */}
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-          <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Macro Trends</h4>
-            <p className="text-[11px] font-bold text-slate-600">Organic vs Paid Traffic Flow</p>
-          </div>
-          <div className="flex items-center gap-3 w-full md:w-auto">
-             <div className="relative w-full md:w-64">
-                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                <input 
-                  type="text" 
-                  value={urlFilter}
-                  onChange={(e) => setUrlFilter(e.target.value)}
-                  placeholder="Filter URLs..."
-                  className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-400"
-                />
-             </div>
-          </div>
-        </div>
-        <div className="h-[200px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" tick={{fontSize: 9}} axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9}} />
-                <Tooltip content={<ComparisonTooltip />} />
-                <Legend verticalAlign="top" iconType="circle" />
-                <Line type="monotone" dataKey="organic" name="Organic" stroke="#10b981" strokeWidth={3} dot={false} />
-                <Line type="monotone" dataKey="paid" name="Paid" stroke="#3b82f6" strokeWidth={3} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-        </div>
-      </div>
-
       {/* SECTION B: KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <KpiCard title="Critical Overlap" value={kpis.exclude.count} icon={<AlertOctagon />} color="rose" comparison={undefined} />
@@ -154,10 +97,10 @@ export const SeoPpcBridgeView: React.FC<{
         <KpiCard title="Safe / Maintain" value={kpis.maintain.count} icon={<ShieldCheck />} color="emerald" comparison={undefined} />
       </div>
 
-      {/* SECTION C: MATRIX & VOLUME (Layout Compacted) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Graph 1 */}
         <div className="lg:col-span-2 bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm">
-           <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Dependency Matrix (Rank vs Paid Share)</h4>
+           <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Traffic Matrix (Rank vs Paid Share)</h4>
            <div className="h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
               <ScatterChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
@@ -185,6 +128,7 @@ export const SeoPpcBridgeView: React.FC<{
            </div>
         </div>
 
+        {/* Graph 2 */}
         <div className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm">
            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Wasted Volume</h4>
            <div className="h-[200px]">
@@ -204,31 +148,34 @@ export const SeoPpcBridgeView: React.FC<{
         </div>
       </div>
 
-      {/* SECTION E: THE NEW GROUPED TABLE */}
+      {/* SECTION E: THE NEW CLEAN TABLE */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex justify-between items-center mb-6">
             <div>
-              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">URL-Level Intelligence</h4>
-              <p className="text-[11px] font-bold text-slate-600">Click arrows to inspect specific Keywords</p>
+              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Traffic Source Audit</h4>
+              <p className="text-[11px] font-bold text-slate-600">Comparing Raw Volumes: SEO vs PPC</p>
             </div>
              <button 
                 onClick={() => exportToCSV(data, "PPC_SEO_Export")} 
                 className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
               >
-                <FileText size={12} /> Export Full Data
+                <FileText size={12} /> Export CSV
               </button>
         </div>
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/50">
-                <th className="py-3 px-4 w-8"></th> {/* Arrow Column */}
-                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Target URL</th>
-                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Avg Rank</th>
-                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Main Campaign</th>
-                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Paid CVR</th>
+                <th className="py-3 px-4 w-8"></th>
+                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">URL / Campaign</th>
+                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Top Rank</th>
+                
+                {/* NUEVAS COLUMNAS DE TRÁFICO REAL */}
+                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">SEO Clicks</th>
+                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">PPC Sessions</th>
                 <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right text-amber-600">Paid Share</th>
-                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Status</th>
+                
+                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -243,41 +190,63 @@ export const SeoPpcBridgeView: React.FC<{
                       {expandedRows.has(row.url) ? <ChevronDown size={14} className="text-indigo-500" /> : <ChevronRight size={14} className="text-slate-400" />}
                     </td>
                     <td className="py-3 px-4 max-w-xs">
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-800 break-all">
-                          <ExternalLink size={10} className="text-indigo-400 flex-shrink-0" /> {row.url}
-                          <span className="text-[9px] text-slate-400 font-normal">({row.queries.length} queries)</span>
+                        <div className="flex flex-col">
+                           <div className="flex items-center gap-2 text-[10px] font-bold text-slate-800 break-all">
+                             <ExternalLink size={10} className="text-indigo-400 flex-shrink-0" /> {row.url}
+                           </div>
+                           <div className="flex items-center gap-1 text-[9px] text-slate-400 mt-1">
+                             <Zap size={8} /> {row.ppcCampaign}
+                           </div>
                         </div>
                     </td>
                     <td className="py-3 px-4 text-center">
-                      {/* Mostramos el mejor ranking de sus hijos para dar contexto rápido */}
                       <span className="text-[10px] font-bold text-slate-600">
-                        Top: #{Math.min(...row.queries.map(q => q.r || 100)).toFixed(1)}
+                        #{Math.min(...row.queries.map(q => q.r || 100)).toFixed(1)}
                       </span>
                     </td>
-                    <td className="py-3 px-4">
-                        <span className="text-[10px] font-bold text-slate-600">{row.ppcCampaign}</span>
-                    </td>
+                    
+                    {/* COLUMNA: SEO VOL (Dato Crudo) */}
                     <td className="py-3 px-4 text-right">
-                       <span className="text-[10px] font-black text-slate-800">{(row.ppcCpa * 100).toFixed(1)}%</span>
+                       <span className="text-[10px] font-bold text-emerald-600">
+                         {row.organicClicks.toLocaleString()}
+                       </span>
                     </td>
+
+                    {/* COLUMNA: PPC VOL (Dato Crudo) */}
                     <td className="py-3 px-4 text-right">
-                        <div className={`inline-block px-2 py-0.5 rounded-md border ${row.blendedCostRatio > 0.5 ? 'bg-rose-50 border-rose-100 text-rose-700' : 'bg-amber-50 border-amber-100 text-amber-700'}`}>
-                           <span className="text-[10px] font-black">{(row.blendedCostRatio * 100).toFixed(0)}%</span>
+                       <span className="text-[10px] font-bold text-indigo-600">
+                         {row.ppcClicks.toLocaleString()}
+                       </span>
+                    </td>
+
+                    {/* COLUMNA: SHARE (Barra Visual) */}
+                    <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                           <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full ${row.blendedCostRatio > 0.5 ? 'bg-rose-500' : 'bg-emerald-500'}`} 
+                                style={{ width: `${row.blendedCostRatio * 100}%` }} 
+                              />
+                           </div>
+                           <span className="text-[9px] font-bold text-slate-600 w-6">
+                             {(row.blendedCostRatio * 100).toFixed(0)}%
+                           </span>
                         </div>
                     </td>
+
                     <td className="py-3 px-4 text-right">
                       <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tight 
                         ${row.actionLabel.includes('CRITICAL') ? 'bg-rose-100 text-rose-600' : 
                           row.actionLabel === 'INCREASE' ? 'bg-blue-100 text-blue-600' : 
                           'bg-emerald-100 text-emerald-600'}`}>
-                        {row.actionLabel.split(' ')[0]} {/* Show just first word for compactness */}
+                        {row.actionLabel.split(' ')[0]}
                       </span>
                     </td>
                   </tr>
 
-                  {/* CHILD ROWS (QUERIES) - Only if Expanded */}
+                  {/* CHILD ROWS (Queries) */}
                   {expandedRows.has(row.url) && row.queries.map((q, qIdx) => (
-                    <QueryDetailRow key={`${idx}-${qIdx}`} query={q.q} rank={q.r} action={q.a} />
+                    <QueryDetailRow key={`${idx}-${qIdx}`} query={q.q} rank={q.r} clicks={q.c} />
                   ))}
                 </React.Fragment>
               )) : (
