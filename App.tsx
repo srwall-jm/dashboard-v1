@@ -276,7 +276,7 @@ const App: React.FC = () => {
     }
   };
 
-// --- BRIDGE DATA: TRAFFIC OVERLAP (BYPASS 403 & FIXED NAMES) ---
+// --- BRIDGE DATA: FINAL (TRAFFIC STRATEGY + METRICS CALCULATION) ---
   const fetchBridgeData = async () => {
     // 1. Validaciones
     if (!ga4Auth?.property || !ga4Auth.token || !gscAuth?.site || !gscAuth.token) {
@@ -285,12 +285,10 @@ const App: React.FC = () => {
     }
 
     setIsLoadingBridge(true);
-    console.log("🚀 STARTING TRAFFIC OVERLAP STRATEGY...");
+    console.log("🚀 STARTING TRAFFIC STRATEGY WITH METRICS...");
 
     try {
         const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
-        
-        // Función de limpieza nuclear
         const normalizeUrl = (url: string) => {
             if (!url) return '';
             return url.toLowerCase()
@@ -321,8 +319,7 @@ const App: React.FC = () => {
             clicks: row.clicks
         }));
 
-        // --- B. GA4 (SOLO TRÁFICO - BYPASS 403) ---
-        // ⚠️ TRUCO: No pedimos 'advertiserAdCost'. Pedimos 'sessions' desglosadas por campaña.
+        // --- B. GA4 (SOLO TRÁFICO - SIN COSTE PARA EVITAR 403) ---
         const ga4Resp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
@@ -336,28 +333,21 @@ const App: React.FC = () => {
                     { name: 'sessions' },
                     { name: 'conversions' }
                 ],
-                // Sin filtros restrictivos en la API para evitar errores 400
                 limit: 10000
             })
         });
 
-        if (!ga4Resp.ok) {
-            console.error("GA4 Error:", await ga4Resp.text());
-            throw new Error("GA4 API Error");
-        }
-
+        if (!ga4Resp.ok) throw new Error("GA4 API Error");
         const ga4Data = await ga4Resp.json();
 
-        // --- C. PROCESAMIENTO INTELIGENTE ---
-        
-        // Clasificador de Campañas (Tus nombres reales)
+        // --- C. PROCESAMIENTO ---
         const getCampaignType = (name: string): string => {
             const n = name.toLowerCase();
             if (n === '(not set)' || n === 'none') return 'Unknown';
-            if (n.includes('dsa')) return 'DSA (Dynamic Ads)';
-            if (n.includes('branded') && !n.includes('nonbranded')) return 'Branded Search';
-            if (n.includes('nonbranded')) return 'Non-Branded / Generic';
-            if (n.includes('pmax') || n.includes('performance max')) return 'Performance Max';
+            if (n.includes('dsa')) return '🤖 DSA (Dynamic)';
+            if (n.includes('branded') && !n.includes('non')) return '🛡️ Brand';
+            if (n.includes('nonbranded')) return '🌍 Generic';
+            if (n.includes('pmax') || n.includes('performance max')) return '⚡ PMax';
             if (n.includes('social') || n.includes('facebook')) return 'Paid Social';
             if (n.includes('email')) return 'Email';
             return 'Other Paid';
@@ -371,25 +361,22 @@ const App: React.FC = () => {
             const sessions = parseInt(row.metricValues[0].value) || 0;
             const convs = parseFloat(row.metricValues[1].value) || 0;
 
-            // Filtro Lógico: Solo nos interesa el tráfico que parece de pago
             const type = getCampaignType(campaignName);
-            const isLikelyPaid = type !== 'Email' && type !== 'Unknown' && type !== 'Other Paid';
-
-            // Si es DSA, PMax o Search, lo guardamos
-            if (isLikelyPaid || campaignName.includes('cpc') || campaignName.includes('ppc')) {
+            
+            // Filtramos tráfico irrelevante
+            if (type !== 'Email' && type !== 'Unknown' && type !== 'Other Paid') {
                 const cleanPath = normalizeUrl(rawUrl);
                 
                 if (!urlPaidMap[cleanPath]) {
                     urlPaidMap[cleanPath] = { sessions: 0, convs: 0, campaigns: new Set() };
                 }
-                
                 urlPaidMap[cleanPath].sessions += sessions;
                 urlPaidMap[cleanPath].convs += convs;
-                urlPaidMap[cleanPath].campaigns.add(type); // Guardamos el tipo limpio
+                urlPaidMap[cleanPath].campaigns.add(type);
             }
         });
 
-        // --- D. CRUCE FINAL ---
+        // --- D. CÁLCULO DE MÉTRICAS & CRUCE ---
         const bridgeResults: BridgeData[] = [];
 
         organicRows.forEach(org => {
@@ -397,46 +384,59 @@ const App: React.FC = () => {
             const sessions = paid ? paid.sessions : 0;
             const convs = paid ? paid.convs : 0;
 
-            // Lógica de Acción Estratégica
+            // 1. CÁLCULO: PAID SHARE (Dependencia)
+            // (Visitas Pago / Visitas Totales)
+            const totalTraffic = sessions + org.clicks;
+            const paidDependency = totalTraffic > 0 ? (sessions / totalTraffic) : 0;
+
+            // 2. CÁLCULO: PAID CVR (Conversión)
+            const paidCvr = sessions > 0 ? (convs / sessions) : 0;
+
+            // 3. Lógica de Acción
             let action = "MAINTAIN";
             
-            // Si rankeo TOP 3 y tengo tráfico de pago significativo -> CANIBALIZACIÓN
-            if (org.rank <= 3.0 && sessions > 10) {
-                action = "REVIEW (Overlap)";
+            // Si rankeo Top 3 Y dependo más del 50% de anuncios -> CRÍTICO
+            if (org.rank <= 3.0 && paidDependency > 0.5) {
+                action = "CRITICAL (Overlap)";
             } 
-            // Si rankeo en pág 2 y no tengo tráfico -> OPORTUNIDAD
+            else if (org.rank <= 3.0 && sessions > 0) {
+                 action = "REVIEW";
+            }
             else if (org.rank > 10.0 && sessions === 0) {
                 action = "INCREASE";
             }
 
-            // Nombre bonito para la UI
+            // Nombre bonito
             let campDisplay = "None";
             if (paid && paid.campaigns.size > 0) {
-                campDisplay = Array.from(paid.campaigns).join(' + ');
+                 campDisplay = Array.from(paid.campaigns).join(' + ');
             }
 
-            // Filtro visual: Mostrar si hay conflicto o gasto
             if (org.rank <= 20 || sessions > 0) {
                 bridgeResults.push({
                     url: org.cleanPath,
                     query: org.query,
                     organicRank: org.rank,
                     organicClicks: org.clicks,
-                    ppcCampaign: campDisplay, // "DSA + Branded"
-                    ppcCost: 0, // No tenemos coste, pero...
-                    ppcConversions: convs, 
-                    ppcCpa: 0,
-                    ppcClicks: sessions, // ...tenemos tráfico real
-                    ppcImpressions: sessions * 15, // Estimación
-                    blendedCostRatio: 0,
+                    ppcCampaign: campDisplay,
+                    
+                    ppcCost: 0, // No tenemos coste
+                    ppcConversions: convs,
+                    
+                    // REUTILIZAMOS VARIABLES PARA LAS NUEVAS MÉTRICAS
+                    ppcCpa: paidCvr,           // Guardamos el % de Conversión aquí
+                    blendedCostRatio: paidDependency, // Guardamos el % de Dependencia aquí
+
+                    ppcClicks: sessions,
+                    ppcImpressions: sessions * 10,
                     actionLabel: action
                 });
             }
         });
 
-        // Ordenamos por INTENSIDAD de tráfico pagado
-        console.log(`✅ BRIDGE DONE. Rows generated: ${bridgeResults.length}`);
-        setBridgeData(bridgeResults.sort((a, b) => b.ppcClicks - a.ppcClicks));
+        console.log(`✅ BRIDGE DONE. Rows: ${bridgeResults.length}`);
+        // Ordenamos por mayor dependencia de pago
+        setBridgeData(bridgeResults.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
 
     } catch (e) {
         console.error("❌ ERROR BRIDGE:", e);
