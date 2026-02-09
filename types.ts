@@ -23,6 +23,7 @@ export interface BaseMetrics {
   sales: number;
   addToCarts: number;
   checkouts: number;
+  cost?: number; // Added for Paid Search Cost
 }
 
 export interface DailyData extends BaseMetrics {
@@ -41,6 +42,7 @@ export interface KeywordData extends BaseMetrics {
   queryType: QueryType;
   date?: string; 
   dateRangeLabel?: 'current' | 'previous';
+  position?: number; // Added for SEO Ranking
 }
 
 export interface DashboardFilters {
