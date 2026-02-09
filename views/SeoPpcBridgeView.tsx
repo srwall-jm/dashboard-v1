@@ -1,9 +1,10 @@
-import React, { useMemo } from 'react';
+
+import React, { useMemo, useState } from 'react';
 import { 
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine, Label, BarChart, Bar, LineChart, Line, Legend, LabelList
 } from 'recharts';
 import { 
-  AlertOctagon, Zap, ShieldCheck, TrendingUp, DollarSign, FileText, ExternalLink, Search
+  AlertOctagon, Zap, ShieldCheck, TrendingUp, DollarSign, FileText, ExternalLink, Search, Filter
 } from 'lucide-react';
 import { BridgeData, DailyData } from '../types';
 import { exportToCSV } from '../utils';
@@ -16,28 +17,31 @@ export const SeoPpcBridgeView: React.FC<{
   dailyData: DailyData[];
   currencySymbol: string;
 }> = ({ data, dailyData, currencySymbol }) => {
+  const [urlFilter, setUrlFilter] = useState('');
 
-  // Process data for rules
+  // Process data for rules with URL Filtering
   const processedData = useMemo(() => {
-    return data.map(item => {
-      let status: 'Exclude' | 'Increase' | 'Maintain' | 'Review' = 'Review';
-      
-      // Rule 1: EXCLUDE (High Rank & High Cost)
-      if (item.organicRank !== null && item.organicRank <= 3 && item.ppcCost > 0) {
-        status = 'Exclude';
-      } 
-      // Rule 2: INCREASE (Mid Rank & Good CPA - assuming Good CPA < 50 for mock)
-      else if (item.organicRank !== null && item.organicRank > 5 && item.organicRank <= 20 && item.ppcCpa < 50) {
-        status = 'Increase';
-      }
-      // Rule 3: MAINTAIN (Poor Rank & Good Conversions)
-      else if ((item.organicRank === null || item.organicRank > 20) && item.ppcConversions > 0) {
-        status = 'Maintain';
-      }
+    return data
+      .filter(item => item.url.toLowerCase().includes(urlFilter.toLowerCase()))
+      .map(item => {
+        let status: 'Exclude' | 'Increase' | 'Maintain' | 'Review' = 'Review';
+        
+        // Rule 1: EXCLUDE (High Rank & High Cost)
+        if (item.organicRank !== null && item.organicRank <= 3 && item.ppcCost > 0) {
+          status = 'Exclude';
+        } 
+        // Rule 2: INCREASE (Mid Rank & Good CPA - assuming Good CPA < 50 for mock)
+        else if (item.organicRank !== null && item.organicRank > 5 && item.organicRank <= 20 && item.ppcCpa < 50) {
+          status = 'Increase';
+        }
+        // Rule 3: MAINTAIN (Poor Rank & Good Conversions)
+        else if ((item.organicRank === null || item.organicRank > 20) && item.ppcConversions > 0) {
+          status = 'Maintain';
+        }
 
-      return { ...item, status };
-    });
-  }, [data]);
+        return { ...item, status };
+      });
+  }, [data, urlFilter]);
 
   const kpis = useMemo(() => {
     const excludeItems = processedData.filter(d => d.status === 'Exclude');
@@ -73,10 +77,23 @@ export const SeoPpcBridgeView: React.FC<{
       
       {/* SECTION A: Macro Trends */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
           <div>
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Macro Trends: Traffic Distribution</h4>
             <p className="text-[11px] font-bold text-slate-600">Organic Growth vs Paid Dependency</p>
+          </div>
+          {/* URL Filter Input */}
+          <div className="flex items-center gap-3 w-full md:w-auto">
+             <div className="relative w-full md:w-64">
+                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                <input 
+                  type="text" 
+                  value={urlFilter}
+                  onChange={(e) => setUrlFilter(e.target.value)}
+                  placeholder="Filter by URL path (e.g. /product, /vuelos)"
+                  className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-400"
+                />
+             </div>
           </div>
         </div>
         <div className="h-[250px]">
@@ -213,7 +230,7 @@ export const SeoPpcBridgeView: React.FC<{
         <div className="flex justify-between items-center mb-8">
             <div>
               <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">GSC to PPC Bridge</h4>
-              <p className="text-[11px] font-bold text-slate-600">Unified Intelligence Ledger</p>
+              <p className="text-[11px] font-bold text-slate-600">Unified Intelligence Ledger {urlFilter && <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg ml-2">Filtering by: "{urlFilter}"</span>}</p>
             </div>
              <button 
                 onClick={() => exportToCSV(processedData, "PPC_SEO_Bridge_Export")} 
@@ -234,12 +251,12 @@ export const SeoPpcBridgeView: React.FC<{
               </tr>
             </thead>
             <tbody>
-              {processedData.slice(0, 20).map((row, idx) => (
+              {processedData.length > 0 ? processedData.slice(0, 50).map((row, idx) => (
                 <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                   <td className="py-3 px-4 max-w-xs">
                      <div className="flex flex-col">
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-800">
-                          <ExternalLink size={10} className="text-indigo-400" /> {row.url}
+                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-800 break-all">
+                          <ExternalLink size={10} className="text-indigo-400 flex-shrink-0" /> {row.url}
                         </div>
                         <div className="flex items-center gap-2 text-[9px] text-slate-500 mt-1 pl-4">
                           <Search size={10} /> {row.query}
@@ -264,7 +281,13 @@ export const SeoPpcBridgeView: React.FC<{
                     </span>
                   </td>
                 </tr>
-              ))}
+              )) : (
+                <tr>
+                   <td colSpan={5} className="py-12 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                     No matches found for "{urlFilter}"
+                   </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
