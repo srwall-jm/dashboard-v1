@@ -282,12 +282,22 @@ export const SeoPpcBridgeView: React.FC<{
                   </tr>
 
                   {/* CHILD ROWS (Queries) - Sorted by Top 10 Clicks */}
-                  {expandedRows.has(row.url) && row.queries
-                    .sort((a, b) => b.c - a.c) // Sort by Clicks Descending
-                    .slice(0, 10) // Take Top 10
-                    .map((q, qIdx) => (
-                    <QueryDetailRow key={`${idx}-${qIdx}`} query={q.q} rank={q.r} clicks={q.c} />
-                  ))}
+                  {expandedRows.has(row.url) && (
+                    <>
+                      <tr className="bg-slate-50/50">
+                        <td colSpan={7} className="px-12 py-2 text-[9px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100/50">
+                          Top 10 GSC Queries (by Clicks)
+                        </td>
+                      </tr>
+                      {row.queries
+                        .sort((a, b) => b.c - a.c) // Sort by Clicks Descending
+                        .slice(0, 10) // Take Top 10
+                        .map((q, qIdx) => (
+                        <QueryDetailRow key={`${idx}-${qIdx}`} query={q.q} rank={q.r} clicks={q.c} />
+                      ))}
+                      <tr className="bg-slate-50/50 border-b border-slate-100"><td colSpan={7} className="py-1"></td></tr>
+                    </>
+                  )}
                 </React.Fragment>
               )) : (
                 <tr><td colSpan={7} className="py-12 text-center text-xs text-slate-400">No data found</td></tr>

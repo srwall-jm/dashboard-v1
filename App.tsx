@@ -291,6 +291,13 @@ const App: React.FC = () => {
         // This ensures GSC URLs (full path) match GA4 paths (often relative or different casing)
         const normalizeUrl = (url: string) => {
           if (!url || url === '(not set)') return '';
+          try {
+            // Fix: Decode URI to match GA4 responses that might be decoded
+            url = decodeURIComponent(url);
+          } catch (e) {
+            // ignore
+          }
+
           let path = url.toLowerCase().trim();
           
           // Remove protocol/domain if present (GSC usually has it)
@@ -350,7 +357,8 @@ const App: React.FC = () => {
                     { name: 'sessions' },
                     { name: 'sessionConversionRate' } 
                 ],
-                limit: 10000
+                // FIX: Increase limit to prevent data sampling/cutoff for long tail URLs
+                limit: 100000 
             })
         });
 
