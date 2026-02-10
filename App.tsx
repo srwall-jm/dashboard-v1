@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   RefreshCw, Filter, Globe, Tag, AlertCircle, Sparkles, Cpu, Activity, Menu, X
 } from 'lucide-react';
-import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, QueryType, BridgeData, AiTrafficData, KeywordBridgeData } from './types';
+import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, QueryType, BridgeData, AiTrafficData } from './types';
 import { getDashboardInsights, getOpenAiInsights } from './geminiService';
 import GoogleLogin from './GoogleLogin'; 
 import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry, extractPath, AI_SOURCE_REGEX_STRING } from './utils';
@@ -58,11 +58,8 @@ const App: React.FC = () => {
   
   const [realDailyData, setRealDailyData] = useState<DailyData[]>([]);
   const [realKeywordData, setRealKeywordData] = useState<KeywordData[]>([]);
-  
   const [bridgeData, setBridgeData] = useState<BridgeData[]>([]); 
-  const [keywordBridgeData, setKeywordBridgeData] = useState<KeywordBridgeData[]>([]); // New State for Keywords
-  
-  const [aiTrafficData, setAiTrafficData] = useState<AiTrafficData[]>([]); 
+  const [aiTrafficData, setAiTrafficData] = useState<AiTrafficData[]>([]); // New State
 
   const [gscDailyTotals, setGscDailyTotals] = useState<any[]>([]);
   const [gscTotals, setGscTotals] = useState<{current: any, previous: any} | null>(null);
@@ -291,19 +288,38 @@ const App: React.FC = () => {
         const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
         
         // --- STRICT URL NORMALIZATION ---
+        // This ensures GSC URLs (full path) match GA4 paths (often relative or different casing)
         const normalizeUrl = (url: string) => {
           if (!url || url === '(not set)') return '';
-          try { url = decodeURIComponent(url); } catch (e) {}
+          try {
+            // Fix: Decode URI to match GA4 responses that might be decoded
+            url = decodeURIComponent(url);
+          } catch (e) {
+            // ignore
+          }
+
           let path = url.toLowerCase().trim();
+          
+          // Remove protocol/domain if present (GSC usually has it)
           path = path.replace(/^https?:\/\/[^\/]+/, '');
+
+          // Remove query params
           path = path.split('?')[0];
           path = path.split('#')[0];
-          if (path.endsWith('/') && path.length > 1) { path = path.slice(0, -1); }
-          if (!path.startsWith('/')) { path = '/' + path; }
+
+          // Remove trailing slash for consistency
+          if (path.endsWith('/') && path.length > 1) {
+            path = path.slice(0, -1);
+          }
+
+          // Ensure leading slash
+          if (!path.startsWith('/')) {
+            path = '/' + path;
+          }
           return path;
         };
 
-        // 1. GSC RAW DATA (Needed for both views)
+        // --- A. GSC (Granular Data: URL + Query) ---
         const gscResp = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
@@ -317,17 +333,16 @@ const App: React.FC = () => {
 
         const gscDataRaw = await gscResp.json();
         
-        // Prepare rows for URL View
         const organicRows = (gscDataRaw.rows || []).map((row: any) => ({
             query: row.keys[1],
+            // Use strict normalizer
             cleanPath: normalizeUrl(row.keys[0]), 
-            fullUrl: row.keys[0], 
+            fullUrl: row.keys[0], // Keep original for reference if needed
             rank: row.position,
             gscClicks: row.clicks
         }));
 
-
-        // --- VIEW 1: URL BASED (Existing Logic) ---
+        // --- B. GA4 (SESIONES ORGÁNICAS Y PAGADAS) ---
         const ga4Resp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
@@ -342,25 +357,33 @@ const App: React.FC = () => {
                     { name: 'sessions' },
                     { name: 'sessionConversionRate' } 
                 ],
+                // FIX: Increase limit to prevent data sampling/cutoff for long tail URLs
                 limit: 100000 
             })
         });
 
+        if (!ga4Resp.ok) throw new Error("GA4 API Error");
         const ga4Data = await ga4Resp.json();
+
+        // Mapa: Guardamos Sesiones Orgánicas y Pagadas por URL NORMALIZADA
         const urlMap: Record<string, { organicSessions: number, paidSessions: number, weightedCvr: number, campaigns: Set<string> }> = {};
 
         (ga4Data.rows || []).forEach((row: any) => {
             const rawUrl = row.dimensionValues[0].value;
             const channelGroup = row.dimensionValues[1].value.toLowerCase();
             const campaignName = row.dimensionValues[2].value;
+            
             const sessions = parseInt(row.metricValues[0].value) || 0;
             const rate = parseFloat(row.metricValues[1].value) || 0; 
+
+            // Use SAME strict normalizer
             const path = normalizeUrl(rawUrl);
             
             if (!urlMap[path]) {
                 urlMap[path] = { organicSessions: 0, paidSessions: 0, weightedCvr: 0, campaigns: new Set() };
             }
 
+            // LOGICA DE CLASIFICACIÓN GA4
             if (channelGroup.includes('organic')) {
                 urlMap[path].organicSessions += sessions;
             } else if (channelGroup.includes('paid') || channelGroup.includes('cpc') || channelGroup.includes('ppc')) {
@@ -373,20 +396,33 @@ const App: React.FC = () => {
                 else if (n.includes('brand')) campType = "🛡️ Brand";
                 else if (n.includes('generic') || n.includes('non')) campType = "🌍 Generic";
                 else if (n !== '(not set)') campType = campaignName;
+                
                 urlMap[path].campaigns.add(campType);
             }
         });
 
+        // --- D. CRUCE FINAL ---
         const bridgeResults: BridgeData[] = [];
+        // We do NOT filter processedUrls here because we want ALL GSC queries to be available for the UI dropdown
+        // The View component handles grouping.
+        
         organicRows.forEach(org => {
             const ga4Stats = urlMap[org.cleanPath];
             const organicSessions = ga4Stats ? ga4Stats.organicSessions : 0;
             const paidSessions = ga4Stats ? ga4Stats.paidSessions : 0;
+
+            // If absolutely no traffic (GA4 or GSC), skip to keep it clean.
+            // But if we have GSC clicks OR GA4 sessions, we keep it.
             if (org.gscClicks === 0 && organicSessions === 0 && paidSessions === 0) return;
+
+            // 1. CVR REAL (Media ponderada de tráfico pagado)
             const realCvr = (paidSessions > 0 && ga4Stats) ? (ga4Stats.weightedCvr / paidSessions) : 0;
+
+            // 2. SHARE usando SESIONES
             const totalSessions = organicSessions + paidSessions;
             const paidShare = totalSessions > 0 ? (paidSessions / totalSessions) : 0;
 
+            // Lógica Action
             let action = "MAINTAIN";
             if (org.rank <= 3.0 && paidShare > 0.4) action = "CRITICAL (Overlap)";
             else if (org.rank <= 3.0 && paidSessions > 0) action = "REVIEW";
@@ -396,11 +432,12 @@ const App: React.FC = () => {
             if (ga4Stats && ga4Stats.campaigns.size > 0) campDisplay = Array.from(ga4Stats.campaigns).join(' + ');
 
             bridgeResults.push({
+                // We use the CLEAN path for display to ensure consistency
                 url: org.cleanPath, 
                 query: org.query,
                 organicRank: org.rank,
                 organicClicks: org.gscClicks,
-                organicSessions: organicSessions, 
+                organicSessions: organicSessions, // Correctly mapped via normalized key
                 ppcCampaign: campDisplay,
                 ppcCost: 0,
                 ppcConversions: 0,
@@ -411,87 +448,8 @@ const App: React.FC = () => {
                 actionLabel: action
             });
         });
+
         setBridgeData(bridgeResults.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
-
-
-        // --- VIEW 2: KEYWORD BASED (New Feature) ---
-        // 1. Fetch GA4 Keywords
-        const ga4KwResp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-              dateRanges: [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }],
-              dimensions: [{ name: 'sessionGoogleAdsKeywordText' }],
-              metrics: [{ name: 'sessions' }],
-              limit: 25000 // reasonable limit for keywords
-          })
-        });
-        
-        const ga4KwData = await ga4KwResp.json();
-        const ga4KeywordMap: Record<string, number> = {};
-
-        // Process GA4 Keywords (Normalize: lowercase, trim)
-        (ga4KwData.rows || []).forEach((row: any) => {
-           const kw = row.dimensionValues[0].value;
-           if (kw === '(not set)' || !kw) return; // Filter noise
-           const cleanKw = kw.toLowerCase().trim();
-           const sessions = parseInt(row.metricValues[0].value) || 0;
-           ga4KeywordMap[cleanKw] = (ga4KeywordMap[cleanKw] || 0) + sessions;
-        });
-
-        // 2. Aggregate GSC by Query (Regardless of URL)
-        // We want the BEST organic rank for a query across the site.
-        const uniqueQueryMap: Record<string, { rankSum: number, count: number, bestRank: number, clicks: number }> = {};
-        
-        organicRows.forEach(row => {
-           const q = row.query.toLowerCase().trim();
-           if (!uniqueQueryMap[q]) uniqueQueryMap[q] = { rankSum: 0, count: 0, bestRank: 999, clicks: 0 };
-           uniqueQueryMap[q].rankSum += row.rank;
-           uniqueQueryMap[q].count += 1;
-           uniqueQueryMap[q].clicks += row.gscClicks;
-           if (row.rank < uniqueQueryMap[q].bestRank) uniqueQueryMap[q].bestRank = row.rank;
-        });
-
-        // 3. Join & Create KeywordBridgeData
-        const keywordResults: KeywordBridgeData[] = [];
-        const allKeys = new Set([...Object.keys(ga4KeywordMap), ...Object.keys(uniqueQueryMap)]);
-
-        allKeys.forEach(key => {
-            const ga4Sess = ga4KeywordMap[key] || 0;
-            const gscData = uniqueQueryMap[key];
-            
-            // If strictly no data relevant to paid or top SEO, skip to reduce noise
-            if (ga4Sess === 0 && (!gscData || gscData.clicks === 0)) return;
-
-            const organicRank = gscData ? gscData.bestRank : null;
-            const organicClicks = gscData ? gscData.clicks : 0;
-
-            // Logic: Cannibalization vs Opportunity
-            let action = "MAINTAIN";
-            
-            // Critical: We rank #1-3 Organically AND we are paying for >10 sessions
-            if (organicRank !== null && organicRank <= 3.0 && ga4Sess > 10) {
-               action = "CRITICAL (Cannibalization)";
-            } 
-            // Opportunity: We rank #11-20 (Page 2) AND we are NOT paying (0 sessions)
-            else if (organicRank !== null && organicRank > 10 && organicRank <= 20 && ga4Sess === 0) {
-               action = "OPPORTUNITY (Boost)";
-            }
-            // Review: We rank Top 3 and pay a little (1-10 sessions)
-            else if (organicRank !== null && organicRank <= 3.0 && ga4Sess > 0) {
-               action = "REVIEW";
-            }
-
-            keywordResults.push({
-               keyword: key,
-               organicRank: organicRank === 999 ? null : organicRank,
-               organicClicks,
-               paidSessions: ga4Sess,
-               actionLabel: action
-            });
-        });
-
-        setKeywordBridgeData(keywordResults.sort((a, b) => b.paidSessions - a.paidSessions));
 
     } catch (e) {
         console.error("❌ ERROR BRIDGE:", e);
@@ -1000,7 +958,7 @@ const fetchGa4Data = async () => {
           
           {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && <SeoDeepDiveView keywords={filteredKeywordData} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isLoading={isAnythingLoading} comparisonEnabled={filters.comparison.enabled} />}
 
-          {activeTab === DashboardTab.PPC_SEO_BRIDGE && <SeoPpcBridgeView data={bridgeData} keywordData={keywordBridgeData} dailyData={filteredDailyData} currencySymbol={currencySymbol} />}
+          {activeTab === DashboardTab.PPC_SEO_BRIDGE && <SeoPpcBridgeView data={bridgeData} dailyData={filteredDailyData} currencySymbol={currencySymbol} />}
 
           {activeTab === DashboardTab.AI_TRAFFIC_MONITOR && <AiTrafficView data={aiTrafficData} currencySymbol={currencySymbol} />}
         </div>
