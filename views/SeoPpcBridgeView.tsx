@@ -353,7 +353,8 @@ export const SeoPpcBridgeView: React.FC<{
                     </>
                   )}
                 </React.Fragment>
-              );})} : (
+              );
+              }) : (
                 <tr><td colSpan={7} className="py-12 text-center text-xs text-slate-400">No data found</td></tr>
               )}
             </tbody>
