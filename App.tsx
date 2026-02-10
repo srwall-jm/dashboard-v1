@@ -414,7 +414,7 @@ const App: React.FC = () => {
         setBridgeData(bridgeResults.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
 
 
-        // --- VIEW 2: KEYWORD BASED (New Feature) ---
+        // --- VIEW 2: KEYWORD BASED (Revised) ---
         // 1. Fetch GA4 Keywords
         const ga4KwResp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
           method: 'POST',
@@ -422,21 +422,39 @@ const App: React.FC = () => {
           body: JSON.stringify({
               dateRanges: [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }],
               dimensions: [{ name: 'sessionGoogleAdsKeywordText' }],
-              metrics: [{ name: 'sessions' }],
-              limit: 25000 // reasonable limit for keywords
+              metrics: [{ name: 'sessions' }, { name: 'sessionConversionRate' }],
+              limit: 25000
           })
         });
         
         const ga4KwData = await ga4KwResp.json();
-        const ga4KeywordMap: Record<string, number> = {};
+        const ga4KeywordMap: Record<string, { sessions: number, cvr: number }> = {};
 
         // Process GA4 Keywords (Normalize: lowercase, trim)
         (ga4KwData.rows || []).forEach((row: any) => {
            const kw = row.dimensionValues[0].value;
-           if (kw === '(not set)' || !kw) return; // Filter noise
+           // Filter noise: (not set) is typically PMax or Display
+           if (kw === '(not set)' || !kw) return; 
+           
            const cleanKw = kw.toLowerCase().trim();
            const sessions = parseInt(row.metricValues[0].value) || 0;
-           ga4KeywordMap[cleanKw] = (ga4KeywordMap[cleanKw] || 0) + sessions;
+           const rate = parseFloat(row.metricValues[1].value) || 0;
+           
+           // Accumulate if same keyword appears (e.g. from different ad groups)
+           if (!ga4KeywordMap[cleanKw]) {
+             ga4KeywordMap[cleanKw] = { sessions: 0, cvr: 0 };
+           }
+           
+           // We need weighted average for CVR, but simple average might suffice for display
+           // Better: Store total sessions and weighted CVR sum
+           const prevSess = ga4KeywordMap[cleanKw].sessions;
+           const prevWeighted = prevSess * ga4KeywordMap[cleanKw].cvr;
+           const newWeighted = sessions * rate;
+           
+           const totalSess = prevSess + sessions;
+           const newCvr = totalSess > 0 ? (prevWeighted + newWeighted) / totalSess : 0;
+           
+           ga4KeywordMap[cleanKw] = { sessions: totalSess, cvr: newCvr };
         });
 
         // 2. Aggregate GSC by Query (Regardless of URL)
@@ -457,7 +475,10 @@ const App: React.FC = () => {
         const allKeys = new Set([...Object.keys(ga4KeywordMap), ...Object.keys(uniqueQueryMap)]);
 
         allKeys.forEach(key => {
-            const ga4Sess = ga4KeywordMap[key] || 0;
+            const ga4Data = ga4KeywordMap[key] || { sessions: 0, cvr: 0 };
+            const ga4Sess = ga4Data.sessions;
+            const ga4Cvr = ga4Data.cvr * 100; // to percentage
+            
             const gscData = uniqueQueryMap[key];
             
             // If strictly no data relevant to paid or top SEO, skip to reduce noise
@@ -469,17 +490,17 @@ const App: React.FC = () => {
             // Logic: Cannibalization vs Opportunity
             let action = "MAINTAIN";
             
-            // Critical: We rank #1-3 Organically AND we are paying for >10 sessions
-            if (organicRank !== null && organicRank <= 3.0 && ga4Sess > 10) {
+            // CRITICAL (Canibalización Directa): Rank <= 3 AND Paid Sessions > 50
+            if (organicRank !== null && organicRank <= 3.0 && ga4Sess > 50) {
                action = "CRITICAL (Cannibalization)";
             } 
-            // Opportunity: We rank #11-20 (Page 2) AND we are NOT paying (0 sessions)
-            else if (organicRank !== null && organicRank > 10 && organicRank <= 20 && ga4Sess === 0) {
-               action = "OPPORTUNITY (Boost)";
+            // OPPORTUNITY (Growth): Rank > 10 AND Paid Sessions == 0
+            else if (organicRank !== null && organicRank > 10 && ga4Sess === 0) {
+               action = "OPPORTUNITY (Growth)";
             }
-            // Review: We rank Top 3 and pay a little (1-10 sessions)
-            else if (organicRank !== null && organicRank <= 3.0 && ga4Sess > 0) {
-               action = "REVIEW";
+            // REVIEW (Ineficiencia): Rank <= 3 AND Paid Sessions between 1 and 50
+            else if (organicRank !== null && organicRank <= 3.0 && ga4Sess > 0 && ga4Sess <= 50) {
+               action = "REVIEW (Ineficiency)";
             }
 
             keywordResults.push({
@@ -487,6 +508,7 @@ const App: React.FC = () => {
                organicRank: organicRank === 999 ? null : organicRank,
                organicClicks,
                paidSessions: ga4Sess,
+               paidCvr: ga4Cvr,
                actionLabel: action
             });
         });

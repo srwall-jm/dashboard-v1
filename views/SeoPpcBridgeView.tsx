@@ -81,19 +81,19 @@ export const SeoPpcBridgeView: React.FC<{
   const getActionInfo = (label: string) => {
     if (label.includes('CRITICAL')) return {
         desc: "High Cannibalization Risk",
-        logic: "Ranking Top 3 Organic AND Paid Share > 40%. You are likely paying for traffic you already own."
+        logic: "Ranking Top 3 Organic AND Paid Sessions > 50. Paying for traffic you likely already own."
     };
     if (label.includes('OPPORTUNITY')) return {
         desc: "Expansion Opportunity",
-        logic: "Ranking on Page 2 (11-20) with NO Paid Spend. Perfect candidate for ads to capture visibility."
+        logic: "Ranking on Page 2 (11-20) with NO Paid Spend. Ads could boost visibility here."
     };
     if (label.includes('REVIEW')) return {
-        desc: "Potential Overlap",
-        logic: "Ranking Top 3 Organic with active Paid Spend. Check if ads are truly incremental."
+        desc: "Potential Inefficiency",
+        logic: "Ranking Top 3 Organic with active Paid Spend (1-50 sessions). Check incrementality."
     };
     if (label === 'INCREASE') return {
         desc: "Growth Opportunity",
-        logic: "Ranking below Top 10 Organic with NO Paid Spend. Good candidate for PPC expansion."
+        logic: "Ranking below Top 10 Organic with NO Paid Spend."
     };
     return {
         desc: "Healthy State",
@@ -228,13 +228,13 @@ export const SeoPpcBridgeView: React.FC<{
                   onClick={() => setViewMode('url')} 
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${viewMode === 'url' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
                 >
-                  <LayoutList size={12} /> By URL (Landing)
+                  <LayoutList size={12} /> Analysis by URL
                 </button>
                 <button 
                   onClick={() => setViewMode('keyword')} 
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${viewMode === 'keyword' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
                 >
-                  <Key size={12} /> By Keyword (Exact)
+                  <Key size={12} /> Analysis by Keyword
                 </button>
               </div>
             </div>
@@ -373,10 +373,11 @@ export const SeoPpcBridgeView: React.FC<{
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Matched Keyword</th>
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Top Organic Rank (GSC)</th>
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Paid Sessions (GA4)</th>
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Organic Clicks (GSC)</th>
+                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Matched Keyword (Exact)</th>
+                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Top Org. Rank</th>
+                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Org. Clicks</th>
+                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Paid Sessions</th>
+                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Paid CVR</th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
                 </tr>
               </thead>
@@ -401,12 +402,17 @@ export const SeoPpcBridgeView: React.FC<{
                           ) : <span className="text-[10px] text-slate-400">-</span>}
                         </td>
                         <td className="py-3 px-4 text-right">
+                           <span className="text-[10px] font-bold text-emerald-600">{row.organicClicks.toLocaleString()}</span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
                           <span className={`text-[10px] font-black ${row.paidSessions > 0 ? 'text-indigo-600' : 'text-slate-400'}`}>
                             {row.paidSessions.toLocaleString()}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-right">
-                           <span className="text-[10px] font-bold text-emerald-600">{row.organicClicks.toLocaleString()}</span>
+                         <td className="py-3 px-4 text-right">
+                          <span className="text-[10px] font-bold text-slate-600">
+                            {row.paidCvr.toFixed(2)}%
+                          </span>
                         </td>
                         <td className="py-3 px-4 text-right">
                           <div className="group relative inline-block">
@@ -431,7 +437,7 @@ export const SeoPpcBridgeView: React.FC<{
                       </tr>
                     );
                 }) : (
-                  <tr><td colSpan={5} className="py-12 text-center text-xs text-slate-400">No keyword data matched</td></tr>
+                  <tr><td colSpan={6} className="py-12 text-center text-xs text-slate-400">No keyword data matched</td></tr>
                 )}
               </tbody>
             </table>

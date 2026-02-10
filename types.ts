@@ -103,6 +103,7 @@ export interface KeywordBridgeData {
   organicRank: number | null;
   organicClicks: number;
   paidSessions: number;
+  paidCvr: number;
   actionLabel: string;
 }
 
