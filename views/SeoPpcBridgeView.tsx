@@ -4,7 +4,7 @@ import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, BarChart, Bar, LineChart, Line, Legend, LabelList
 } from 'recharts';
 import { 
-  AlertOctagon, Zap, ShieldCheck, FileText, ExternalLink, Search, Filter, ChevronDown, ChevronRight, CornerDownRight, BarChart2, TrendingUp, DollarSign
+  AlertOctagon, Zap, ShieldCheck, FileText, ExternalLink, Search, Filter, ChevronDown, ChevronRight, CornerDownRight, BarChart2, TrendingUp, DollarSign, Info
 } from 'lucide-react';
 import { BridgeData, DailyData } from '../types';
 import { exportToCSV } from '../utils';
@@ -74,6 +74,25 @@ export const SeoPpcBridgeView: React.FC<{
     if (newSet.has(url)) newSet.delete(url);
     else newSet.add(url);
     setExpandedRows(newSet);
+  };
+
+  const getActionInfo = (label: string) => {
+    if (label.includes('CRITICAL')) return {
+        desc: "High Cannibalization Risk",
+        logic: "Ranking Top 3 Organic AND Paid Share > 40%. You are likely paying for traffic you already own."
+    };
+    if (label.includes('REVIEW')) return {
+        desc: "Potential Overlap",
+        logic: "Ranking Top 3 Organic with active Paid Spend. Check if ads are truly incremental."
+    };
+    if (label === 'INCREASE') return {
+        desc: "Growth Opportunity",
+        logic: "Ranking below Top 10 Organic with NO Paid Spend. Good candidate for PPC expansion."
+    };
+    return {
+        desc: "Healthy State",
+        logic: "Balanced Organic & Paid visibility. No immediate action required."
+    };
   };
 
   // KPIs Logic
@@ -230,7 +249,9 @@ export const SeoPpcBridgeView: React.FC<{
               </tr>
             </thead>
             <tbody>
-              {groupedData.length > 0 ? groupedData.slice(0, 100).map((row, idx) => (
+              {groupedData.length > 0 ? groupedData.slice(0, 100).map((row, idx) => {
+                const actionInfo = getActionInfo(row.actionLabel);
+                return (
                 <React.Fragment key={idx}>
                   {/* PARENT ROW (URL) */}
                   <tr 
@@ -286,12 +307,30 @@ export const SeoPpcBridgeView: React.FC<{
                     </td>
 
                     <td className="py-3 px-4 text-right">
-                      <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tight 
-                        ${row.actionLabel.includes('CRITICAL') ? 'bg-rose-100 text-rose-600' : 
-                          row.actionLabel === 'INCREASE' ? 'bg-blue-100 text-blue-600' : 
-                          'bg-emerald-100 text-emerald-600'}`}>
-                        {row.actionLabel.split(' ')[0]}
-                      </span>
+                      {/* Tooltip Group */}
+                      <div className="group relative inline-block">
+                          <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tight cursor-help
+                            ${row.actionLabel.includes('CRITICAL') ? 'bg-rose-100 text-rose-600' : 
+                              row.actionLabel === 'INCREASE' ? 'bg-blue-100 text-blue-600' : 
+                              row.actionLabel === 'REVIEW' ? 'bg-amber-100 text-amber-600' :
+                              'bg-emerald-100 text-emerald-600'}`}>
+                            {row.actionLabel.split(' ')[0]}
+                          </span>
+                          
+                          {/* Tooltip Body */}
+                          <div className="absolute right-0 top-full mt-2 w-56 p-3 bg-slate-900 text-white text-[10px] rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 border border-white/10 pointer-events-none text-left">
+                              <div className="flex items-center gap-2 mb-1">
+                                  {row.actionLabel.includes('CRITICAL') ? <AlertOctagon size={12} className="text-rose-400" /> : 
+                                   row.actionLabel === 'INCREASE' ? <TrendingUp size={12} className="text-blue-400" /> :
+                                   row.actionLabel === 'REVIEW' ? <Zap size={12} className="text-amber-400" /> :
+                                   <ShieldCheck size={12} className="text-emerald-400" />}
+                                  <span className="font-bold text-slate-200 uppercase tracking-wider">{actionInfo.desc}</span>
+                              </div>
+                              <p className="text-slate-400 leading-relaxed font-medium">{actionInfo.logic}</p>
+                              {/* Arrow */}
+                              <div className="absolute bottom-full right-4 w-2 h-2 bg-slate-900 border-l border-t border-white/10 rotate-45"></div>
+                          </div>
+                      </div>
                     </td>
                   </tr>
 
@@ -314,7 +353,7 @@ export const SeoPpcBridgeView: React.FC<{
                     </>
                   )}
                 </React.Fragment>
-              )) : (
+              );})} : (
                 <tr><td colSpan={7} className="py-12 text-center text-xs text-slate-400">No data found</td></tr>
               )}
             </tbody>
