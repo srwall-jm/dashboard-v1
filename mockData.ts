@@ -78,7 +78,8 @@ export const generateMockKeywordData = (): KeywordData[] => {
     const impressions = clicks * (12 + Math.random() * 10);
     const sales = Math.floor(sessions * 0.035);
     const country = COUNTRIES[Math.floor(Math.random() * COUNTRIES.length)];
-    
+    const position = Math.random() * 30 + 1; // Random rank 1-30
+
     return {
       keyword: keywords[i % keywords.length] + (i > 10 ? ` ${i}` : ''),
       landingPage: pages[i % pages.length],
@@ -89,6 +90,7 @@ export const generateMockKeywordData = (): KeywordData[] => {
       impressions,
       clicks,
       ctr: (clicks / impressions) * 100,
+      position,
       sessions,
       conversionRate: (sales / sessions) * 100,
       revenue: sales * 55,

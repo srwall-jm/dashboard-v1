@@ -603,6 +603,7 @@ const fetchGa4Data = async () => {
             clicks: row.clicks || 0,
             impressions: row.impressions || 0,
             ctr: (row.ctr || 0) * 100,
+            position: row.position || 0, // MAPPED POSITION HERE
             sessions: 0, conversionRate: 0, revenue: 0, sales: 0, addToCarts: 0, checkouts: 0, queryType: 'Non-Branded' as QueryType
         }));
 

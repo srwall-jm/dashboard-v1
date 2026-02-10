@@ -55,6 +55,7 @@ export interface KeywordData {
   clicks: number;
   impressions: number;
   ctr: number;
+  position: number; // Added Position
   sessions: number;
   conversionRate: number;
   revenue: number;

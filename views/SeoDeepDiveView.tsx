@@ -33,7 +33,7 @@ export const SeoDeepDiveView: React.FC<{
       url: string; 
       clicks: number; 
       impressions: number; 
-      queryMap: Record<string, KeywordData>; 
+      queryMap: Record<string, KeywordData & { weightedPosition: number }>; 
     }> = {};
 
     filtered.forEach(k => {
@@ -50,13 +50,16 @@ export const SeoDeepDiveView: React.FC<{
             map[url].queryMap[k.keyword] = {
                 ...k,
                 clicks: 0,
-                impressions: 0
+                impressions: 0,
+                weightedPosition: 0
             };
         }
         
         const q = map[url].queryMap[k.keyword];
         q.clicks += k.clicks;
         q.impressions += k.impressions;
+        // Accumulate weighted position (Position * Impressions) for accurate average
+        q.weightedPosition += (k.position || 0) * k.impressions;
         q.ctr = q.impressions > 0 ? (q.clicks / q.impressions) * 100 : 0;
       }
     });
@@ -67,7 +70,13 @@ export const SeoDeepDiveView: React.FC<{
         clicks: page.clicks,
         impressions: page.impressions,
         ctr: page.impressions > 0 ? (page.clicks / page.impressions) * 100 : 0,
-        topQueries: Object.values(page.queryMap).sort((a, b) => b.clicks - a.clicks).slice(0, 20)
+        topQueries: Object.values(page.queryMap)
+          .map(q => ({
+             ...q,
+             avgPosition: q.impressions > 0 ? q.weightedPosition / q.impressions : 0
+          }))
+          .sort((a, b) => b.clicks - a.clicks)
+          .slice(0, 20)
       }))
       .sort((a, b) => b.clicks - a.clicks);
   }, [keywords, searchTerm]);
@@ -91,6 +100,7 @@ return (
                 Clicks: k.clicks,
                 Impressions: k.impressions,
                 CTR: k.ctr.toFixed(2) + "%",
+                Avg_Position: k.position ? k.position.toFixed(1) : "0",
                 Type: k.queryType,
                 Country: k.country
               }));
@@ -169,6 +179,7 @@ return (
                               <tr className="border-b border-indigo-100">
                                 <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-left">Top Queries (Limit 20)</th>
                                 <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 w-24">Type</th>
+                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right w-24">Avg. Rank</th>
                                 <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right w-24">Clicks</th>
                                 <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right w-24">Impr.</th>
                                 <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right w-24">CTR</th>
@@ -183,6 +194,11 @@ return (
                                   <td className="py-2.5 px-4">
                                     <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tight ${q.queryType === 'Branded' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>
                                       {q.queryType}
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5 px-4 text-right">
+                                    <span className={`text-[10px] font-bold ${q.avgPosition <= 3 ? 'text-emerald-600' : q.avgPosition <= 10 ? 'text-indigo-600' : 'text-slate-500'}`}>
+                                      {q.avgPosition.toFixed(1)}
                                     </span>
                                   </td>
                                   <td className="py-2.5 px-4 text-right">
