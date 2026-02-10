@@ -284,27 +284,35 @@ const App: React.FC = () => {
     }
 
     setIsLoadingBridge(true);
-    // console.log("🚀 STARTING BRIDGE: GA4 SESSIONS VS GA4 PAID SESSIONS...");
-
     try {
         const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
         
-        // Función de limpieza de URL (Path)
-        const getPath = (url: string) => {
-            if (!url) return '';
-            let clean = url.toLowerCase().trim();
-            if (clean.startsWith('http')) {
-                try {
-                    const urlObj = new URL(clean);
-                    clean = urlObj.pathname;
-                } catch (e) {
-                    clean = clean.replace(/^https?:\/\/(www\.)?[^\/]+/, '');
-                }
-            }
-            return clean.split('?')[0].split('#')[0].replace(/\/$/, '').replace(/^\/[a-z]{2}\//, '/'); 
+        // --- STRICT URL NORMALIZATION ---
+        // This ensures GSC URLs (full path) match GA4 paths (often relative or different casing)
+        const normalizeUrl = (url: string) => {
+          if (!url || url === '(not set)') return '';
+          let path = url.toLowerCase().trim();
+          
+          // Remove protocol/domain if present (GSC usually has it)
+          path = path.replace(/^https?:\/\/[^\/]+/, '');
+
+          // Remove query params
+          path = path.split('?')[0];
+          path = path.split('#')[0];
+
+          // Remove trailing slash for consistency
+          if (path.endsWith('/') && path.length > 1) {
+            path = path.slice(0, -1);
+          }
+
+          // Ensure leading slash
+          if (!path.startsWith('/')) {
+            path = '/' + path;
+          }
+          return path;
         };
 
-        // --- A. GSC (Solo para Ranking y Top Query) ---
+        // --- A. GSC (Granular Data: URL + Query) ---
         const gscResp = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
@@ -317,16 +325,17 @@ const App: React.FC = () => {
         });
 
         const gscDataRaw = await gscResp.json();
-        // Solo guardamos datos de GSC para pintar la Query y el Rank. El volumen SEO vendrá de GA4.
+        
         const organicRows = (gscDataRaw.rows || []).map((row: any) => ({
             query: row.keys[1],
-            cleanPath: getPath(row.keys[0]),
+            // Use strict normalizer
+            cleanPath: normalizeUrl(row.keys[0]), 
+            fullUrl: row.keys[0], // Keep original for reference if needed
             rank: row.position,
-            gscClicks: row.clicks // Mantenemos clicks por referencia, pero no para cálculo
+            gscClicks: row.clicks
         }));
 
         // --- B. GA4 (SESIONES ORGÁNICAS Y PAGADAS) ---
-        // Solicitamos Default Channel Group para distinguir limpiamente Organic vs Paid
         const ga4Resp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
@@ -335,7 +344,7 @@ const App: React.FC = () => {
                 dimensions: [
                     { name: 'landingPage' },
                     { name: 'sessionDefaultChannelGroup' },
-                    { name: 'sessionCampaignName' } // Para tener detalle de campaña PPC
+                    { name: 'sessionCampaignName' }
                 ],
                 metrics: [
                     { name: 'sessions' },
@@ -348,7 +357,7 @@ const App: React.FC = () => {
         if (!ga4Resp.ok) throw new Error("GA4 API Error");
         const ga4Data = await ga4Resp.json();
 
-        // Mapa: Guardamos Sesiones Orgánicas y Pagadas por URL
+        // Mapa: Guardamos Sesiones Orgánicas y Pagadas por URL NORMALIZADA
         const urlMap: Record<string, { organicSessions: number, paidSessions: number, weightedCvr: number, campaigns: Set<string> }> = {};
 
         (ga4Data.rows || []).forEach((row: any) => {
@@ -359,7 +368,8 @@ const App: React.FC = () => {
             const sessions = parseInt(row.metricValues[0].value) || 0;
             const rate = parseFloat(row.metricValues[1].value) || 0; 
 
-            const path = getPath(rawUrl);
+            // Use SAME strict normalizer
+            const path = normalizeUrl(rawUrl);
             
             if (!urlMap[path]) {
                 urlMap[path] = { organicSessions: 0, paidSessions: 0, weightedCvr: 0, campaigns: new Set() };
@@ -372,13 +382,12 @@ const App: React.FC = () => {
                 urlMap[path].paidSessions += sessions;
                 urlMap[path].weightedCvr += (rate * sessions);
                 
-                // Limpieza nombre campaña
                 let campType = "Other Paid";
                 const n = campaignName.toLowerCase();
                 if (n.includes('pmax')) campType = "⚡ PMax";
                 else if (n.includes('brand')) campType = "🛡️ Brand";
                 else if (n.includes('generic') || n.includes('non')) campType = "🌍 Generic";
-                else if (n !== '(not set)') campType = campaignName; // Si no encaja, usar nombre real (ej: "Search - Sale")
+                else if (n !== '(not set)') campType = campaignName;
                 
                 urlMap[path].campaigns.add(campType);
             }
@@ -386,26 +395,22 @@ const App: React.FC = () => {
 
         // --- D. CRUCE FINAL ---
         const bridgeResults: BridgeData[] = [];
-        const processedUrls = new Set<string>();
-
+        // We do NOT filter processedUrls here because we want ALL GSC queries to be available for the UI dropdown
+        // The View component handles grouping.
+        
         organicRows.forEach(org => {
-            // Evitar duplicados si GSC devuelve multiples queries para la misma URL (que lo hace)
-            // En este view agrupamos por URL, así que tomamos la primera query (top query) que suele venir ordenada por GSC
-            if (processedUrls.has(org.cleanPath)) return;
-            
             const ga4Stats = urlMap[org.cleanPath];
             const organicSessions = ga4Stats ? ga4Stats.organicSessions : 0;
             const paidSessions = ga4Stats ? ga4Stats.paidSessions : 0;
 
-            // Si no hay tráfico en absoluto (ni orgánico ni pagado en GA4), quizás es una url muy long tail de GSC, la ignoramos para limpiar tabla
-            if (organicSessions === 0 && paidSessions === 0) return;
+            // If absolutely no traffic (GA4 or GSC), skip to keep it clean.
+            // But if we have GSC clicks OR GA4 sessions, we keep it.
+            if (org.gscClicks === 0 && organicSessions === 0 && paidSessions === 0) return;
 
-            processedUrls.add(org.cleanPath);
-            
             // 1. CVR REAL (Media ponderada de tráfico pagado)
-            const realCvr = (paidSessions > 0) ? (ga4Stats!.weightedCvr / paidSessions) : 0;
+            const realCvr = (paidSessions > 0 && ga4Stats) ? (ga4Stats.weightedCvr / paidSessions) : 0;
 
-            // 2. SHARE usando SESIONES (No Clics)
+            // 2. SHARE usando SESIONES
             const totalSessions = organicSessions + paidSessions;
             const paidShare = totalSessions > 0 ? (paidSessions / totalSessions) : 0;
 
@@ -419,17 +424,18 @@ const App: React.FC = () => {
             if (ga4Stats && ga4Stats.campaigns.size > 0) campDisplay = Array.from(ga4Stats.campaigns).join(' + ');
 
             bridgeResults.push({
-                url: org.cleanPath,
+                // We use the CLEAN path for display to ensure consistency
+                url: org.cleanPath, 
                 query: org.query,
                 organicRank: org.rank,
-                organicClicks: org.gscClicks, // Guardamos el dato GSC por si acaso, pero no es la métrica principal
-                organicSessions: organicSessions, // AQUÍ ESTÁ LA NUEVA MÉTRICA
+                organicClicks: org.gscClicks,
+                organicSessions: organicSessions, // Correctly mapped via normalized key
                 ppcCampaign: campDisplay,
                 ppcCost: 0,
                 ppcConversions: 0,
                 ppcCpa: realCvr,
                 blendedCostRatio: paidShare, 
-                ppcSessions: paidSessions, // Esto es "Paid Sessions"
+                ppcSessions: paidSessions,
                 ppcImpressions: paidSessions * 10,
                 actionLabel: action
             });

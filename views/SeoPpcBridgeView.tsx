@@ -281,8 +281,11 @@ export const SeoPpcBridgeView: React.FC<{
                     </td>
                   </tr>
 
-                  {/* CHILD ROWS (Queries) */}
-                  {expandedRows.has(row.url) && row.queries.map((q, qIdx) => (
+                  {/* CHILD ROWS (Queries) - Sorted by Top 10 Clicks */}
+                  {expandedRows.has(row.url) && row.queries
+                    .sort((a, b) => b.c - a.c) // Sort by Clicks Descending
+                    .slice(0, 10) // Take Top 10
+                    .map((q, qIdx) => (
                     <QueryDetailRow key={`${idx}-${qIdx}`} query={q.q} rank={q.r} clicks={q.c} />
                   ))}
                 </React.Fragment>
