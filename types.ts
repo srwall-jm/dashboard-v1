@@ -98,6 +98,14 @@ export interface BridgeData {
   ppcSourceMedium?: string;
 }
 
+export interface KeywordBridgeData {
+  keyword: string;
+  organicRank: number | null;
+  organicClicks: number;
+  paidSessions: number;
+  actionLabel: string;
+}
+
 export interface AiTrafficData {
   date: string;
   source: string;
