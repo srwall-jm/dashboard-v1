@@ -14,9 +14,12 @@ import { ComparisonTooltip } from '../components/ComparisonTooltip';
 // Helper component for expanded rows (Shows Keyword Detail)
 const QueryDetailRow: React.FC<{ query: string, rank: number | null, clicks: number }> = ({ query, rank, clicks }) => (
   <tr className="bg-slate-50/80 border-b border-slate-100/50">
-    <td className="pl-12 py-2 flex items-center gap-2 text-[10px] text-slate-500 font-medium">
-      <CornerDownRight size={10} className="text-slate-300" />
-      <span className="truncate max-w-[200px]" title={query}>{query}</span>
+    {/* Colspan 2 covers Chevron + URL Column for better indentation space */}
+    <td colSpan={2} className="py-2 pl-12">
+      <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
+        <CornerDownRight size={10} className="text-slate-300 flex-shrink-0" />
+        <span className="truncate max-w-[200px]" title={query}>{query}</span>
+      </div>
     </td>
     <td className="text-center py-2">
       {rank ? (
@@ -25,9 +28,10 @@ const QueryDetailRow: React.FC<{ query: string, rank: number | null, clicks: num
         </span>
       ) : '-'}
     </td>
-    <td className="text-right pr-8 py-2 text-[10px] text-slate-500 font-mono">
-       {clicks.toLocaleString()} clicks (GSC)
+    <td className="text-right pr-4 py-2 text-[10px] text-slate-500 font-mono">
+       {clicks.toLocaleString()} clicks
     </td>
+    {/* Colspan 3 covers Paid Sessions, Share, and Action columns */}
     <td colSpan={3} className="py-2"></td>
   </tr>
 );
@@ -219,12 +223,9 @@ export const SeoPpcBridgeView: React.FC<{
                 <th className="py-3 px-4 w-8"></th>
                 <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">URL / Campaign</th>
                 <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Top Rank</th>
-                
-                {/* MODIFICACIÓN: COLUMNA DE SESIONES ORGÁNICAS */}
                 <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Organic Sessions (GA4)</th>
                 <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Paid Sessions (GA4)</th>
                 <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right text-amber-600">Paid Share</th>
-                
                 <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
               </tr>
             </thead>
@@ -302,9 +303,10 @@ export const SeoPpcBridgeView: React.FC<{
                           Top 10 GSC Queries (by Clicks)
                         </td>
                       </tr>
-                      {row.queries
-                        .sort((a, b) => b.c - a.c) // Sort by Clicks Descending
-                        .slice(0, 10) // Take Top 10
+                      {/* FIX: Create a shallow copy before sorting to avoid mutating state directly */}
+                      {[...row.queries]
+                        .sort((a, b) => b.c - a.c)
+                        .slice(0, 10)
                         .map((q, qIdx) => (
                         <QueryDetailRow key={`${idx}-${qIdx}`} query={q.q} rank={q.r} clicks={q.c} />
                       ))}
