@@ -43,8 +43,9 @@ export const SeoPpcBridgeView: React.FC<{
   currencySymbol: string;
 }> = ({ data, keywordData = [], dailyData, currencySymbol }) => {
   const [urlFilter, setUrlFilter] = useState('');
+  const [keywordFilter, setKeywordFilter] = useState(''); // Search state for keyword view
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const [viewMode, setViewMode] = useState<'url' | 'keyword'>('url'); // Toggle View State
+  const [viewMode, setViewMode] = useState<'url' | 'keyword'>('url'); // Restored Toggle State
 
   // 1. GROUP DATA BY URL
   const groupedData = useMemo(() => {
@@ -81,7 +82,7 @@ export const SeoPpcBridgeView: React.FC<{
   const getActionInfo = (label: string) => {
     if (label.includes('CRITICAL')) return {
         desc: "High Cannibalization Risk",
-        logic: "Ranking Top 3 Organic AND Paid Sessions > 50. Paying for traffic you likely already own."
+        logic: "Ranking Top 3 Organic AND High Paid Volume. You are likely paying for traffic you already own."
     };
     if (label.includes('OPPORTUNITY')) return {
         desc: "Expansion Opportunity",
@@ -89,7 +90,7 @@ export const SeoPpcBridgeView: React.FC<{
     };
     if (label.includes('REVIEW')) return {
         desc: "Potential Inefficiency",
-        logic: "Ranking Top 3 Organic with active Paid Spend (1-50 sessions). Check incrementality."
+        logic: "Ranking Top 3 Organic with active Paid Spend. Check incrementality."
     };
     if (label === 'INCREASE') return {
         desc: "Growth Opportunity",
@@ -214,15 +215,18 @@ export const SeoPpcBridgeView: React.FC<{
         </div>
       </div>
 
-      {/* SECTION E: THE TABLE */}
+      {/* SECTION E: UNIFIED TABLE WITH TOGGLE */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
             <div className="flex flex-col gap-2">
               <div>
                 <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Traffic Source Audit</h4>
-                <p className="text-[11px] font-bold text-slate-600">Comparing GA4 Sessions: Organic vs Paid</p>
+                <p className="text-[11px] font-bold text-slate-600">
+                  {viewMode === 'url' ? 'Comparing GA4 Sessions: Organic vs Paid by URL' : 'Exact Match Analysis: GSC Query vs GA4 Keyword'}
+                </p>
               </div>
-              {/* VIEW TOGGLE */}
+              
+              {/* RESTORED TOGGLE */}
               <div className="flex bg-slate-100 p-1 rounded-xl w-fit">
                 <button 
                   onClick={() => setViewMode('url')} 
@@ -245,8 +249,8 @@ export const SeoPpcBridgeView: React.FC<{
                   <input 
                     type="text" 
                     placeholder={viewMode === 'url' ? "Search URL..." : "Search Keyword..."}
-                    value={urlFilter} 
-                    onChange={(e) => setUrlFilter(e.target.value)} 
+                    value={viewMode === 'url' ? urlFilter : keywordFilter} 
+                    onChange={(e) => viewMode === 'url' ? setUrlFilter(e.target.value) : setKeywordFilter(e.target.value)} 
                     className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none focus:ring-1 ring-indigo-500 transition-all"
                   />
                </div>
@@ -261,7 +265,7 @@ export const SeoPpcBridgeView: React.FC<{
         
         <div className="overflow-x-auto custom-scrollbar">
           {viewMode === 'url' ? (
-            /* --- EXISTING URL TABLE --- */
+            /* --- URL TABLE (Default) --- */
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
@@ -349,12 +353,12 @@ export const SeoPpcBridgeView: React.FC<{
                       <>
                         <tr className="bg-slate-50/50">
                           <td colSpan={7} className="px-12 py-2 text-[9px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100/50">
-                            Top 10 GSC Queries (by Clicks)
+                            ALL GSC Queries Fetched (No Limit)
                           </td>
                         </tr>
+                        {/* UNLIMITED SLICE: Shows everything available for this URL */}
                         {[...row.queries]
                           .sort((a, b) => b.c - a.c)
-                          .slice(0, 10)
                           .map((q, qIdx) => (
                           <QueryDetailRow key={`${idx}-${qIdx}`} query={q.q} rank={q.r} clicks={q.c} />
                         ))}
@@ -369,7 +373,7 @@ export const SeoPpcBridgeView: React.FC<{
               </tbody>
             </table>
           ) : (
-            /* --- NEW KEYWORD CANNIBALIZATION TABLE --- */
+            /* --- KEYWORD TABLE (New View) --- */
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
@@ -383,7 +387,7 @@ export const SeoPpcBridgeView: React.FC<{
               </thead>
               <tbody>
                 {keywordData && keywordData.length > 0 ? keywordData
-                  .filter(k => !urlFilter || k.keyword.toLowerCase().includes(urlFilter.toLowerCase()))
+                  .filter(k => !keywordFilter || k.keyword.toLowerCase().includes(keywordFilter.toLowerCase()))
                   .map((row, idx) => {
                     const actionInfo = getActionInfo(row.actionLabel);
                     return (

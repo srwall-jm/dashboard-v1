@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -46,7 +45,7 @@ export const AiTrafficView: React.FC<{
   // 3. Trend Chart Data (Time Series by Source)
   const trendData = useMemo(() => {
     const dates = Array.from(new Set(data.map(d => d.date))).sort();
-    const sources = Array.from(new Set(data.map(d => d.source)));
+    const sources = Array.from(new Set(data.map(d => d.source))) as string[];
 
     return dates.map(date => {
       const dayData = data.filter(d => d.date === date);

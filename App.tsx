@@ -311,7 +311,7 @@ const App: React.FC = () => {
                 startDate: filters.dateRange.start,
                 endDate: filters.dateRange.end,
                 dimensions: ['page', 'query'], 
-                rowLimit: 5000 
+                rowLimit: 25000 // INCREASED LIMIT FROM 5000 TO 25000
             })
         });
 
