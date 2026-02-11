@@ -11,8 +11,7 @@ import { exportToCSV } from '../utils';
 import { KpiCard } from '../components/KpiCard';
 import { ComparisonTooltip } from '../components/ComparisonTooltip';
 
-// Helper component for expanded rows (Shows Keyword Detail)
-const QueryDetailRow: React.FC<{ query: string, rank: number | null, clicks: number }> = ({ query, rank, clicks }) => (
+const QueryDetailRow: React.FC<{ query: string, rank: number | null, clicks: number, colSpan?: number }> = ({ query, rank, clicks, colSpan = 5 }) => (
   <tr className="bg-slate-50/80 border-b border-slate-100/50">
     <td colSpan={2} className="py-2 pl-12">
       <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
@@ -30,7 +29,7 @@ const QueryDetailRow: React.FC<{ query: string, rank: number | null, clicks: num
     <td className="text-right pr-4 py-2 text-[10px] text-slate-500 font-mono">
        {clicks.toLocaleString()} clicks
     </td>
-    <td colSpan={5} className="py-2"></td>
+    <td colSpan={colSpan} className="py-2"></td>
   </tr>
 );
 
@@ -49,7 +48,6 @@ export const SeoPpcBridgeView: React.FC<{
   const metricLabel = dataSource === 'SA360' ? 'Paid Clicks' : 'Paid Sessions';
   const metricShort = dataSource === 'SA360' ? 'Clicks' : 'Sessions';
 
-  // 1. GROUP DATA BY URL
   const groupedData = useMemo(() => {
     const groups: Record<string, BridgeData & { queries: { q: string, r: number | null, c: number }[] }> = {};
 
@@ -102,7 +100,6 @@ export const SeoPpcBridgeView: React.FC<{
     };
   };
 
-  // KPIs Logic
   const kpis = useMemo(() => {
     const excludeCount = data.filter(d => d.actionLabel.includes('CRITICAL') || d.actionLabel.includes('REVIEW')).length;
     const increaseCount = data.filter(d => d.actionLabel === 'INCREASE').length;
@@ -126,7 +123,6 @@ export const SeoPpcBridgeView: React.FC<{
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
       
-      {/* SECTION A: TRAFFIC VISIBILITY SCORECARD */}
       <div className="bg-slate-900 p-8 rounded-[32px] text-white shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 p-8 opacity-10">
             <TrendingUp size={120} />
@@ -156,7 +152,6 @@ export const SeoPpcBridgeView: React.FC<{
         </div>
       </div>
 
-      {/* SECTION B: KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <KpiCard title="Critical Overlap" value={kpis.exclude.count} icon={<AlertOctagon />} color="rose" comparison={undefined} />
         <KpiCard title="Expansion Opps" value={kpis.increase.count} icon={<Zap />} color="blue" comparison={undefined} />
@@ -164,7 +159,6 @@ export const SeoPpcBridgeView: React.FC<{
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Graph 1 */}
         <div className="lg:col-span-2 bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm">
            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Traffic Matrix (Rank vs Paid Share)</h4>
            <div className="h-[250px]">
@@ -197,7 +191,6 @@ export const SeoPpcBridgeView: React.FC<{
            </div>
         </div>
 
-        {/* Graph 2 */}
         <div className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm">
            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Wasted Volume ({metricShort})</h4>
            <div className="h-[200px]">
@@ -217,7 +210,6 @@ export const SeoPpcBridgeView: React.FC<{
         </div>
       </div>
 
-      {/* SECTION E: UNIFIED TABLE WITH TOGGLE */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
             <div className="flex flex-col gap-2">
@@ -245,7 +237,6 @@ export const SeoPpcBridgeView: React.FC<{
         
         <div className="overflow-x-auto custom-scrollbar">
           {viewMode === 'url' ? (
-            /* --- URL TABLE --- */
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
@@ -284,7 +275,7 @@ export const SeoPpcBridgeView: React.FC<{
                       <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-indigo-600">{row.ppcSessions.toLocaleString()}</span></td>
                       {dataSource === 'SA360' && (
                         <>
-                            <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-slate-600">{currencySymbol}{row.ppcAvgCpc.toFixed(2)}</span></td>
+                            <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-slate-600">{currencySymbol}{(row.ppcAvgCpc || 0).toFixed(2)}</span></td>
                             <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-slate-600">{currencySymbol}{row.ppcCost.toLocaleString()}</span></td>
                         </>
                       )}
@@ -307,7 +298,7 @@ export const SeoPpcBridgeView: React.FC<{
                     {expandedRows.has(row.url) && (
                       <>
                         <tr className="bg-slate-50/50"><td colSpan={dataSource === 'SA360' ? 9 : 7} className="px-12 py-2 text-[9px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100/50">ALL GSC Queries Fetched (No Limit)</td></tr>
-                        {[...row.queries].sort((a, b) => b.c - a.c).map((q, qIdx) => (<QueryDetailRow key={`${idx}-${qIdx}`} query={q.q} rank={q.r} clicks={q.c} />))}
+                        {[...row.queries].sort((a, b) => b.c - a.c).map((q, qIdx) => (<QueryDetailRow key={`${idx}-${qIdx}`} query={q.q} rank={q.r} clicks={q.c} colSpan={dataSource === 'SA360' ? 5 : 3} />))}
                         <tr className="bg-slate-50/50 border-b border-slate-100"><td colSpan={dataSource === 'SA360' ? 9 : 7} className="py-1"></td></tr>
                       </>
                     )}
@@ -319,7 +310,6 @@ export const SeoPpcBridgeView: React.FC<{
               </tbody>
             </table>
           ) : (
-            /* --- KEYWORD TABLE --- */
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
@@ -351,7 +341,7 @@ export const SeoPpcBridgeView: React.FC<{
                         <td className="py-3 px-4 text-right"><span className={`text-[10px] font-black ${row.paidSessions > 0 ? 'text-indigo-600' : 'text-slate-400'}`}>{row.paidSessions.toLocaleString()}</span></td>
                         {dataSource === 'SA360' && (
                             <>
-                                <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-slate-600">{currencySymbol}{row.paidCpc.toFixed(2)}</span></td>
+                                <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-slate-600">{currencySymbol}{(row.paidCpc || 0).toFixed(2)}</span></td>
                                 <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-slate-600">{currencySymbol}{row.paidCost.toLocaleString()}</span></td>
                                 <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-slate-600">{row.paidCpa > 0 ? `${currencySymbol}${row.paidCpa.toFixed(2)}` : '-'}</span></td>
                             </>
