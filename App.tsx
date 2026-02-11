@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   RefreshCw, Filter, Globe, Tag, AlertCircle, Sparkles, Cpu, Activity, Menu, X
@@ -721,7 +722,17 @@ const App: React.FC = () => {
     loadData();
   }, [filters, ga4Auth, gscAuth, sa360Auth]);
 
-  const stats = useMemo(() => aggregateData(realDailyData), [realDailyData]);
+  // FIX: Aggregate data separately for Organic and Paid channels to avoid undefined errors in child components
+  const stats = useMemo(() => {
+    const organicData = realDailyData.filter(d => d.channel.toLowerCase().includes('organic'));
+    const paidData = realDailyData.filter(d => d.channel.toLowerCase().includes('paid') || d.channel.toLowerCase().includes('cpc'));
+    
+    return {
+      total: aggregateData(realDailyData),
+      organic: aggregateData(organicData),
+      paid: aggregateData(paidData)
+    };
+  }, [realDailyData]);
   
   const filteredProperties = availableProperties.filter(p => p.name.toLowerCase().includes(ga4Search.toLowerCase()));
   const filteredSites = availableSites.filter(s => s.siteUrl.toLowerCase().includes(gscSearch.toLowerCase()));
