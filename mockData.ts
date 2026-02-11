@@ -150,6 +150,8 @@ export const generateMockBridgeData = (): BridgeData[] => {
     
     // Paid Sessions Logic
     const ppcSessions = Math.floor(ppcCost / (0.5 + Math.random()));
+    const ppcAvgCpc = ppcSessions > 0 ? ppcCost / ppcSessions : 0;
+
     const blendedDenominator = organicSessions + ppcSessions;
     const blendedCostRatio = blendedDenominator > 0 ? ppcSessions / blendedDenominator : 0;
     
@@ -170,6 +172,7 @@ export const generateMockBridgeData = (): BridgeData[] => {
       ppcConversions,
       ppcCpa,
       ppcSessions: ppcSessions, // GA4 Paid Sessions
+      ppcAvgCpc,
       ppcImpressions: Math.floor(ppcCost * 20),
       blendedCostRatio,
       actionLabel: action,

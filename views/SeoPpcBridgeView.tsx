@@ -14,7 +14,6 @@ import { ComparisonTooltip } from '../components/ComparisonTooltip';
 // Helper component for expanded rows (Shows Keyword Detail)
 const QueryDetailRow: React.FC<{ query: string, rank: number | null, clicks: number }> = ({ query, rank, clicks }) => (
   <tr className="bg-slate-50/80 border-b border-slate-100/50">
-    {/* Colspan 2 covers Chevron + URL Column for better indentation space */}
     <td colSpan={2} className="py-2 pl-12">
       <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
         <CornerDownRight size={10} className="text-slate-300 flex-shrink-0" />
@@ -31,8 +30,7 @@ const QueryDetailRow: React.FC<{ query: string, rank: number | null, clicks: num
     <td className="text-right pr-4 py-2 text-[10px] text-slate-500 font-mono">
        {clicks.toLocaleString()} clicks
     </td>
-    {/* Colspan 3 covers Paid Sessions, Share, and Action columns */}
-    <td colSpan={3} className="py-2"></td>
+    <td colSpan={5} className="py-2"></td>
   </tr>
 );
 
@@ -43,13 +41,12 @@ export const SeoPpcBridgeView: React.FC<{
   currencySymbol: string;
 }> = ({ data, keywordData = [], dailyData, currencySymbol }) => {
   const [urlFilter, setUrlFilter] = useState('');
-  const [keywordFilter, setKeywordFilter] = useState(''); // Search state for keyword view
+  const [keywordFilter, setKeywordFilter] = useState(''); 
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const [viewMode, setViewMode] = useState<'url' | 'keyword'>('url'); // Restored Toggle State
+  const [viewMode, setViewMode] = useState<'url' | 'keyword'>('url'); 
 
-  // Determine Source (Assuming first row carries source info)
   const dataSource = data.length > 0 ? data[0].dataSource : 'GA4';
-  const metricLabel = dataSource === 'SA360' ? 'Paid Clicks (SA360)' : 'Paid Sessions (GA4)';
+  const metricLabel = dataSource === 'SA360' ? 'Paid Clicks' : 'Paid Sessions';
   const metricShort = dataSource === 'SA360' ? 'Clicks' : 'Sessions';
 
   // 1. GROUP DATA BY URL
@@ -65,8 +62,6 @@ export const SeoPpcBridgeView: React.FC<{
           queries: [] 
         };
       }
-      
-      // Agregamos la query hijo
       groups[item.url].queries.push({
         q: item.query,
         r: item.organicRank,
@@ -112,7 +107,6 @@ export const SeoPpcBridgeView: React.FC<{
     const excludeCount = data.filter(d => d.actionLabel.includes('CRITICAL') || d.actionLabel.includes('REVIEW')).length;
     const increaseCount = data.filter(d => d.actionLabel === 'INCREASE').length;
     
-    // Organic Sessions in Bridge is always mapped, but if SA360 is used, visual comparison is Clicks vs Clicks
     const totalOrganicVolume = data.reduce((acc, curr) => acc + curr.organicSessions, 0); 
     const totalPaidVolume = data.reduce((acc, curr) => acc + curr.ppcSessions, 0);
 
@@ -188,6 +182,7 @@ export const SeoPpcBridgeView: React.FC<{
                         <p className="text-[10px] text-slate-300">Paid Share: {(d.blendedCostRatio*100).toFixed(0)}%</p>
                         <p className="text-[10px] text-emerald-400">Org: {d.organicSessions.toLocaleString()}</p>
                         <p className="text-[10px] text-indigo-400">Paid: {d.ppcSessions.toLocaleString()}</p>
+                        {d.ppcAvgCpc > 0 && <p className="text-[10px] text-amber-400">Avg CPC: {currencySymbol}{d.ppcAvgCpc.toFixed(2)}</p>}
                       </div>
                     );
                   } return null;
@@ -233,46 +228,24 @@ export const SeoPpcBridgeView: React.FC<{
                 </p>
               </div>
               
-              {/* RESTORED TOGGLE */}
               <div className="flex bg-slate-100 p-1 rounded-xl w-fit">
-                <button 
-                  onClick={() => setViewMode('url')} 
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${viewMode === 'url' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
-                >
-                  <LayoutList size={12} /> Analysis by URL
-                </button>
-                <button 
-                  onClick={() => setViewMode('keyword')} 
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${viewMode === 'keyword' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
-                >
-                  <Key size={12} /> Analysis by Keyword
-                </button>
+                <button onClick={() => setViewMode('url')} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${viewMode === 'url' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}><LayoutList size={12} /> Analysis by URL</button>
+                <button onClick={() => setViewMode('keyword')} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${viewMode === 'keyword' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}><Key size={12} /> Analysis by Keyword</button>
               </div>
             </div>
             
             <div className="flex items-center gap-2 w-full md:w-auto">
                <div className="relative w-full md:w-64">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                  <input 
-                    type="text" 
-                    placeholder={viewMode === 'url' ? "Search URL..." : "Search Keyword..."}
-                    value={viewMode === 'url' ? urlFilter : keywordFilter} 
-                    onChange={(e) => viewMode === 'url' ? setUrlFilter(e.target.value) : setKeywordFilter(e.target.value)} 
-                    className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none focus:ring-1 ring-indigo-500 transition-all"
-                  />
+                  <input type="text" placeholder={viewMode === 'url' ? "Search URL..." : "Search Keyword..."} value={viewMode === 'url' ? urlFilter : keywordFilter} onChange={(e) => viewMode === 'url' ? setUrlFilter(e.target.value) : setKeywordFilter(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none focus:ring-1 ring-indigo-500 transition-all" />
                </div>
-               <button 
-                  onClick={() => exportToCSV(viewMode === 'url' ? data : keywordData, `PPC_SEO_${viewMode.toUpperCase()}_Export`)} 
-                  className="flex items-center gap-2 px-3 py-2 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md whitespace-nowrap"
-                >
-                  <FileText size={12} /> Export CSV
-                </button>
+               <button onClick={() => exportToCSV(viewMode === 'url' ? data : keywordData, `PPC_SEO_${viewMode.toUpperCase()}_Export`)} className="flex items-center gap-2 px-3 py-2 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md whitespace-nowrap"><FileText size={12} /> Export CSV</button>
             </div>
         </div>
         
         <div className="overflow-x-auto custom-scrollbar">
           {viewMode === 'url' ? (
-            /* --- URL TABLE (Default) --- */
+            /* --- URL TABLE --- */
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
@@ -281,6 +254,12 @@ export const SeoPpcBridgeView: React.FC<{
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Top Rank</th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Org. {dataSource === 'SA360' ? 'Clicks' : 'Sessions'}</th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">{metricLabel}</th>
+                  {dataSource === 'SA360' && (
+                    <>
+                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Avg. CPC</th>
+                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Cost</th>
+                    </>
+                  )}
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right text-amber-600">Paid Share</th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
                 </tr>
@@ -290,97 +269,57 @@ export const SeoPpcBridgeView: React.FC<{
                   const actionInfo = getActionInfo(row.actionLabel);
                   return (
                   <React.Fragment key={idx}>
-                    {/* PARENT ROW (URL) */}
-                    <tr 
-                      className={`border-b border-slate-50 hover:bg-slate-50/80 transition-colors cursor-pointer ${expandedRows.has(row.url) ? 'bg-slate-50' : ''}`}
-                      onClick={() => toggleRow(row.url)}
-                    >
+                    <tr className={`border-b border-slate-50 hover:bg-slate-50/80 transition-colors cursor-pointer ${expandedRows.has(row.url) ? 'bg-slate-50' : ''}`} onClick={() => toggleRow(row.url)}>
                       <td className="py-3 px-4 text-center">
                         {expandedRows.has(row.url) ? <ChevronDown size={14} className="text-indigo-500" /> : <ChevronRight size={14} className="text-slate-400" />}
                       </td>
                       <td className="py-3 px-4 max-w-xs">
                           <div className="flex flex-col">
-                            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-800 break-all">
-                              <ExternalLink size={10} className="text-indigo-400 flex-shrink-0" /> {row.url}
-                            </div>
-                            <div className="flex items-center gap-1 text-[9px] text-slate-400 mt-1">
-                              <Zap size={8} /> {row.ppcCampaign}
-                            </div>
+                            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-800 break-all"><ExternalLink size={10} className="text-indigo-400 flex-shrink-0" /> {row.url}</div>
+                            <div className="flex items-center gap-1 text-[9px] text-slate-400 mt-1"><Zap size={8} /> {row.ppcCampaign}</div>
                           </div>
                       </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className="text-[10px] font-bold text-slate-600">
-                          #{Math.min(...row.queries.map(q => q.r || 100)).toFixed(1)}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <span className="text-[10px] font-bold text-emerald-600">
-                          {row.organicSessions.toLocaleString()}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <span className="text-[10px] font-bold text-indigo-600">
-                          {row.ppcSessions.toLocaleString()}
-                        </span>
-                      </td>
+                      <td className="py-3 px-4 text-center"><span className="text-[10px] font-bold text-slate-600">#{Math.min(...row.queries.map(q => q.r || 100)).toFixed(1)}</span></td>
+                      <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-emerald-600">{row.organicSessions.toLocaleString()}</span></td>
+                      <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-indigo-600">{row.ppcSessions.toLocaleString()}</span></td>
+                      {dataSource === 'SA360' && (
+                        <>
+                            <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-slate-600">{currencySymbol}{row.ppcAvgCpc.toFixed(2)}</span></td>
+                            <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-slate-600">{currencySymbol}{row.ppcCost.toLocaleString()}</span></td>
+                        </>
+                      )}
                       <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                <div 
-                                  className={`h-full ${row.blendedCostRatio > 0.5 ? 'bg-rose-500' : 'bg-emerald-500'}`} 
-                                  style={{ width: `${row.blendedCostRatio * 100}%` }} 
-                                />
-                            </div>
-                            <span className="text-[9px] font-bold text-slate-600 w-6">
-                              {(row.blendedCostRatio * 100).toFixed(0)}%
-                            </span>
+                            <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className={`h-full ${row.blendedCostRatio > 0.5 ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${row.blendedCostRatio * 100}%` }} /></div>
+                            <span className="text-[9px] font-bold text-slate-600 w-6">{(row.blendedCostRatio * 100).toFixed(0)}%</span>
                           </div>
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="group relative inline-block">
-                            <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tight cursor-help
-                              ${row.actionLabel.includes('CRITICAL') ? 'bg-rose-100 text-rose-600' : 
-                                row.actionLabel === 'INCREASE' ? 'bg-blue-100 text-blue-600' : 
-                                row.actionLabel === 'REVIEW' ? 'bg-amber-100 text-amber-600' :
-                                'bg-emerald-100 text-emerald-600'}`}>
-                              {row.actionLabel.split(' ')[0]}
-                            </span>
+                            <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tight cursor-help ${row.actionLabel.includes('CRITICAL') ? 'bg-rose-100 text-rose-600' : row.actionLabel === 'INCREASE' ? 'bg-blue-100 text-blue-600' : row.actionLabel === 'REVIEW' ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>{row.actionLabel.split(' ')[0]}</span>
                             <div className="absolute right-0 top-full mt-2 w-56 p-3 bg-slate-900 text-white text-[10px] rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 border border-white/10 pointer-events-none text-left">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <Info size={12} className="text-indigo-400" />
-                                    <span className="font-bold text-slate-200 uppercase tracking-wider">{actionInfo.desc}</span>
-                                </div>
+                                <div className="flex items-center gap-2 mb-1"><Info size={12} className="text-indigo-400" /><span className="font-bold text-slate-200 uppercase tracking-wider">{actionInfo.desc}</span></div>
                                 <p className="text-slate-400 leading-relaxed font-medium">{actionInfo.logic}</p>
-                                <div className="absolute bottom-full right-4 w-2 h-2 bg-slate-900 border-l border-t border-white/10 rotate-45"></div>
                             </div>
                         </div>
                       </td>
                     </tr>
                     {expandedRows.has(row.url) && (
                       <>
-                        <tr className="bg-slate-50/50">
-                          <td colSpan={7} className="px-12 py-2 text-[9px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100/50">
-                            ALL GSC Queries Fetched (No Limit)
-                          </td>
-                        </tr>
-                        {/* UNLIMITED SLICE: Shows everything available for this URL */}
-                        {[...row.queries]
-                          .sort((a, b) => b.c - a.c)
-                          .map((q, qIdx) => (
-                          <QueryDetailRow key={`${idx}-${qIdx}`} query={q.q} rank={q.r} clicks={q.c} />
-                        ))}
-                        <tr className="bg-slate-50/50 border-b border-slate-100"><td colSpan={7} className="py-1"></td></tr>
+                        <tr className="bg-slate-50/50"><td colSpan={dataSource === 'SA360' ? 9 : 7} className="px-12 py-2 text-[9px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100/50">ALL GSC Queries Fetched (No Limit)</td></tr>
+                        {[...row.queries].sort((a, b) => b.c - a.c).map((q, qIdx) => (<QueryDetailRow key={`${idx}-${qIdx}`} query={q.q} rank={q.r} clicks={q.c} />))}
+                        <tr className="bg-slate-50/50 border-b border-slate-100"><td colSpan={dataSource === 'SA360' ? 9 : 7} className="py-1"></td></tr>
                       </>
                     )}
                   </React.Fragment>
                 );
                 }) : (
-                  <tr><td colSpan={7} className="py-12 text-center text-xs text-slate-400">No data found</td></tr>
+                  <tr><td colSpan={dataSource === 'SA360' ? 9 : 7} className="py-12 text-center text-xs text-slate-400">No data found</td></tr>
                 )}
               </tbody>
             </table>
           ) : (
-            /* --- KEYWORD TABLE (New View) --- */
+            /* --- KEYWORD TABLE --- */
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
@@ -388,6 +327,13 @@ export const SeoPpcBridgeView: React.FC<{
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Top Org. Rank</th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Org. Clicks</th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">{metricLabel}</th>
+                  {dataSource === 'SA360' && (
+                    <>
+                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Avg CPC</th>
+                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Cost</th>
+                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">CPA</th>
+                    </>
+                  )}
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Paid CVR</th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
                 </tr>
@@ -399,48 +345,23 @@ export const SeoPpcBridgeView: React.FC<{
                     const actionInfo = getActionInfo(row.actionLabel);
                     return (
                       <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
-                             <Key size={10} className="text-slate-400" />
-                             <span className="text-[10px] font-bold text-slate-800">{row.keyword}</span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          {row.organicRank ? (
-                             <span className={`px-2 py-0.5 rounded text-[10px] font-black ${row.organicRank <= 3 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                               #{row.organicRank.toFixed(1)}
-                             </span>
-                          ) : <span className="text-[10px] text-slate-400">-</span>}
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                           <span className="text-[10px] font-bold text-emerald-600">{row.organicClicks.toLocaleString()}</span>
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <span className={`text-[10px] font-black ${row.paidSessions > 0 ? 'text-indigo-600' : 'text-slate-400'}`}>
-                            {row.paidSessions.toLocaleString()}
-                          </span>
-                        </td>
-                         <td className="py-3 px-4 text-right">
-                          <span className="text-[10px] font-bold text-slate-600">
-                            {row.paidCvr.toFixed(2)}%
-                          </span>
-                        </td>
+                        <td className="py-3 px-4"><div className="flex items-center gap-2"><Key size={10} className="text-slate-400" /><span className="text-[10px] font-bold text-slate-800">{row.keyword}</span></div></td>
+                        <td className="py-3 px-4 text-center">{row.organicRank ? (<span className={`px-2 py-0.5 rounded text-[10px] font-black ${row.organicRank <= 3 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>#{row.organicRank.toFixed(1)}</span>) : <span className="text-[10px] text-slate-400">-</span>}</td>
+                        <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-emerald-600">{row.organicClicks.toLocaleString()}</span></td>
+                        <td className="py-3 px-4 text-right"><span className={`text-[10px] font-black ${row.paidSessions > 0 ? 'text-indigo-600' : 'text-slate-400'}`}>{row.paidSessions.toLocaleString()}</span></td>
+                        {dataSource === 'SA360' && (
+                            <>
+                                <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-slate-600">{currencySymbol}{row.paidCpc.toFixed(2)}</span></td>
+                                <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-slate-600">{currencySymbol}{row.paidCost.toLocaleString()}</span></td>
+                                <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-slate-600">{row.paidCpa > 0 ? `${currencySymbol}${row.paidCpa.toFixed(2)}` : '-'}</span></td>
+                            </>
+                        )}
+                        <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-slate-600">{row.paidCvr.toFixed(2)}%</span></td>
                         <td className="py-3 px-4 text-right">
                           <div className="group relative inline-block">
-                              <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tight cursor-help
-                                ${row.actionLabel.includes('CRITICAL') ? 'bg-rose-100 text-rose-600' : 
-                                  row.actionLabel.includes('OPPORTUNITY') ? 'bg-blue-100 text-blue-600' :
-                                  row.actionLabel.includes('REVIEW') ? 'bg-amber-100 text-amber-600' :
-                                  'bg-slate-100 text-slate-500'}`}>
-                                {row.actionLabel.replace(/\(.*\)/, '')}
-                              </span>
-                              
-                              {/* Tooltip */}
+                              <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tight cursor-help ${row.actionLabel.includes('CRITICAL') ? 'bg-rose-100 text-rose-600' : row.actionLabel.includes('OPPORTUNITY') ? 'bg-blue-100 text-blue-600' : row.actionLabel.includes('REVIEW') ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-500'}`}>{row.actionLabel.replace(/\(.*\)/, '')}</span>
                               <div className="absolute right-0 top-full mt-2 w-56 p-3 bg-slate-900 text-white text-[10px] rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 border border-white/10 pointer-events-none text-left">
-                                  <div className="flex items-center gap-2 mb-1">
-                                      {row.actionLabel.includes('CRITICAL') ? <AlertOctagon size={12} className="text-rose-400" /> : <Info size={12} className="text-indigo-400" />}
-                                      <span className="font-bold text-slate-200 uppercase tracking-wider">{actionInfo.desc}</span>
-                                  </div>
+                                  <div className="flex items-center gap-2 mb-1">{row.actionLabel.includes('CRITICAL') ? <AlertOctagon size={12} className="text-rose-400" /> : <Info size={12} className="text-indigo-400" />}<span className="font-bold text-slate-200 uppercase tracking-wider">{actionInfo.desc}</span></div>
                                   <p className="text-slate-400 leading-relaxed font-medium">{actionInfo.logic}</p>
                               </div>
                           </div>
@@ -448,7 +369,7 @@ export const SeoPpcBridgeView: React.FC<{
                       </tr>
                     );
                 }) : (
-                  <tr><td colSpan={6} className="py-12 text-center text-xs text-slate-400">No keyword data matched</td></tr>
+                  <tr><td colSpan={dataSource === 'SA360' ? 9 : 6} className="py-12 text-center text-xs text-slate-400">No keyword data matched</td></tr>
                 )}
               </tbody>
             </table>
