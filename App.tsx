@@ -84,6 +84,7 @@ const App: React.FC = () => {
 
   const [error, setError] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isCollapsed, setIsCollapsed] = useState(false); // NEW: Mini Sidebar State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false); // NEW STATE FOR MODAL
 
   const [brandRegexStr, setBrandRegexStr] = useState('shop|brand|pro|sports');
@@ -1059,6 +1060,7 @@ const fetchGa4Data = async () => {
 
       <Sidebar 
         isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen}
+        isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed}
         activeTab={activeTab} setActiveTab={setActiveTab}
         user={user} handleLogout={handleLogout}
         setIsSettingsOpen={setIsSettingsOpen}
@@ -1080,7 +1082,7 @@ const fetchGa4Data = async () => {
         filteredProperties={filteredProperties} filteredSites={filteredSites} filteredSa360Customers={filteredSa360Customers}
       />
 
-<main className={`flex-1 transition-all duration-300 ease-in-out p-5 md:p-8 xl:p-12 overflow-x-hidden ${isSidebarOpen ? 'xl:ml-80' : 'ml-0'}`}>
+      <main className={`flex-1 transition-all duration-300 ease-in-out p-5 md:p-8 xl:p-12 overflow-x-hidden ${isSidebarOpen ? (isCollapsed ? 'xl:ml-20' : 'xl:ml-80') : 'ml-0'}`}>
   <header className="flex flex-col gap-6 mb-10">
     <div className="flex items-center gap-4">
       {!isSidebarOpen && (
