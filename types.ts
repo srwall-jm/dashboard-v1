@@ -90,27 +90,29 @@ export interface BridgeData {
   url: string;
   query: string;
   organicRank: number | null;
-  organicClicks: number; // GSC Clicks (Kept for reference/CTR context only)
-  organicSessions: number; // GA4 Sessions (Primary Metric)
+  organicClicks: number; // GSC Clicks
+  organicSessions: number; // GA4 Sessions (Primary Organic Metric)
   ppcCampaign: string;
   ppcCost: number;
   ppcConversions: number;
   ppcCpa: number;
-  ppcSessions: number; // GA4 Paid Sessions (Primary Metric)
+  ppcSessions: number; // Value depends on dataSource (GA4=Sessions, SA360=Clicks)
   ppcImpressions: number;
   blendedCostRatio: number;
   actionLabel: string;
   status?: string;
   ppcSourceMedium?: string;
+  dataSource: 'GA4' | 'SA360'; // NEW: Track source
 }
 
 export interface KeywordBridgeData {
   keyword: string;
   organicRank: number | null;
   organicClicks: number;
-  paidSessions: number;
+  paidSessions: number; // Value depends on dataSource
   paidCvr: number;
   actionLabel: string;
+  dataSource: 'GA4' | 'SA360'; // NEW: Track source
 }
 
 export interface AiTrafficData {

@@ -47,6 +47,11 @@ export const SeoPpcBridgeView: React.FC<{
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'url' | 'keyword'>('url'); // Restored Toggle State
 
+  // Determine Source (Assuming first row carries source info)
+  const dataSource = data.length > 0 ? data[0].dataSource : 'GA4';
+  const metricLabel = dataSource === 'SA360' ? 'Paid Clicks (SA360)' : 'Paid Sessions (GA4)';
+  const metricShort = dataSource === 'SA360' ? 'Clicks' : 'Sessions';
+
   // 1. GROUP DATA BY URL
   const groupedData = useMemo(() => {
     const groups: Record<string, BridgeData & { queries: { q: string, r: number | null, c: number }[] }> = {};
@@ -106,21 +111,23 @@ export const SeoPpcBridgeView: React.FC<{
   const kpis = useMemo(() => {
     const excludeCount = data.filter(d => d.actionLabel.includes('CRITICAL') || d.actionLabel.includes('REVIEW')).length;
     const increaseCount = data.filter(d => d.actionLabel === 'INCREASE').length;
-    const totalOrganicSessions = data.reduce((acc, curr) => acc + curr.organicSessions, 0);
-    const totalPaidSessions = data.reduce((acc, curr) => acc + curr.ppcSessions, 0);
+    
+    // Organic Sessions in Bridge is always mapped, but if SA360 is used, visual comparison is Clicks vs Clicks
+    const totalOrganicVolume = data.reduce((acc, curr) => acc + curr.organicSessions, 0); 
+    const totalPaidVolume = data.reduce((acc, curr) => acc + curr.ppcSessions, 0);
 
     return {
       exclude: { count: excludeCount, volume: data.reduce((acc, curr) => curr.actionLabel.includes('CRITICAL') ? acc + curr.ppcSessions : acc, 0) },
       increase: { count: increaseCount },
       maintain: { count: data.length - excludeCount - increaseCount },
-      traffic: { organic: totalOrganicSessions, paid: totalPaidSessions }
+      traffic: { organic: totalOrganicVolume, paid: totalPaidVolume }
     };
   }, [data]);
 
   const savingsData = useMemo(() => [
-    { name: 'Total Paid Sessions', value: data.reduce((acc, c) => acc + c.ppcSessions, 0) },
-    { name: 'Cannibalized Sessions', value: kpis.exclude.volume }
-  ], [data, kpis]);
+    { name: `Total ${metricLabel}`, value: data.reduce((acc, c) => acc + c.ppcSessions, 0) },
+    { name: `Cannibalized ${metricShort}`, value: kpis.exclude.volume }
+  ], [data, kpis, metricLabel, metricShort]);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
@@ -135,21 +142,21 @@ export const SeoPpcBridgeView: React.FC<{
                 <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Total Visibility (Analysed URLs)</h4>
                 <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-black">{kpis.traffic.organic.toLocaleString()}</span>
-                    <span className="text-sm font-bold text-emerald-400">Organic Sessions</span>
+                    <span className="text-sm font-bold text-emerald-400">Organic {dataSource === 'SA360' ? 'Clicks (GSC)' : 'Sessions'}</span>
                 </div>
             </div>
             <div className="md:text-right">
                 <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Paid Investment</h4>
                 <div className="flex items-baseline gap-2 md:justify-end">
                     <span className="text-3xl font-black">{kpis.traffic.paid.toLocaleString()}</span>
-                    <span className="text-sm font-bold text-indigo-400">Paid Sessions</span>
+                    <span className="text-sm font-bold text-indigo-400">{metricLabel}</span>
                 </div>
             </div>
             <div className="md:text-right">
                 <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Organic Ratio</h4>
                 <div className="flex items-baseline gap-2 md:justify-end">
                     <span className="text-3xl font-black">{((kpis.traffic.organic / (kpis.traffic.organic + kpis.traffic.paid || 1)) * 100).toFixed(1)}%</span>
-                    <span className="text-sm font-bold text-slate-500">of Total Traffic</span>
+                    <span className="text-sm font-bold text-slate-500">of Total {dataSource === 'SA360' ? 'Clicks' : 'Traffic'}</span>
                 </div>
             </div>
         </div>
@@ -179,8 +186,8 @@ export const SeoPpcBridgeView: React.FC<{
                       <div className="bg-slate-900 text-white p-3 rounded-xl border border-white/10 shadow-xl">
                         <p className="font-bold text-xs mb-1">{d.url}</p>
                         <p className="text-[10px] text-slate-300">Paid Share: {(d.blendedCostRatio*100).toFixed(0)}%</p>
-                        <p className="text-[10px] text-emerald-400">Org. Sessions: {d.organicSessions.toLocaleString()}</p>
-                        <p className="text-[10px] text-indigo-400">Paid Sessions: {d.ppcSessions.toLocaleString()}</p>
+                        <p className="text-[10px] text-emerald-400">Org: {d.organicSessions.toLocaleString()}</p>
+                        <p className="text-[10px] text-indigo-400">Paid: {d.ppcSessions.toLocaleString()}</p>
                       </div>
                     );
                   } return null;
@@ -197,7 +204,7 @@ export const SeoPpcBridgeView: React.FC<{
 
         {/* Graph 2 */}
         <div className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm">
-           <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Wasted Volume (Sessions)</h4>
+           <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Wasted Volume ({metricShort})</h4>
            <div className="h-[200px]">
              <ResponsiveContainer width="100%" height="100%">
                <BarChart data={savingsData} layout="vertical" margin={{left: 0}}>
@@ -220,9 +227,9 @@ export const SeoPpcBridgeView: React.FC<{
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
             <div className="flex flex-col gap-2">
               <div>
-                <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Traffic Source Audit</h4>
+                <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Traffic Source Audit ({dataSource})</h4>
                 <p className="text-[11px] font-bold text-slate-600">
-                  {viewMode === 'url' ? 'Comparing GA4 Sessions: Organic vs Paid by URL' : 'Exact Match Analysis: GSC Query vs GA4 Keyword'}
+                  {viewMode === 'url' ? `Comparing Organic (GSC) vs ${metricLabel} by URL` : 'Exact Match Analysis: GSC Query vs Paid Keyword'}
                 </p>
               </div>
               
@@ -272,8 +279,8 @@ export const SeoPpcBridgeView: React.FC<{
                   <th className="py-3 px-4 w-8"></th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">URL / Campaign</th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Top Rank</th>
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Organic Sessions</th>
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Paid Sessions</th>
+                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Org. {dataSource === 'SA360' ? 'Clicks' : 'Sessions'}</th>
+                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">{metricLabel}</th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right text-amber-600">Paid Share</th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
                 </tr>
@@ -380,7 +387,7 @@ export const SeoPpcBridgeView: React.FC<{
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Matched Keyword (Exact)</th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Top Org. Rank</th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Org. Clicks</th>
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Paid Sessions</th>
+                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">{metricLabel}</th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Paid CVR</th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
                 </tr>

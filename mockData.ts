@@ -172,7 +172,8 @@ export const generateMockBridgeData = (): BridgeData[] => {
       ppcSessions: ppcSessions, // GA4 Paid Sessions
       ppcImpressions: Math.floor(ppcCost * 20),
       blendedCostRatio,
-      actionLabel: action
+      actionLabel: action,
+      dataSource: 'GA4' // Default source for mock data
     };
   });
 };
