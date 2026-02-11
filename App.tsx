@@ -11,6 +11,7 @@ import { generateMockBridgeData, generateMockAiTrafficData } from './mockData';
 
 // Import New Components and Views
 import { Sidebar } from './components/Sidebar';
+import { SettingsModal } from './components/SettingsModal';
 import { DateRangeSelector } from './components/DateRangeSelector';
 import { OrganicVsPaidView } from './views/OrganicVsPaidView';
 import { SeoMarketplaceView } from './views/SeoMarketplaceView';
@@ -83,6 +84,8 @@ const App: React.FC = () => {
 
   const [error, setError] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false); // NEW STATE FOR MODAL
+
   const [brandRegexStr, setBrandRegexStr] = useState('shop|brand|pro|sports');
   const [grouping, setGrouping] = useState<'daily' | 'weekly' | 'monthly'>('daily');
 
@@ -1057,12 +1060,21 @@ const fetchGa4Data = async () => {
       <Sidebar 
         isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen}
         activeTab={activeTab} setActiveTab={setActiveTab}
+        user={user} handleLogout={handleLogout}
+        setIsSettingsOpen={setIsSettingsOpen}
+      />
+
+      <SettingsModal 
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
         aiProvider={aiProvider} setAiProvider={setAiProvider}
         openaiKey={openaiKey} setOpenaiKey={setOpenaiKey}
         brandRegexStr={brandRegexStr} setBrandRegexStr={setBrandRegexStr}
-        user={user} ga4Auth={ga4Auth} gscAuth={gscAuth} sa360Auth={sa360Auth}
-        handleConnectGa4={handleConnectGa4} handleConnectGsc={handleConnectGsc} handleConnectSa360={handleConnectSa360} handleLogout={handleLogout}
-        ga4Search={ga4Search} setGa4Search={setGa4Search} gscSearch={gscSearch} setGscSearch={setGscSearch} sa360Search={sa360Search} setSa360Search={setSa360Search}
+        ga4Auth={ga4Auth} gscAuth={gscAuth} sa360Auth={sa360Auth}
+        handleConnectGa4={handleConnectGa4} handleConnectGsc={handleConnectGsc} handleConnectSa360={handleConnectSa360}
+        ga4Search={ga4Search} setGa4Search={setGa4Search}
+        gscSearch={gscSearch} setGscSearch={setGscSearch}
+        sa360Search={sa360Search} setSa360Search={setSa360Search}
         availableProperties={availableProperties} availableSites={availableSites} availableSa360Customers={availableSa360Customers}
         setGa4Auth={setGa4Auth} setGscAuth={setGscAuth} setSa360Auth={setSa360Auth}
         filteredProperties={filteredProperties} filteredSites={filteredSites} filteredSa360Customers={filteredSa360Customers}
