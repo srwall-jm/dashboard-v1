@@ -1060,7 +1060,8 @@ const fetchGa4Data = async () => {
       <Sidebar 
         isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen}
         activeTab={activeTab} setActiveTab={setActiveTab}
-        user={user} handleLogout={handleLogout}
+        user={user} 
+        handleLogout={handleLogout}
         setIsSettingsOpen={setIsSettingsOpen}
       />
 
@@ -1072,38 +1073,36 @@ const fetchGa4Data = async () => {
         brandRegexStr={brandRegexStr} setBrandRegexStr={setBrandRegexStr}
         ga4Auth={ga4Auth} gscAuth={gscAuth} sa360Auth={sa360Auth}
         handleConnectGa4={handleConnectGa4} handleConnectGsc={handleConnectGsc} handleConnectSa360={handleConnectSa360}
-        ga4Search={ga4Search} setGa4Search={setGa4Search}
-        gscSearch={gscSearch} setGscSearch={setGscSearch}
-        sa360Search={sa360Search} setSa360Search={setSa360Search}
+        ga4Search={ga4Search} setGa4Search={setGa4Search} gscSearch={gscSearch} setGscSearch={setGscSearch} sa360Search={sa360Search} setSa360Search={setSa360Search}
         availableProperties={availableProperties} availableSites={availableSites} availableSa360Customers={availableSa360Customers}
         setGa4Auth={setGa4Auth} setGscAuth={setGscAuth} setSa360Auth={setSa360Auth}
         filteredProperties={filteredProperties} filteredSites={filteredSites} filteredSa360Customers={filteredSa360Customers}
       />
 
-<main className={`flex-1 transition-all duration-300 ease-in-out p-5 md:p-8 xl:p-12 overflow-x-hidden ${isSidebarOpen ? 'xl:ml-80' : 'ml-0'}`}>
-  <header className="flex flex-col gap-6 mb-10">
-    <div className="flex items-center gap-4">
-      {!isSidebarOpen && (
-        <button onClick={() => setIsSidebarOpen(true)} className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-indigo-300 transition-all shadow-sm text-slate-600 hover:text-indigo-600 group" title="Abrir menú">
-          <Menu size={20} className="group-hover:scale-110 transition-transform" />
-        </button>
-      )}
-      <div>
-        <div className="flex items-center gap-2 mb-2">
-          <span className={`w-2 h-2 rounded-full ${isAnythingLoading ? 'bg-amber-500 animate-ping' : 'bg-emerald-500'}`} />
-          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-            {isLoadingGa4 ? 'Syncing GA4...' : isLoadingGsc ? 'Syncing GSC...' : isLoadingSa360 ? 'Syncing SA360...' : isLoadingBridge ? 'Joining Data...' : isLoadingAi ? 'Scanning AI...' : 'Dashboard Active'}
-          </span>
-        </div>
-        <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">
-          {activeTab === DashboardTab.ORGANIC_VS_PAID && "Organic vs Paid Performance"}
-          {activeTab === DashboardTab.SEO_BY_COUNTRY && "SEO Performance by Country"}
-          {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && "URL & Keyword Analysis"}
-          {activeTab === DashboardTab.PPC_SEO_BRIDGE && "The Bridge: SEO vs PPC Intelligence"}
-          {activeTab === DashboardTab.AI_TRAFFIC_MONITOR && "AI Traffic Monitor"}
-        </h2>
-      </div>
-    </div>
+      <main className={`flex-1 transition-all duration-300 ease-in-out p-5 md:p-8 xl:p-12 overflow-x-hidden ${isSidebarOpen ? 'xl:ml-80' : 'ml-0'}`}>
+        <header className="flex flex-col gap-6 mb-10">
+          <div className="flex items-center gap-4">
+            {!isSidebarOpen && (
+              <button onClick={() => setIsSidebarOpen(true)} className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-indigo-300 transition-all shadow-sm text-slate-600 hover:text-indigo-600 group" title="Abrir menú">
+                <Menu size={20} className="group-hover:scale-110 transition-transform" />
+              </button>
+            )}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`w-2 h-2 rounded-full ${isAnythingLoading ? 'bg-amber-500 animate-ping' : 'bg-emerald-500'}`} />
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                  {isLoadingGa4 ? 'Syncing GA4...' : isLoadingGsc ? 'Syncing GSC...' : isLoadingSa360 ? 'Syncing SA360...' : isLoadingBridge ? 'Joining Data...' : isLoadingAi ? 'Scanning AI...' : 'Dashboard Active'}
+                </span>
+              </div>
+              <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">
+                {activeTab === DashboardTab.ORGANIC_VS_PAID && "Organic vs Paid Performance"}
+                {activeTab === DashboardTab.SEO_BY_COUNTRY && "SEO Performance by Country"}
+                {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && "URL & Keyword Analysis"}
+                {activeTab === DashboardTab.PPC_SEO_BRIDGE && "The Bridge: SEO vs PPC Intelligence"}
+                {activeTab === DashboardTab.AI_TRAFFIC_MONITOR && "AI Traffic Monitor"}
+              </h2>
+            </div>
+          </div>
 
           <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-4 w-full">
             <DateRangeSelector filters={filters} setFilters={setFilters} />
