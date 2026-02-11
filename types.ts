@@ -74,6 +74,12 @@ export interface GscSite {
   siteUrl: string;
 }
 
+export interface Sa360Customer {
+  resourceName: string;
+  id: string;
+  descriptiveName?: string;
+}
+
 export interface GoogleAdsCustomer {
   id: string;
   resourceName: string;

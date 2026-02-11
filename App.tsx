@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   RefreshCw, Filter, Globe, Tag, AlertCircle, Sparkles, Cpu, Activity, Menu, X
 } from 'lucide-react';
-import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, QueryType, BridgeData, AiTrafficData, KeywordBridgeData } from './types';
+import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, Sa360Customer, QueryType, BridgeData, AiTrafficData, KeywordBridgeData } from './types';
 import { getDashboardInsights, getOpenAiInsights } from './geminiService';
 import GoogleLogin from './GoogleLogin'; 
 import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry, extractPath, AI_SOURCE_REGEX_STRING } from './utils';
@@ -21,6 +21,7 @@ import { AiTrafficView } from './views/AiTrafficView';
 const CLIENT_ID = "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com"; 
 const SCOPE_GA4 = "https://www.googleapis.com/auth/analytics.readonly";
 const SCOPE_GSC = "https://www.googleapis.com/auth/webmasters.readonly";
+const SCOPE_SA360 = "https://www.googleapis.com/auth/searchads360.readonly";
 
 const PRIORITY_DIMENSIONS = [
   'sessionDefaultChannelGroup',
@@ -47,14 +48,21 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : null;
   });
 
+  const [sa360Auth, setSa360Auth] = useState<{ token: string; customer: Sa360Customer | null } | null>(() => {
+    const saved = sessionStorage.getItem('sa360_auth');
+    return saved ? JSON.parse(saved) : null;
+  });
+
   const [availableProperties, setAvailableProperties] = useState<Ga4Property[]>([]);
   const [availableSites, setAvailableSites] = useState<GscSite[]>([]);
+  const [availableSa360Customers, setAvailableSa360Customers] = useState<Sa360Customer[]>([]);
 
   const [availableDimensions, setAvailableDimensions] = useState<{ label: string; value: string }[]>([]);
   const [currencySymbol, setCurrencySymbol] = useState('£');
   
   const [ga4Search, setGa4Search] = useState('');
   const [gscSearch, setGscSearch] = useState('');
+  const [sa360Search, setSa360Search] = useState('');
   
   const [realDailyData, setRealDailyData] = useState<DailyData[]>([]);
   const [realKeywordData, setRealKeywordData] = useState<KeywordData[]>([]);
@@ -71,6 +79,8 @@ const App: React.FC = () => {
   const [isLoadingGsc, setIsLoadingGsc] = useState(false);
   const [isLoadingBridge, setIsLoadingBridge] = useState(false);
   const [isLoadingAi, setIsLoadingAi] = useState(false);
+  const [isLoadingSa360, setIsLoadingSa360] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [brandRegexStr, setBrandRegexStr] = useState('shop|brand|pro|sports');
@@ -111,6 +121,7 @@ const App: React.FC = () => {
 
   const tokenClientGa4 = useRef<any>(null);
   const tokenClientGsc = useRef<any>(null);
+  const tokenClientSa360 = useRef<any>(null);
 
   const isBranded = (text: string) => {
     if (!text || text.trim() === '') return false;
@@ -214,6 +225,40 @@ const App: React.FC = () => {
     } catch (e) {
       console.error(e);
       setError("Error connecting to Search Console API.");
+    }
+  };
+
+  const fetchSa360Customers = async (token: string) => {
+    try {
+        setIsLoadingSa360(true);
+        // Using the new Search Ads 360 Reporting API endpoint
+        const resp = await fetch('https://searchads360.googleapis.com/v0/customers:listAccessibleCustomers', {
+            method: 'GET',
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (!resp.ok) throw new Error(`SA360 Status: ${resp.status}`);
+        const data = await resp.json();
+        
+        // The API returns resourceNames like "customers/123456789"
+        const customers: Sa360Customer[] = (data.resourceNames || []).map((rn: string) => {
+            const id = rn.split('/')[1];
+            return {
+                resourceName: rn,
+                id: id,
+                descriptiveName: `Customer ${id}` // The listAccessibleCustomers endpoint doesn't return names by default
+            };
+        });
+        
+        setAvailableSa360Customers(customers);
+        if (customers.length > 0 && !sa360Auth?.customer) {
+            setSa360Auth({ token, customer: customers[0] });
+        }
+    } catch (e) {
+        console.error(e);
+        setError("Error connecting to Search Ads 360 API.");
+    } finally {
+        setIsLoadingSa360(false);
     }
   };
 
@@ -741,6 +786,19 @@ const fetchGa4Data = async () => {
             }
           },
         });
+        tokenClientSa360.current = (window as any).google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: SCOPE_SA360,
+            prompt: '',
+            callback: (resp: any) => {
+              if (resp.access_token) {
+                const newAuth = { token: resp.access_token, customer: sa360Auth?.customer || null };
+                setSa360Auth(newAuth);
+                sessionStorage.setItem('sa360_auth', JSON.stringify(newAuth));
+                fetchSa360Customers(resp.access_token);
+              }
+            },
+        });
       } else { setTimeout(initializeOAuth, 500); }
     };
     initializeOAuth();
@@ -758,14 +816,16 @@ const fetchGa4Data = async () => {
   };
 
   const handleLogout = () => {
-    setUser(null); setGa4Auth(null); setGscAuth(null);
+    setUser(null); setGa4Auth(null); setGscAuth(null); setSa360Auth(null);
     localStorage.removeItem('seo_suite_user');
     sessionStorage.removeItem('ga4_auth');
     sessionStorage.removeItem('gsc_auth');
+    sessionStorage.removeItem('sa360_auth');
   };
 
   const handleConnectGa4 = () => { if (tokenClientGa4.current) tokenClientGa4.current.requestAccessToken(); };
   const handleConnectGsc = () => { if (tokenClientGsc.current) tokenClientGsc.current.requestAccessToken(); };
+  const handleConnectSa360 = () => { if (tokenClientSa360.current) tokenClientSa360.current.requestAccessToken(); };
 
   useEffect(() => { 
     if (ga4Auth?.token && ga4Auth.property) {
@@ -798,7 +858,8 @@ const fetchGa4Data = async () => {
   
   const filteredProperties = useMemo(() => availableProperties.filter(p => p.name.toLowerCase().includes(ga4Search.toLowerCase())), [availableProperties, ga4Search]);
   const filteredSites = useMemo(() => availableSites.filter(s => s.siteUrl.toLowerCase().includes(gscSearch.toLowerCase())), [availableSites, gscSearch]);
-  
+  const filteredSa360Customers = useMemo(() => availableSa360Customers.filter(c => c.descriptiveName?.toLowerCase().includes(sa360Search.toLowerCase()) || c.id.includes(sa360Search)), [availableSa360Customers, sa360Search]);
+
   const uniqueCountries = useMemo(() => {
     const set = new Set([...realDailyData.map(d => d.country), ...realKeywordData.map(k => k.country)]);
     return Array.from(set).filter(c => c && c !== 'Other' && c !== 'Unknown').sort();
@@ -887,7 +948,7 @@ const fetchGa4Data = async () => {
     }
   };
 
-  const isAnythingLoading = isLoadingGa4 || isLoadingGsc || isLoadingBridge || isLoadingAi;
+  const isAnythingLoading = isLoadingGa4 || isLoadingGsc || isLoadingBridge || isLoadingAi || isLoadingSa360;
 
   useEffect(() => { localStorage.setItem('ai_provider', aiProvider); }, [aiProvider]);
   useEffect(() => { localStorage.setItem('openai_api_key', openaiKey); }, [openaiKey]);
@@ -925,12 +986,12 @@ const fetchGa4Data = async () => {
         aiProvider={aiProvider} setAiProvider={setAiProvider}
         openaiKey={openaiKey} setOpenaiKey={setOpenaiKey}
         brandRegexStr={brandRegexStr} setBrandRegexStr={setBrandRegexStr}
-        user={user} ga4Auth={ga4Auth} gscAuth={gscAuth}
-        handleConnectGa4={handleConnectGa4} handleConnectGsc={handleConnectGsc} handleLogout={handleLogout}
-        ga4Search={ga4Search} setGa4Search={setGa4Search} gscSearch={gscSearch} setGscSearch={setGscSearch}
-        availableProperties={availableProperties} availableSites={availableSites}
-        setGa4Auth={setGa4Auth} setGscAuth={setGscAuth}
-        filteredProperties={filteredProperties} filteredSites={filteredSites}
+        user={user} ga4Auth={ga4Auth} gscAuth={gscAuth} sa360Auth={sa360Auth}
+        handleConnectGa4={handleConnectGa4} handleConnectGsc={handleConnectGsc} handleConnectSa360={handleConnectSa360} handleLogout={handleLogout}
+        ga4Search={ga4Search} setGa4Search={setGa4Search} gscSearch={gscSearch} setGscSearch={setGscSearch} sa360Search={sa360Search} setSa360Search={setSa360Search}
+        availableProperties={availableProperties} availableSites={availableSites} availableSa360Customers={availableSa360Customers}
+        setGa4Auth={setGa4Auth} setGscAuth={setGscAuth} setSa360Auth={setSa360Auth}
+        filteredProperties={filteredProperties} filteredSites={filteredSites} filteredSa360Customers={filteredSa360Customers}
       />
 
 <main className={`flex-1 transition-all duration-300 ease-in-out p-5 md:p-8 xl:p-12 overflow-x-hidden ${isSidebarOpen ? 'xl:ml-80' : 'ml-0'}`}>
@@ -945,7 +1006,7 @@ const fetchGa4Data = async () => {
         <div className="flex items-center gap-2 mb-2">
           <span className={`w-2 h-2 rounded-full ${isAnythingLoading ? 'bg-amber-500 animate-ping' : 'bg-emerald-500'}`} />
           <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-            {isLoadingGa4 ? 'Syncing GA4...' : isLoadingGsc ? 'Syncing GSC...' : isLoadingBridge ? 'Joining Data...' : isLoadingAi ? 'Scanning AI...' : 'Dashboard Active'}
+            {isLoadingGa4 ? 'Syncing GA4...' : isLoadingGsc ? 'Syncing GSC...' : isLoadingSa360 ? 'Syncing SA360...' : isLoadingBridge ? 'Joining Data...' : isLoadingAi ? 'Scanning AI...' : 'Dashboard Active'}
           </span>
         </div>
         <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">
