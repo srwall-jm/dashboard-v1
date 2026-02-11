@@ -96,27 +96,23 @@ export interface BridgeData {
   ppcCost: number;
   ppcConversions: number;
   ppcCpa: number;
-  ppcAvgCpc: number; // New Field
   ppcSessions: number; // Value depends on dataSource (GA4=Sessions, SA360=Clicks)
   ppcImpressions: number;
   blendedCostRatio: number;
   actionLabel: string;
   status?: string;
   ppcSourceMedium?: string;
-  dataSource: 'GA4' | 'SA360'; 
+  dataSource: 'GA4' | 'SA360'; // NEW: Track source
 }
 
 export interface KeywordBridgeData {
   keyword: string;
   organicRank: number | null;
   organicClicks: number;
-  paidSessions: number; // Clicks from SA360
+  paidSessions: number; // Value depends on dataSource
   paidCvr: number;
-  paidCpc: number; // New Field
-  paidCpa: number; // New Field
-  paidCost: number; // New Field
   actionLabel: string;
-  dataSource: 'GA4' | 'SA360';
+  dataSource: 'GA4' | 'SA360'; // NEW: Track source
 }
 
 export interface AiTrafficData {
