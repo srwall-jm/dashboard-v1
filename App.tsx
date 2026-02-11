@@ -21,7 +21,7 @@ import { AiTrafficView } from './views/AiTrafficView';
 const CLIENT_ID = "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com"; 
 const SCOPE_GA4 = "https://www.googleapis.com/auth/analytics.readonly";
 const SCOPE_GSC = "https://www.googleapis.com/auth/webmasters.readonly";
-const SCOPE_SA360 = "https://www.googleapis.com/auth/searchads360.readonly";
+const SCOPE_SA360 = "https://www.googleapis.com/auth/doubleclicksearch";
 
 const PRIORITY_DIMENSIONS = [
   'sessionDefaultChannelGroup',
