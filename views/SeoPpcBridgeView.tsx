@@ -50,8 +50,7 @@ const BridgeAnalysisTable: React.FC<{
   metricLabel: string;
   dataSourceName: string;
   headerContent?: React.ReactNode;
-  currencySymbol?: string;
-}> = ({ title, subTitle, data, keywordData, metricLabel, dataSourceName, headerContent, currencySymbol = '£' }) => {
+}> = ({ title, subTitle, data, keywordData, metricLabel, dataSourceName, headerContent }) => {
   const [urlFilter, setUrlFilter] = useState('');
   const [keywordFilter, setKeywordFilter] = useState('');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -73,14 +72,12 @@ const BridgeAnalysisTable: React.FC<{
     setExpandedRows(newSet);
   };
 
-  const isSA360 = dataSourceName === 'SA360';
-
   return (
     <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden mb-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
             <div className="flex flex-col gap-2">
               <div>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="flex items-center gap-3">
                     <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{title}</h4>
                     {headerContent}
                 </div>
@@ -119,10 +116,8 @@ const BridgeAnalysisTable: React.FC<{
                   <th className="py-3 px-4 w-8"></th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">URL / Campaign</th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Top Rank</th>
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Org. {isSA360 ? 'Clicks' : 'Sessions'}</th>
+                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Org. {dataSourceName === 'SA360' ? 'Clicks' : 'Sessions'}</th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">{metricLabel}</th>
-                  {isSA360 && <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Cost</th>}
-                  {isSA360 && <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Impr.</th>}
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right text-amber-600">Paid Share</th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
                 </tr>
@@ -143,10 +138,6 @@ const BridgeAnalysisTable: React.FC<{
                       <td className="py-3 px-4 text-center"><span className="text-[10px] font-bold text-slate-600">#{Math.min(...row.queries.map(q => q.r || 100)).toFixed(1)}</span></td>
                       <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-emerald-600">{row.organicSessions.toLocaleString()}</span></td>
                       <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-indigo-600">{row.ppcSessions.toLocaleString()}</span></td>
-                      
-                      {isSA360 && <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-slate-600">{currencySymbol}{row.ppcCost.toLocaleString()}</span></td>}
-                      {isSA360 && <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-slate-500">{row.ppcImpressions.toLocaleString()}</span></td>}
-
                       <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className={`h-full ${row.blendedCostRatio > 0.5 ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${row.blendedCostRatio * 100}%` }} /></div>
@@ -163,11 +154,11 @@ const BridgeAnalysisTable: React.FC<{
                       </td>
                     </tr>
                     {expandedRows.has(row.url) && (
-                      <>{[...row.queries].sort((a, b) => b.c - a.c).map((q, qIdx) => (<QueryDetailRow key={`${idx}-${qIdx}`} query={q.q} rank={q.r} clicks={q.c} />))}<tr className="bg-slate-50/50 border-b border-slate-100"><td colSpan={isSA360 ? 9 : 7} className="py-1"></td></tr></>
+                      <>{[...row.queries].sort((a, b) => b.c - a.c).map((q, qIdx) => (<QueryDetailRow key={`${idx}-${qIdx}`} query={q.q} rank={q.r} clicks={q.c} />))}<tr className="bg-slate-50/50 border-b border-slate-100"><td colSpan={7} className="py-1"></td></tr></>
                     )}
                   </React.Fragment>
                 );
-                }) : <tr><td colSpan={isSA360 ? 9 : 7} className="py-12 text-center text-xs text-slate-400">No data found</td></tr>}
+                }) : <tr><td colSpan={7} className="py-12 text-center text-xs text-slate-400">No data found</td></tr>}
               </tbody>
             </table>
           ) : (
@@ -223,13 +214,13 @@ export const SeoPpcBridgeView: React.FC<{
   setSelectedSa360Customer?: (c: Sa360Customer | null) => void;
 }> = ({ ga4Data, sa360Data, ga4KeywordData, sa360KeywordData, dailyData, currencySymbol, availableSa360Customers, selectedSa360Customer, setSelectedSa360Customer }) => {
   
-  // Logic for top-level stats charts
+  // Decide which dataset to use for top-level stats (Prefer SA360 if available)
   const primaryData = sa360Data.length > 0 ? sa360Data : ga4Data;
   const primaryDataSource = sa360Data.length > 0 ? 'SA360' : 'GA4';
   const metricLabel = primaryDataSource === 'SA360' ? 'Paid Clicks (SA360)' : 'Paid Sessions (GA4)';
   const metricShort = primaryDataSource === 'SA360' ? 'Clicks' : 'Sessions';
 
-  // KPIs Logic
+  // KPIs Logic based on Primary Data
   const kpis = useMemo(() => {
     const excludeCount = primaryData.filter(d => d.actionLabel.includes('CRITICAL') || d.actionLabel.includes('REVIEW')).length;
     const increaseCount = primaryData.filter(d => d.actionLabel === 'INCREASE').length;
@@ -249,17 +240,15 @@ export const SeoPpcBridgeView: React.FC<{
     { name: `Cannibalized ${metricShort}`, value: kpis.exclude.volume }
   ], [primaryData, kpis, metricLabel, metricShort]);
 
-  // Grouped Data for Scatter Plot
+  // Grouped Data for Scatter Plot (Primary Only)
   const groupedForScatter = useMemo(() => {
+    // Simple grouping for scatter plot visualization
     const groups: Record<string, BridgeData> = {};
     primaryData.forEach(item => {
       if (!groups[item.url]) groups[item.url] = item;
     });
     return Object.values(groups);
   }, [primaryData]);
-
-  // Check if SA360 table should be rendered (if user has access to SA360 customers)
-  const shouldShowSa360 = (availableSa360Customers && availableSa360Customers.length > 0) || sa360Data.length > 0;
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
@@ -354,19 +343,20 @@ export const SeoPpcBridgeView: React.FC<{
 
       {/* SECTION E: DUAL TABLES */}
       
-      {/* 1. GA4 TABLE - ALWAYS RENDER if data exists or even as empty state placeholder if only SA360 exists to keep structure */}
-      <BridgeAnalysisTable 
-          title="Traffic Source Audit (GA4 Scope)" 
-          subTitle="Comparing Organic (GSC) vs Paid Sessions (GA4)"
-          data={ga4Data}
-          keywordData={ga4KeywordData}
-          metricLabel="Paid Sessions (GA4)"
-          dataSourceName="GA4"
-          currencySymbol={currencySymbol}
-      />
+      {/* 1. GA4 TABLE */}
+      {ga4Data.length > 0 && (
+          <BridgeAnalysisTable 
+             title="Traffic Source Audit (GA4 Scope)" 
+             subTitle="Comparing Organic (GSC) vs Paid Sessions (GA4)"
+             data={ga4Data}
+             keywordData={ga4KeywordData}
+             metricLabel="Paid Sessions (GA4)"
+             dataSourceName="GA4"
+          />
+      )}
 
-      {/* 2. SA360 TABLE - RENDER IF AVAILABLE CUSTOMERS EXIST OR DATA EXISTS */}
-      {shouldShowSa360 && (
+      {/* 2. SA360 TABLE (Only if data exists) */}
+      {availableSa360Customers && availableSa360Customers.length > 0 && (
           <BridgeAnalysisTable 
              title="Traffic Source Audit (SA360 Scope)" 
              subTitle="Comparing Organic (GSC) vs Paid Clicks (SA360)"
@@ -374,30 +364,29 @@ export const SeoPpcBridgeView: React.FC<{
              keywordData={sa360KeywordData}
              metricLabel="Paid Clicks (SA360)"
              dataSourceName="SA360"
-             currencySymbol={currencySymbol}
              headerContent={
-                 <div className="relative group min-w-[200px]">
+                 <div className="relative group">
                      <select 
                         value={selectedSa360Customer?.resourceName || ''}
                         onChange={(e) => {
-                             const customer = availableSa360Customers?.find(c => c.resourceName === e.target.value);
+                             const customer = availableSa360Customers.find(c => c.resourceName === e.target.value);
                              if (setSelectedSa360Customer) setSelectedSa360Customer(customer || null);
                         }}
-                        className="w-full bg-slate-100 text-slate-700 text-[10px] font-black uppercase py-2 pl-3 pr-8 rounded-xl appearance-none cursor-pointer outline-none hover:bg-slate-200 transition-colors border border-transparent focus:border-indigo-400 shadow-sm"
+                        className="bg-slate-100 text-slate-700 text-[9px] font-black uppercase py-1 pl-2 pr-6 rounded-lg appearance-none cursor-pointer outline-none hover:bg-slate-200 transition-colors border border-transparent focus:border-indigo-400"
                      >
-                         {availableSa360Customers?.map(c => (
+                         {availableSa360Customers.map(c => (
                              <option key={c.resourceName} value={c.resourceName}>
                                  {c.descriptiveName} ({c.id})
                              </option>
                          ))}
                      </select>
-                     <Settings size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                     <Settings size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                  </div>
              }
           />
       )}
 
-      {!shouldShowSa360 && ga4Data.length === 0 && (
+      {ga4Data.length === 0 && sa360Data.length === 0 && (
          <div className="bg-white p-12 rounded-[32px] border border-slate-200 shadow-sm text-center flex flex-col items-center opacity-50">
              <Info size={48} className="text-slate-300 mb-4" />
              <p className="text-slate-400 font-bold">No bridge data available. Please connect GSC and (GA4 or SA360).</p>

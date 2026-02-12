@@ -33,8 +33,6 @@ interface SettingsModalProps {
   filteredProperties: Ga4Property[];
   filteredSites: GscSite[];
   filteredSa360Customers: Sa360Customer[];
-  selectedSa360Customer?: Sa360Customer | null;
-  setSelectedSa360Customer?: (c: Sa360Customer | null) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -46,8 +44,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   ga4Search, setGa4Search, gscSearch, setGscSearch, sa360Search, setSa360Search,
   availableProperties, availableSites, availableSa360Customers,
   setGa4Auth, setGscAuth, setSa360Auth,
-  filteredProperties, filteredSites, filteredSa360Customers,
-  selectedSa360Customer, setSelectedSa360Customer
+  filteredProperties, filteredSites, filteredSa360Customers
 }) => {
   if (!isOpen) return null;
 
@@ -117,37 +114,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   )}
                </div>
 
-               {/* SA360 - Updated with Main/Sub Account Logic */}
+               {/* SA360 */}
                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                   <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest block mb-2">Search Ads 360</label>
                   {!sa360Auth?.token ? (
                     <button onClick={handleConnectSa360} className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Connect SA360</button>
                   ) : (
-                    <div className="space-y-3">
-                      {/* Connection Status */}
-                      <div className="flex items-center justify-between">
-                         <div className="flex items-center gap-1.5 text-[9px] text-emerald-600 font-bold px-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> Connected (Main)</div>
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
+                        <input type="text" placeholder="Search Customer..." value={sa360Search} onChange={e => setSa360Search(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl text-[10px] pl-8 pr-2 py-2 outline-none focus:border-orange-500" />
                       </div>
-
-                      {/* Sub-account Selector */}
-                      <div className="space-y-1">
-                        <label className="text-[8px] font-black uppercase text-slate-500 tracking-wide ml-1">Select Sub-Account / Client</label>
-                        <div className="relative">
-                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
-                            <input type="text" placeholder="Search Client..." value={sa360Search} onChange={e => setSa360Search(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl text-[10px] pl-8 pr-2 py-2 outline-none focus:border-orange-500" />
-                        </div>
-                        <select 
-                            className="w-full bg-white border border-slate-200 rounded-xl text-[10px] p-2 outline-none cursor-pointer" 
-                            value={selectedSa360Customer?.resourceName || ''} 
-                            onChange={e => {
-                                const cust = availableSa360Customers.find(c => c.resourceName === e.target.value);
-                                if (setSelectedSa360Customer) setSelectedSa360Customer(cust || null);
-                            }}
-                        >
-                            <option value="" disabled>Select Account</option>
-                            {filteredSa360Customers.map(c => <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName} ({c.id})</option>)}
-                        </select>
-                      </div>
+                      <select className="w-full bg-white border border-slate-200 rounded-xl text-[10px] p-2 outline-none cursor-pointer" value={sa360Auth?.customer?.resourceName || ''} onChange={e => setSa360Auth({...sa360Auth, customer: availableSa360Customers.find(c => c.resourceName === e.target.value) || null})}>
+                        {filteredSa360Customers.map(c => <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName} ({c.id})</option>)}
+                      </select>
+                      <div className="flex items-center gap-1.5 text-[9px] text-emerald-600 font-bold px-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> Connected</div>
                     </div>
                   )}
                </div>
