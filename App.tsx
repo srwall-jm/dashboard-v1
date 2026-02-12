@@ -1049,25 +1049,16 @@ if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
 
 
 
-         const sa360UrlQuery = `
-
-            SELECT 
-
-              landing_page_view.unmasked_url, 
-
-              metrics.cost_micros, 
-
-              metrics.clicks, 
-
-              metrics.impressions, 
-
-              metrics.conversions 
-
-            FROM landing_page_view 
-
-            WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
-
-         `;
+const sa360UrlQuery = `
+  SELECT 
+    ad_group_ad.ad.final_urls, 
+    metrics.cost_micros, 
+    metrics.clicks, 
+    metrics.impressions, 
+    metrics.conversions 
+  FROM ad_group_ad 
+  WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
+`;
 
          const sa360KwQuery = `
 
@@ -1142,27 +1133,22 @@ if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
 
 
 urlRows.forEach((row: any) => {
-    // Intentamos leer unmaskedUrl (CamelCase de la API) o el objeto completo
-    const url = row.landingPageView?.unmaskedUrl; // <--- CAMBIADO
+    // En ad_group_ad, la URL es un array llamado finalUrls
+    const url = row.adGroupAd?.ad?.finalUrls?.[0]; 
     
     if(!url) return;
     const path = normalizeUrl(url);
-
-                
-
-                if (!sa360PaidMap[path]) sa360PaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set(['SA360']) };
-
-                const metrics = row.metrics;
-
-                sa360PaidMap[path].clicksOrSessions += parseInt(metrics.clicks) || 0;
-
-                sa360PaidMap[path].conversions += parseFloat(metrics.conversions) || 0;
-
-                sa360PaidMap[path].impressions += parseInt(metrics.impressions) || 0;
-
-                sa360PaidMap[path].cost += (parseInt(metrics.costMicros) || 0) / 1000000;
-
-            });
+    
+    if (!sa360PaidMap[path]) {
+        sa360PaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set(['SA360']) };
+    }
+    
+    const metrics = row.metrics;
+    sa360PaidMap[path].clicksOrSessions += parseInt(metrics.clicks) || 0;
+    sa360PaidMap[path].conversions += parseFloat(metrics.conversions) || 0;
+    sa360PaidMap[path].impressions += parseInt(metrics.impressions) || 0;
+    sa360PaidMap[path].cost += (parseInt(metrics.costMicros) || 0) / 1000000;
+});
 
 
 
