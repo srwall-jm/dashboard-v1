@@ -247,7 +247,7 @@ const App: React.FC = () => {
   const fetchSa360Customers = async (token: string) => {
     try {
         setIsLoadingSa360(true);
-        const resp = await fetch('https://searchads360.googleapis.com/v0/customers:listAccessibleCustomers', {
+        const resp = await fetch('/api/sa360/v0/customers:listAccessibleCustomers', {
             method: 'GET',
             headers: { Authorization: `Bearer ${token}` }
         });
@@ -312,7 +312,7 @@ const App: React.FC = () => {
         `;
 
         // NOTA: Mantenemos el login-customer-id fijo en el Manager original para no perder permisos
-        const resp = await fetch(`https://searchads360.googleapis.com/v0/customers/${currentId}/googleAds:searchStream`, {
+        const resp = await fetch(`/api/sa360/v0/customers/${currentId}/googleAds:searchStream`, {
             method: 'POST',
             headers: { 
                 Authorization: `Bearer ${token}`, 
@@ -552,7 +552,7 @@ const App: React.FC = () => {
                     headers['login-customer-id'] = selectedSa360Customer.id;
                 }
 
-                const res = await fetch(`https://searchads360.googleapis.com/v0/customers/${selectedSa360SubAccount.id}/googleAds:searchStream`, {
+                const res = await fetch(`/api/sa360/v0/customers/${selectedSa360SubAccount.id}/googleAds:searchStream`, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify({ query })
