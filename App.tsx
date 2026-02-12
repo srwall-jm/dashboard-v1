@@ -533,26 +533,24 @@ const App: React.FC = () => {
              `;
              
              const fetchSa360 = async (query: string) => {
-                // Using selectedSa360SubAccount.id specifically
-                const headers: any = { 
-                    Authorization: `Bearer ${sa360Auth.token}`, 
-                    'Content-Type': 'application/json' 
-                };
-                
-                // Point 2: login-customer-id Header included for manager context in reporting data
-                if (selectedSa360Customer) {
-                    headers['login-customer-id'] = selectedSa360Customer.id;
-                }
+    const headers: any = { 
+        Authorization: `Bearer ${sa360Auth.token}`, 
+        'Content-Type': 'application/json' 
+    };
+    
+    if (selectedSa360Customer) {
+        headers['login-customer-id'] = selectedSa360Customer.id;
+    }
 
-                // REVERTED to direct URL to avoid 404 in non-proxy environments
-                const res = await fetch(`/api/sa360/v0/customers/${selectedSa360SubAccount.id}/googleAds:searchStream`, {
-                    method: 'POST',
-                    headers: headers,
-                    body: JSON.stringify({ query })
-                });
-                const json = await res.json();
-                return (json || []).flatMap((batch: any) => batch.results || []);
-             };
+    // CAMBIA ESTA URL: era /googleAds:searchStream y debe ser /searchAds360:searchStream
+    const res = await fetch(`/api/sa360/v0/customers/${selectedSa360SubAccount.id}/searchAds360:searchStream`, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({ query })
+    });
+    const json = await res.json();
+    return (json || []).flatMap((batch: any) => batch.results || []);
+};
 
              try {
                 const [urlRows, kwRows] = await Promise.all([fetchSa360(sa360UrlQuery), fetchSa360(sa360KwQuery)]);
