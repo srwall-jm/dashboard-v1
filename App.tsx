@@ -68,8 +68,11 @@ const App: React.FC = () => {
   const [realDailyData, setRealDailyData] = useState<DailyData[]>([]);
   const [realKeywordData, setRealKeywordData] = useState<KeywordData[]>([]);
   
-  const [bridgeData, setBridgeData] = useState<BridgeData[]>([]); 
-  const [keywordBridgeData, setKeywordBridgeData] = useState<KeywordBridgeData[]>([]); // New State for Keywords
+  // Revised Bridge Data States
+  const [bridgeDataGA4, setBridgeDataGA4] = useState<BridgeData[]>([]); 
+  const [bridgeDataSA360, setBridgeDataSA360] = useState<BridgeData[]>([]); 
+  const [keywordBridgeDataGA4, setKeywordBridgeDataGA4] = useState<KeywordBridgeData[]>([]);
+  const [keywordBridgeDataSA360, setKeywordBridgeDataSA360] = useState<KeywordBridgeData[]>([]);
   
   const [aiTrafficData, setAiTrafficData] = useState<AiTrafficData[]>([]); 
 
@@ -84,8 +87,8 @@ const App: React.FC = () => {
 
   const [error, setError] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isCollapsed, setIsCollapsed] = useState(false); // NEW: Mini Sidebar State
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false); // NEW STATE FOR MODAL
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const [brandRegexStr, setBrandRegexStr] = useState('shop|brand|pro|sports');
   const [grouping, setGrouping] = useState<'daily' | 'weekly' | 'monthly'>('daily');
@@ -235,7 +238,6 @@ const App: React.FC = () => {
   const fetchSa360Customers = async (token: string) => {
     try {
         setIsLoadingSa360(true);
-        // Using the new Search Ads 360 Reporting API endpoint
         const resp = await fetch('https://searchads360.googleapis.com/v0/customers:listAccessibleCustomers', {
             method: 'GET',
             headers: { Authorization: `Bearer ${token}` }
@@ -244,13 +246,12 @@ const App: React.FC = () => {
         if (!resp.ok) throw new Error(`SA360 Status: ${resp.status}`);
         const data = await resp.json();
         
-        // The API returns resourceNames like "customers/123456789"
         const customers: Sa360Customer[] = (data.resourceNames || []).map((rn: string) => {
             const id = rn.split('/')[1];
             return {
                 resourceName: rn,
                 id: id,
-                descriptiveName: `Customer ${id}` // The listAccessibleCustomers endpoint doesn't return names by default
+                descriptiveName: `Customer ${id}` 
             };
         });
         
@@ -266,7 +267,6 @@ const App: React.FC = () => {
     }
   };
 
-  // --- AI TRAFFIC DATA FETCHING ---
   const fetchAiTrafficData = async () => {
     if (!ga4Auth?.property || !ga4Auth.token) {
         if (!aiTrafficData.length) setAiTrafficData(generateMockAiTrafficData());
@@ -321,7 +321,6 @@ const App: React.FC = () => {
         setAiTrafficData(processed);
     } catch (e: any) {
         console.error("AI Traffic API Error", e);
-        // Fallback
         if(!aiTrafficData.length) setAiTrafficData(generateMockAiTrafficData());
     } finally {
         setIsLoadingAi(false);
@@ -329,17 +328,16 @@ const App: React.FC = () => {
   };
 
 // --- BRIDGE DATA: GA4 SESSIONS (ORGANIC vs PAID) ---
-// UPDATED: Supports SA360 priority
+// UPDATED: Now fetches BOTH GA4 and SA360 data independently if credentials exist.
   const fetchBridgeData = async () => {
-    // Basic checks
     if (!gscAuth?.site || !gscAuth.token) {
-         if (!bridgeData.length) setBridgeData(generateMockBridgeData());
+         if (!bridgeDataGA4.length) setBridgeDataGA4(generateMockBridgeData());
+         // Mock SA360 data if needed or just leave empty in mock mode
          return;
     }
 
     setIsLoadingBridge(true);
     
-    // --- URL NORMALIZATION (Crucial for Joining) ---
     const normalizeUrl = (url: string) => {
       if (!url || url === '(not set)') return '';
       try { url = decodeURIComponent(url); } catch (e) {}
@@ -355,7 +353,7 @@ const App: React.FC = () => {
     try {
         const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
         
-        // 1. GSC RAW DATA (Needed for both views)
+        // 1. GSC RAW DATA (Needed for ALL views)
         const gscResp = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
@@ -369,7 +367,6 @@ const App: React.FC = () => {
 
         const gscDataRaw = await gscResp.json();
         
-        // Prepare rows for URL View
         const organicRows = (gscDataRaw.rows || []).map((row: any) => ({
             query: row.keys[1],
             cleanPath: normalizeUrl(row.keys[0]), 
@@ -378,18 +375,24 @@ const App: React.FC = () => {
             gscClicks: row.clicks
         }));
 
+        // 1. Aggregate GSC by Query (for Keyword View)
+        const uniqueQueryMap: Record<string, { rankSum: number, count: number, bestRank: number, clicks: number }> = {};
+        organicRows.forEach((row: any) => {
+           const q = row.query.toLowerCase().trim();
+           if (!uniqueQueryMap[q]) uniqueQueryMap[q] = { rankSum: 0, count: 0, bestRank: 999, clicks: 0 };
+           uniqueQueryMap[q].rankSum += row.rank;
+           uniqueQueryMap[q].count += 1;
+           uniqueQueryMap[q].clicks += row.gscClicks;
+           if (row.rank < uniqueQueryMap[q].bestRank) uniqueQueryMap[q].bestRank = row.rank;
+        });
 
-        // --- DETERMINE DATA SOURCE (SA360 vs GA4) ---
-        let paidDataMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
-        let keywordDataMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number }> = {};
-        let activeSource: 'GA4' | 'SA360' = 'GA4';
-
+        // ---------------------------------------------------------
+        // PROCESS A: SA360 DATA (If available)
+        // ---------------------------------------------------------
         if (sa360Auth?.customer && sa360Auth.token) {
-             // === PATH A: SA360 (PRIORITY) ===
-             activeSource = 'SA360';
-             
-             // A. Fetch SA360 URL Data (landing_page_view)
-             // Note: searchStream returns JSON stream. We need to handle it.
+             const sa360PaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
+             const sa360KeywordMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number }> = {};
+
              const sa360UrlQuery = `
                 SELECT 
                   landing_page_view.unmasked_url, 
@@ -400,7 +403,6 @@ const App: React.FC = () => {
                 FROM landing_page_view 
                 WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
              `;
-
              const sa360KwQuery = `
                 SELECT 
                   ad_group_criterion.keyword.text, 
@@ -412,7 +414,6 @@ const App: React.FC = () => {
                 WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
              `;
              
-             // Helper for SA360 Fetch
              const fetchSa360 = async (query: string) => {
                 const res = await fetch(`https://searchads360.googleapis.com/v0/customers/${sa360Auth.customer!.id}/googleAds:searchStream`, {
                     method: 'POST',
@@ -420,94 +421,121 @@ const App: React.FC = () => {
                     body: JSON.stringify({ query })
                 });
                 const json = await res.json();
-                // Flatten stream results
                 return (json || []).flatMap((batch: any) => batch.results || []);
              };
 
              const [urlRows, kwRows] = await Promise.all([fetchSa360(sa360UrlQuery), fetchSa360(sa360KwQuery)]);
 
-             // Process URL Data
              urlRows.forEach((row: any) => {
                 const url = row.landingPageView?.unmaskedUrl;
                 if(!url) return;
                 const path = normalizeUrl(url);
                 
-                if (!paidDataMap[path]) {
-                    paidDataMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set(['SA360']) };
-                }
+                if (!sa360PaidMap[path]) sa360PaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set(['SA360']) };
                 const metrics = row.metrics;
-                paidDataMap[path].clicksOrSessions += parseInt(metrics.clicks) || 0;
-                paidDataMap[path].conversions += parseFloat(metrics.conversions) || 0;
-                paidDataMap[path].impressions += parseInt(metrics.impressions) || 0;
-                paidDataMap[path].cost += (parseInt(metrics.costMicros) || 0) / 1000000;
+                sa360PaidMap[path].clicksOrSessions += parseInt(metrics.clicks) || 0;
+                sa360PaidMap[path].conversions += parseFloat(metrics.conversions) || 0;
+                sa360PaidMap[path].impressions += parseInt(metrics.impressions) || 0;
+                sa360PaidMap[path].cost += (parseInt(metrics.costMicros) || 0) / 1000000;
              });
 
-             // Process Keyword Data
              kwRows.forEach((row: any) => {
                  const kw = row.adGroupCriterion?.keyword?.text;
                  if(!kw) return;
                  const cleanKw = kw.toLowerCase().trim();
-
-                 if (!keywordDataMap[cleanKw]) {
-                     keywordDataMap[cleanKw] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
-                 }
+                 if (!sa360KeywordMap[cleanKw]) sa360KeywordMap[cleanKw] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
                  const metrics = row.metrics;
-                 keywordDataMap[cleanKw].clicksOrSessions += parseInt(metrics.clicks) || 0;
-                 keywordDataMap[cleanKw].conversions += parseFloat(metrics.conversions) || 0;
-                 keywordDataMap[cleanKw].cost += (parseInt(metrics.costMicros) || 0) / 1000000;
+                 sa360KeywordMap[cleanKw].clicksOrSessions += parseInt(metrics.clicks) || 0;
+                 sa360KeywordMap[cleanKw].conversions += parseFloat(metrics.conversions) || 0;
+                 sa360KeywordMap[cleanKw].cost += (parseInt(metrics.costMicros) || 0) / 1000000;
              });
 
-        } else if (ga4Auth?.property && ga4Auth.token) {
-             // === PATH B: GA4 (FALLBACK) ===
-             activeSource = 'GA4';
-             
-             // Fetch URL Data
+             // BUILD SA360 BRIDGE DATA
+             const sa360Results: BridgeData[] = [];
+             organicRows.forEach((org: any) => {
+                 const paidStats = sa360PaidMap[org.cleanPath];
+                 const organicProxy = org.gscClicks; 
+                 const paidVolume = paidStats ? paidStats.clicksOrSessions : 0;
+                 if (organicProxy === 0 && paidVolume === 0) return;
+                 
+                 const totalVolume = organicProxy + paidVolume;
+                 const paidShare = totalVolume > 0 ? (paidVolume / totalVolume) : 0;
+                 
+                 let action = "MAINTAIN";
+                 if (org.rank <= 3.0 && paidShare > 0.4) action = "CRITICAL (Overlap)";
+                 else if (org.rank <= 3.0 && paidVolume > 0) action = "REVIEW";
+                 else if (org.rank > 10.0 && paidVolume === 0) action = "INCREASE";
+
+                 let campDisplay = "SA360";
+                 sa360Results.push({
+                    url: org.cleanPath, query: org.query, organicRank: org.rank, organicClicks: org.gscClicks, organicSessions: org.gscClicks, 
+                    ppcCampaign: campDisplay, ppcCost: paidStats?.cost || 0, ppcConversions: paidStats?.conversions || 0, ppcCpa: 0,
+                    ppcSessions: paidVolume, ppcImpressions: paidStats?.impressions || 0, blendedCostRatio: paidShare, actionLabel: action, dataSource: 'SA360'
+                 });
+             });
+             setBridgeDataSA360(sa360Results.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
+
+             // BUILD SA360 KEYWORD DATA
+             const sa360KwResults: KeywordBridgeData[] = [];
+             const allKeysSA = new Set([...Object.keys(sa360KeywordMap), ...Object.keys(uniqueQueryMap)]);
+             allKeysSA.forEach(key => {
+                 const paidData = sa360KeywordMap[key] || { clicksOrSessions: 0, conversions: 0 };
+                 const gscData = uniqueQueryMap[key];
+                 const paidVol = paidData.clicksOrSessions;
+                 const orgVol = gscData ? gscData.clicks : 0;
+                 if (paidVol === 0 && orgVol === 0) return;
+                 const cvr = paidVol > 0 ? (paidData.conversions / paidVol) * 100 : 0;
+                 let action = "MAINTAIN";
+                 if (gscData?.bestRank && gscData.bestRank <= 3 && paidVol > 50) action = "CRITICAL (Cannibalization)";
+                 else if (gscData?.bestRank && gscData.bestRank > 10 && paidVol === 0) action = "OPPORTUNITY (Growth)";
+
+                 sa360KwResults.push({
+                    keyword: key, organicRank: gscData?.bestRank || null, organicClicks: orgVol,
+                    paidSessions: paidVol, paidCvr: cvr, actionLabel: action, dataSource: 'SA360'
+                 });
+             });
+             setKeywordBridgeDataSA360(sa360KwResults.sort((a,b) => b.paidSessions - a.paidSessions));
+        }
+
+        // ---------------------------------------------------------
+        // PROCESS B: GA4 DATA (If available)
+        // ---------------------------------------------------------
+        if (ga4Auth?.property && ga4Auth.token) {
+             const ga4PaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
+             const ga4KeywordMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number }> = {};
+
              const ga4Resp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     dateRanges: [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }],
-                    dimensions: [
-                        { name: 'landingPage' },
-                        { name: 'sessionDefaultChannelGroup' },
-                        { name: 'sessionCampaignName' }
-                    ],
-                    metrics: [
-                        { name: 'sessions' },
-                        { name: 'sessionConversionRate' } 
-                    ],
+                    dimensions: [ { name: 'landingPage' }, { name: 'sessionDefaultChannelGroup' }, { name: 'sessionCampaignName' } ],
+                    metrics: [ { name: 'sessions' }, { name: 'sessionConversionRate' } ],
                     limit: 100000 
                 })
             });
             const ga4Data = await ga4Resp.json();
-
             (ga4Data.rows || []).forEach((row: any) => {
                 const rawUrl = row.dimensionValues[0].value;
                 const channelGroup = row.dimensionValues[1].value.toLowerCase();
                 const campaignName = row.dimensionValues[2].value;
                 const sessions = parseInt(row.metricValues[0].value) || 0;
-                // const rate = parseFloat(row.metricValues[1].value) || 0; 
-
                 const path = normalizeUrl(rawUrl);
 
                 if ((channelGroup.includes('paid') || channelGroup.includes('cpc') || channelGroup.includes('ppc'))) {
-                    if (!paidDataMap[path]) {
-                         paidDataMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set() };
-                    }
-                    paidDataMap[path].clicksOrSessions += sessions;
-                    // GA4 doesn't give cost easily in this report without more dims, keeping 0 for simple bridge
-                    
+                    if (!ga4PaidMap[path]) ga4PaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set() };
+                    ga4PaidMap[path].clicksOrSessions += sessions;
                     let campType = "Other Paid";
                     const n = campaignName.toLowerCase();
                     if (n.includes('pmax')) campType = "⚡ PMax";
                     else if (n.includes('brand')) campType = "🛡️ Brand";
                     else if (n.includes('generic') || n.includes('non')) campType = "🌍 Generic";
                     else if (n !== '(not set)') campType = campaignName;
-                    paidDataMap[path].campaigns.add(campType);
+                    ga4PaidMap[path].campaigns.add(campType);
                 }
             });
 
-            // Fetch Keyword Data (Sessions)
+            // GA4 Keywords
             const ga4KwResp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
@@ -519,124 +547,62 @@ const App: React.FC = () => {
                 })
             });
             const ga4KwData = await ga4KwResp.json();
-            
             (ga4KwData.rows || []).forEach((row: any) => {
                  const kw = row.dimensionValues[0].value;
                  if (kw === '(not set)' || !kw) return; 
                  const cleanKw = kw.toLowerCase().trim();
                  const sessions = parseInt(row.metricValues[0].value) || 0;
-                 const rate = parseFloat(row.metricValues[1].value) || 0; // rate is 0-1 or 0-100? GA4 API usually 0-1.
-                 
-                 if (!keywordDataMap[cleanKw]) keywordDataMap[cleanKw] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
-                 
-                 keywordDataMap[cleanKw].clicksOrSessions += sessions;
-                 // Approximation for conversions since we have rate
-                 keywordDataMap[cleanKw].conversions += (sessions * rate);
+                 const rate = parseFloat(row.metricValues[1].value) || 0;
+                 if (!ga4KeywordMap[cleanKw]) ga4KeywordMap[cleanKw] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
+                 ga4KeywordMap[cleanKw].clicksOrSessions += sessions;
+                 ga4KeywordMap[cleanKw].conversions += (sessions * rate);
             });
+
+            // BUILD GA4 BRIDGE DATA
+            const ga4Results: BridgeData[] = [];
+            organicRows.forEach((org: any) => {
+                const paidStats = ga4PaidMap[org.cleanPath];
+                const organicProxy = org.gscClicks; 
+                const paidVolume = paidStats ? paidStats.clicksOrSessions : 0;
+                if (organicProxy === 0 && paidVolume === 0) return;
+                const totalVolume = organicProxy + paidVolume;
+                const paidShare = totalVolume > 0 ? (paidVolume / totalVolume) : 0;
+                let action = "MAINTAIN";
+                if (org.rank <= 3.0 && paidShare > 0.4) action = "CRITICAL (Overlap)";
+                else if (org.rank <= 3.0 && paidVolume > 0) action = "REVIEW";
+                else if (org.rank > 10.0 && paidVolume === 0) action = "INCREASE";
+                let campDisplay = "None";
+                if (paidStats && paidStats.campaigns.size > 0) campDisplay = Array.from(paidStats.campaigns).join(' + ');
+
+                ga4Results.push({
+                    url: org.cleanPath, query: org.query, organicRank: org.rank, organicClicks: org.gscClicks, organicSessions: org.gscClicks, 
+                    ppcCampaign: campDisplay, ppcCost: 0, ppcConversions: paidStats?.conversions || 0, ppcCpa: 0,
+                    ppcSessions: paidVolume, ppcImpressions: 0, blendedCostRatio: paidShare, actionLabel: action, dataSource: 'GA4'
+                });
+            });
+            setBridgeDataGA4(ga4Results.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
+
+            // BUILD GA4 KEYWORD DATA
+            const ga4KwResults: KeywordBridgeData[] = [];
+            const allKeysGA = new Set([...Object.keys(ga4KeywordMap), ...Object.keys(uniqueQueryMap)]);
+            allKeysGA.forEach(key => {
+                 const paidData = ga4KeywordMap[key] || { clicksOrSessions: 0, conversions: 0 };
+                 const gscData = uniqueQueryMap[key];
+                 const paidVol = paidData.clicksOrSessions;
+                 const orgVol = gscData ? gscData.clicks : 0;
+                 if (paidVol === 0 && orgVol === 0) return;
+                 const cvr = paidVol > 0 ? (paidData.conversions / paidVol) * 100 : 0;
+                 let action = "MAINTAIN";
+                 if (gscData?.bestRank && gscData.bestRank <= 3 && paidVol > 50) action = "CRITICAL (Cannibalization)";
+                 else if (gscData?.bestRank && gscData.bestRank > 10 && paidVol === 0) action = "OPPORTUNITY (Growth)";
+
+                 ga4KwResults.push({
+                    keyword: key, organicRank: gscData?.bestRank || null, organicClicks: orgVol,
+                    paidSessions: paidVol, paidCvr: cvr, actionLabel: action, dataSource: 'GA4'
+                 });
+            });
+            setKeywordBridgeDataGA4(ga4KwResults.sort((a,b) => b.paidSessions - a.paidSessions));
         }
-
-        // --- MERGE & BUILD URL VIEW ---
-        const bridgeResults: BridgeData[] = [];
-        organicRows.forEach(org => {
-            const paidStats = paidDataMap[org.cleanPath];
-            // If GA4, this is Organic Sessions (we need to fetch organic sessions separately if we want accurate organic session count, 
-            // but for "Bridge" we often use GSC Clicks as the "Organic" proxy when matching with SA360 Clicks to be apples-to-apples).
-            // However, to keep UI consistent, let's keep organicSessions = 0 if we don't have GA4 organic data handy in SA360 mode,
-            // OR reuse the code that fetched organic sessions from GA4 previously. 
-            // *Optimization*: The user wants SA360 match. Comparing GSC Clicks (Org) vs SA360 Clicks (Paid) is the best "Bridge".
-            
-            const organicProxy = org.gscClicks; // Using Clicks as the primary volume metric for Organic in this view
-            const paidVolume = paidStats ? paidStats.clicksOrSessions : 0;
-            
-            if (organicProxy === 0 && paidVolume === 0) return;
-
-            const totalVolume = organicProxy + paidVolume;
-            const paidShare = totalVolume > 0 ? (paidVolume / totalVolume) : 0;
-            const cost = paidStats ? paidStats.cost : 0;
-            const conversions = paidStats ? paidStats.conversions : 0;
-            const cpa = conversions > 0 ? cost / conversions : 0;
-
-            let action = "MAINTAIN";
-            if (org.rank <= 3.0 && paidShare > 0.4) action = "CRITICAL (Overlap)";
-            else if (org.rank <= 3.0 && paidVolume > 0) action = "REVIEW";
-            else if (org.rank > 10.0 && paidVolume === 0) action = "INCREASE";
-
-            let campDisplay = "None";
-            if (paidStats && paidStats.campaigns.size > 0) campDisplay = Array.from(paidStats.campaigns).join(' + ');
-
-            bridgeResults.push({
-                url: org.cleanPath, 
-                query: org.query,
-                organicRank: org.rank,
-                organicClicks: org.gscClicks,
-                organicSessions: org.gscClicks, // Visual proxy
-                ppcCampaign: campDisplay,
-                ppcCost: cost,
-                ppcConversions: conversions,
-                ppcCpa: cpa,
-                ppcSessions: paidVolume, // Clicks or Sessions
-                ppcImpressions: paidStats ? paidStats.impressions : 0,
-                blendedCostRatio: paidShare, 
-                actionLabel: action,
-                dataSource: activeSource
-            });
-        });
-        setBridgeData(bridgeResults.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
-
-
-        // --- MERGE & BUILD KEYWORD VIEW ---
-        // 1. Aggregate GSC by Query
-        const uniqueQueryMap: Record<string, { rankSum: number, count: number, bestRank: number, clicks: number }> = {};
-        organicRows.forEach(row => {
-           const q = row.query.toLowerCase().trim();
-           if (!uniqueQueryMap[q]) uniqueQueryMap[q] = { rankSum: 0, count: 0, bestRank: 999, clicks: 0 };
-           uniqueQueryMap[q].rankSum += row.rank;
-           uniqueQueryMap[q].count += 1;
-           uniqueQueryMap[q].clicks += row.gscClicks;
-           if (row.rank < uniqueQueryMap[q].bestRank) uniqueQueryMap[q].bestRank = row.rank;
-        });
-
-        const keywordResults: KeywordBridgeData[] = [];
-        const allKeys = new Set([...Object.keys(keywordDataMap), ...Object.keys(uniqueQueryMap)]);
-
-        allKeys.forEach(key => {
-            const paidData = keywordDataMap[key] || { clicksOrSessions: 0, conversions: 0 };
-            const paidVol = paidData.clicksOrSessions;
-            
-            const gscData = uniqueQueryMap[key];
-            const orgVol = gscData ? gscData.clicks : 0;
-            const organicRank = gscData ? gscData.bestRank : null;
-
-            if (paidVol === 0 && orgVol === 0) return;
-
-            // CVR calculation
-            const cvr = paidVol > 0 ? (paidData.conversions / paidVol) * 100 : 0;
-
-            // Logic: Cannibalization vs Opportunity
-            let action = "MAINTAIN";
-            // SA360 Clicks/GA4 Sessions threshold
-            if (organicRank !== null && organicRank <= 3.0 && paidVol > 50) {
-               action = "CRITICAL (Cannibalization)";
-            } 
-            else if (organicRank !== null && organicRank > 10 && paidVol === 0) {
-               action = "OPPORTUNITY (Growth)";
-            }
-            else if (organicRank !== null && organicRank <= 3.0 && paidVol > 0 && paidVol <= 50) {
-               action = "REVIEW (Ineficiency)";
-            }
-
-            keywordResults.push({
-               keyword: key,
-               organicRank: organicRank === 999 ? null : organicRank,
-               organicClicks: orgVol,
-               paidSessions: paidVol,
-               paidCvr: cvr,
-               actionLabel: action,
-               dataSource: activeSource
-            });
-        });
-
-        setKeywordBridgeData(keywordResults.sort((a, b) => b.paidSessions - a.paidSessions));
 
     } catch (e) {
         console.error("❌ ERROR BRIDGE:", e);
@@ -991,9 +957,10 @@ const fetchGa4Data = async () => {
           Organic GA4 Rev: ${currencySymbol}${channelStats.organic.current.revenue.toLocaleString()}.
         `;
       } else if (activeTab === DashboardTab.PPC_SEO_BRIDGE) {
-        // Summarize bridge data for AI
-        const riskCount = bridgeData.filter(b => b.organicRank !== null && b.organicRank <= 3 && b.ppcSessions > 0).length;
-        const opportunityCount = bridgeData.filter(b => b.organicRank !== null && b.organicRank > 5 && b.organicRank <= 20).length;
+        // Summarize bridge data for AI (Use the primary available source)
+        const primaryBridgeData = bridgeDataSA360.length > 0 ? bridgeDataSA360 : bridgeDataGA4;
+        const riskCount = primaryBridgeData.filter(b => b.organicRank !== null && b.organicRank <= 3 && b.ppcSessions > 0).length;
+        const opportunityCount = primaryBridgeData.filter(b => b.organicRank !== null && b.organicRank > 5 && b.organicRank <= 20).length;
         summary = `
           Context: Integrated SEO and PPC Intelligence using Session Comparison.
           Cannibalization Risks detected: ${riskCount} keywords where we rank Top 3 organically but still pay for Sessions.
@@ -1171,7 +1138,17 @@ const fetchGa4Data = async () => {
           
           {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && <SeoDeepDiveView keywords={filteredKeywordData} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isLoading={isAnythingLoading} comparisonEnabled={filters.comparison.enabled} />}
 
-          {activeTab === DashboardTab.PPC_SEO_BRIDGE && <SeoPpcBridgeView data={bridgeData} keywordData={keywordBridgeData} dailyData={filteredDailyData} currencySymbol={currencySymbol} />}
+          {/* PPC BRIDGE VIEW UPDATE: Passing individual datasets */}
+          {activeTab === DashboardTab.PPC_SEO_BRIDGE && (
+            <SeoPpcBridgeView 
+                ga4Data={bridgeDataGA4} 
+                sa360Data={bridgeDataSA360}
+                ga4KeywordData={keywordBridgeDataGA4}
+                sa360KeywordData={keywordBridgeDataSA360}
+                dailyData={filteredDailyData} 
+                currencySymbol={currencySymbol} 
+            />
+          )}
 
           {activeTab === DashboardTab.AI_TRAFFIC_MONITOR && <AiTrafficView data={aiTrafficData} currencySymbol={currencySymbol} />}
         </div>
