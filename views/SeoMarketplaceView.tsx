@@ -47,7 +47,7 @@ const CountryShareAnalysis = ({ data, currencySymbol }: { data: any[], currencyS
           <FileText size={12} /> Export CSV
         </button>
       </div>
-      <div className="flex-1 h-[250px] relative">
+      <div className="w-full h-[250px] relative">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie

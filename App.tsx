@@ -247,7 +247,7 @@ const App: React.FC = () => {
   const fetchSa360Customers = async (token: string) => {
     try {
         setIsLoadingSa360(true);
-        const resp = await fetch('/api/sa360/v0/customers:listAccessibleCustomers', {
+        const resp = await fetch('https://searchads360.googleapis.com/v0/customers:listAccessibleCustomers', {
             method: 'GET',
             headers: { Authorization: `Bearer ${token}` }
         });
@@ -286,9 +286,7 @@ const App: React.FC = () => {
     }
   };
 
-  // ===========================================================================
-  // CORRECCIÓN: Búsqueda Recursiva para encontrar cuentas dentro de Sub-Managers
-  // ===========================================================================
+  // Fetch Sub Accounts (Client Customers) for a given Manager
   const fetchSa360SubAccounts = async (token: string, managerId: string) => {
     setIsLoadingSa360(true);
     let allLeafAccounts: Sa360Customer[] = [];
@@ -311,13 +309,13 @@ const App: React.FC = () => {
             WHERE customer_client.status = 'ENABLED'
         `;
 
-        // NOTA: Mantenemos el login-customer-id fijo en el Manager original para no perder permisos
-        const resp = await fetch(`/api/sa360/v0/customers/${currentId}/googleAds:searchStream`, {
+        // REVERTED to direct URL to avoid 404 in non-proxy environments
+        const resp = await fetch(`https://searchads360.googleapis.com/v0/customers/${currentId}/googleAds:searchStream`, {
             method: 'POST',
             headers: { 
                 Authorization: `Bearer ${token}`, 
                 'Content-Type': 'application/json',
-                'login-customer-id': managerId // Clave: Usamos el ID del Manager Supremo para la auth
+                'login-customer-id': managerId 
             },
             body: JSON.stringify({ query })
         });
@@ -342,7 +340,7 @@ const App: React.FC = () => {
                         resourceName: client.resourceName,
                         id: String(id),
                         descriptiveName: client.descriptiveName || 'Unknown Account',
-                        isManager: client.manager // Detectamos si es manager
+                        isManager: client.manager 
                     };
                 })
             ).filter(Boolean);
@@ -367,7 +365,7 @@ const App: React.FC = () => {
       }
     } catch (e) {
         console.error("Error fetching SA360 recursive sub-accounts:", e);
-        setError("Error traversing SA360 account hierarchy.");
+        setError("Error traversing SA360 account hierarchy. Check console for CORS or network issues.");
     } finally {
         setIsLoadingSa360(false);
     }
@@ -552,7 +550,8 @@ const App: React.FC = () => {
                     headers['login-customer-id'] = selectedSa360Customer.id;
                 }
 
-                const res = await fetch(`/api/sa360/v0/customers/${selectedSa360SubAccount.id}/googleAds:searchStream`, {
+                // REVERTED to direct URL to avoid 404 in non-proxy environments
+                const res = await fetch(`https://searchads360.googleapis.com/v0/customers/${selectedSa360SubAccount.id}/googleAds:searchStream`, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify({ query })
