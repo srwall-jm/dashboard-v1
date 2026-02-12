@@ -288,18 +288,18 @@ const App: React.FC = () => {
 
   // Fetch Sub Accounts (Client Customers) for a given Manager
   const fetchSa360SubAccounts = async (token: string, managerId: string) => {
+    let subAccounts: Sa360Customer[] = [];
     try {
-        // ACTUALIZADO: Eliminado restricción de Nivel para ver sub-cuentas profundas.
-        // Se trae también el nivel y el status de manager para mejor visualización.
+        // Query to get all accessible clients under the manager
+        // We select key fields. client_customer contains the resource name of the client.
         const query = `
-            SELECT customer_client.id, customer_client.descriptive_name, customer_client.client_customer, customer_client.status, customer_client.manager, customer_client.level
+            SELECT customer_client.resource_name, customer_client.client_customer, customer_client.descriptive_name, customer_client.manager, customer_client.status
             FROM customer_client 
             WHERE customer_client.status = 'ENABLED'
         `;
 
         const resp = await fetch(`https://searchads360.googleapis.com/v0/customers/${managerId}/googleAds:searchStream`, {
             method: 'POST',
-            // Point 2: login-customer-id Header included for manager context
             headers: { 
                 Authorization: `Bearer ${token}`, 
                 'Content-Type': 'application/json',
@@ -310,28 +310,56 @@ const App: React.FC = () => {
         
         const json = await resp.json();
         
-        const subAccounts: Sa360Customer[] = (json || []).flatMap((batch: any) => 
-            (batch.results || []).map((row: any) => {
-                const isManager = row.customerClient?.manager;
-                const typeLabel = isManager ? '(Manager)' : '(Account)';
-                return {
-                    resourceName: row.customerClient?.resourceName,
-                    id: row.customerClient?.id,
-                    descriptiveName: `${row.customerClient?.descriptiveName} ${typeLabel}` || `Client ${row.customerClient?.id} ${typeLabel}`
-                };
-            })
-        );
-
-        setAvailableSa360SubAccounts(subAccounts);
-        
-        // Auto select first sub-account if available and it is NOT a manager (prefer leaf nodes)
-        if (subAccounts.length > 0 && !selectedSa360SubAccount) {
-            const firstClient = subAccounts.find(s => !s.descriptiveName?.includes('(Manager)')) || subAccounts[0];
-            setSelectedSa360SubAccount(firstClient);
+        // Robust parsing of the response
+        if (json && Array.isArray(json)) {
+             subAccounts = json.flatMap((batch: any) => 
+                (batch.results || []).map((row: any) => {
+                    const client = row.customerClient;
+                    if (!client) return null;
+                    
+                    // Parse ID from client_customer (format: customers/1234567890)
+                    // Fallback to client.id if client_customer is missing
+                    let id = client.id;
+                    if (client.clientCustomer) {
+                        const parts = client.clientCustomer.split('/');
+                        if (parts.length > 1) id = parts[1];
+                    }
+                    
+                    const isManager = client.manager;
+                    const typeLabel = isManager ? '(Manager)' : '(Account)';
+                    
+                    return {
+                        resourceName: client.resourceName,
+                        id: id ? String(id) : 'unknown',
+                        descriptiveName: `${client.descriptiveName || 'Unknown'} ${typeLabel}`
+                    };
+                })
+            ).filter(Boolean);
         }
     } catch (e) {
         console.error("Error fetching SA360 sub-accounts:", e);
-        // Don't show critical error, just log. 
+    }
+
+    // FALLBACK LOGIC:
+    // If the API returns no sub-accounts, it might be because the 'Manager' selected is actually a direct Client Account
+    // or the API structure is flat for this user. 
+    // In this case, we allow the user to select the "Main Account" itself as the target for reporting.
+    if (subAccounts.length === 0 && selectedSa360Customer) {
+        // Only add if not already present (though list is 0 here)
+        subAccounts.push({
+            ...selectedSa360Customer,
+            descriptiveName: `${selectedSa360Customer.descriptiveName || 'Main Account'} (Direct / Self)`
+        });
+    }
+
+    setAvailableSa360SubAccounts(subAccounts);
+    
+    // Auto select logic: Prefer leaf nodes (non-managers)
+    if (subAccounts.length > 0) {
+        const leafNode = subAccounts.find(s => !s.descriptiveName?.includes('(Manager)'));
+        setSelectedSa360SubAccount(leafNode || subAccounts[0]);
+    } else {
+        setSelectedSa360SubAccount(null);
     }
   };
 
