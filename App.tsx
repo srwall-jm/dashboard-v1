@@ -286,15 +286,22 @@ const App: React.FC = () => {
   // Fetch Sub Accounts (Client Customers) for a given Manager
   const fetchSa360SubAccounts = async (token: string, managerId: string) => {
     try {
+        // Point 3: Query customer_client.
+        // Also removed "manager = FALSE" to allow seeing sub-managers if needed, but added "level <= 1" as recommended.
         const query = `
-            SELECT customer_client.id, customer_client.descriptive_name, customer_client.level 
+            SELECT customer_client.id, customer_client.descriptive_name, customer_client.client_customer, customer_client.status, customer_client.manager
             FROM customer_client 
-            WHERE customer_client.status = 'ENABLED' AND customer_client.manager = FALSE
+            WHERE customer_client.level <= 1 AND customer_client.status = 'ENABLED'
         `;
 
         const resp = await fetch(`https://searchads360.googleapis.com/v0/customers/${managerId}/googleAds:searchStream`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            // Point 2: login-customer-id Header included for manager context
+            headers: { 
+                Authorization: `Bearer ${token}`, 
+                'Content-Type': 'application/json',
+                'login-customer-id': managerId 
+            },
             body: JSON.stringify({ query })
         });
         
@@ -479,9 +486,19 @@ const App: React.FC = () => {
              
              const fetchSa360 = async (query: string) => {
                 // Using selectedSa360SubAccount.id specifically
+                const headers: any = { 
+                    Authorization: `Bearer ${sa360Auth.token}`, 
+                    'Content-Type': 'application/json' 
+                };
+                
+                // Point 2: login-customer-id Header included for manager context in reporting data
+                if (selectedSa360Customer) {
+                    headers['login-customer-id'] = selectedSa360Customer.id;
+                }
+
                 const res = await fetch(`https://searchads360.googleapis.com/v0/customers/${selectedSa360SubAccount.id}/googleAds:searchStream`, {
                     method: 'POST',
-                    headers: { Authorization: `Bearer ${sa360Auth.token}`, 'Content-Type': 'application/json' },
+                    headers: headers,
                     body: JSON.stringify({ query })
                 });
                 const json = await res.json();
