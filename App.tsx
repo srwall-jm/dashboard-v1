@@ -448,13 +448,18 @@ const App: React.FC = () => {
 
 // --- BRIDGE DATA: GA4 SESSIONS (ORGANIC vs PAID) ---
 // UPDATED: Uses selectedSa360SubAccount for the SA360 portion
-  const fetchBridgeData = async () => {
+const fetchBridgeData = async () => {
     if (!gscAuth?.site || !gscAuth.token) {
          if (!bridgeDataGA4.length) setBridgeDataGA4(generateMockBridgeData());
          return;
     }
 
     setIsLoadingBridge(true);
+
+    // --- AÑADE ESTAS DOS LÍNEAS AQUÍ ---
+    setBridgeDataSA360([]); 
+    setKeywordBridgeDataSA360([]);
+    // -----------------------------------
     
     const normalizeUrl = (url: string) => {
       if (!url || url === '(not set)') return '';
@@ -1325,12 +1330,12 @@ const fetchGa4Data = async () => {
             />
           )}
           
-          {activeTab === DashboardTab.SA360_PERFORMANCE && (
-             <Sa360PerformanceView 
-                data={bridgeDataSA360.length > 0 ? bridgeDataSA360 : bridgeDataGA4} 
-                currencySymbol={currencySymbol} 
-             />
-          )}
+{activeTab === DashboardTab.SA360_PERFORMANCE && (
+    <Sa360PerformanceView 
+        data={bridgeDataSA360} 
+        currencySymbol={currencySymbol} 
+    />
+)}
 
           {activeTab === DashboardTab.AI_TRAFFIC_MONITOR && <AiTrafficView data={aiTrafficData} currencySymbol={currencySymbol} />}
         </div>
