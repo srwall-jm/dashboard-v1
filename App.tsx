@@ -289,12 +289,12 @@ const App: React.FC = () => {
   // Fetch Sub Accounts (Client Customers) for a given Manager
   const fetchSa360SubAccounts = async (token: string, managerId: string) => {
     try {
-        // Point 3: Query customer_client.
-        // Also removed "manager = FALSE" to allow seeing sub-managers if needed, but added "level <= 1" as recommended.
+        // ACTUALIZADO: Eliminado restricción de Nivel para ver sub-cuentas profundas.
+        // Se trae también el nivel y el status de manager para mejor visualización.
         const query = `
-            SELECT customer_client.id, customer_client.descriptive_name, customer_client.client_customer, customer_client.status, customer_client.manager
+            SELECT customer_client.id, customer_client.descriptive_name, customer_client.client_customer, customer_client.status, customer_client.manager, customer_client.level
             FROM customer_client 
-            WHERE customer_client.level <= 1 AND customer_client.status = 'ENABLED'
+            WHERE customer_client.status = 'ENABLED'
         `;
 
         const resp = await fetch(`https://searchads360.googleapis.com/v0/customers/${managerId}/googleAds:searchStream`, {
@@ -311,18 +311,23 @@ const App: React.FC = () => {
         const json = await resp.json();
         
         const subAccounts: Sa360Customer[] = (json || []).flatMap((batch: any) => 
-            (batch.results || []).map((row: any) => ({
-                resourceName: row.customerClient?.resourceName,
-                id: row.customerClient?.id,
-                descriptiveName: row.customerClient?.descriptiveName || `Client ${row.customerClient?.id}`
-            }))
+            (batch.results || []).map((row: any) => {
+                const isManager = row.customerClient?.manager;
+                const typeLabel = isManager ? '(Manager)' : '(Account)';
+                return {
+                    resourceName: row.customerClient?.resourceName,
+                    id: row.customerClient?.id,
+                    descriptiveName: `${row.customerClient?.descriptiveName} ${typeLabel}` || `Client ${row.customerClient?.id} ${typeLabel}`
+                };
+            })
         );
 
         setAvailableSa360SubAccounts(subAccounts);
         
-        // Auto select first sub-account if available
+        // Auto select first sub-account if available and it is NOT a manager (prefer leaf nodes)
         if (subAccounts.length > 0 && !selectedSa360SubAccount) {
-            setSelectedSa360SubAccount(subAccounts[0]);
+            const firstClient = subAccounts.find(s => !s.descriptiveName?.includes('(Manager)')) || subAccounts[0];
+            setSelectedSa360SubAccount(firstClient);
         }
     } catch (e) {
         console.error("Error fetching SA360 sub-accounts:", e);
