@@ -619,8 +619,6 @@ const App: React.FC = () => {
 
 
 
-      // ESTA ES LA URL CORRECTA PARA SA360 v0
-
       const targetUrl = `/api/sa360/v0/customers/${currentId}/searchAds360:searchStream`;
 
 
@@ -1091,13 +1089,21 @@ const fetchBridgeData = async () => {
 
             };
 
+            // Remove formatting to ensure clean ID
+
             if (selectedSa360Customer) {
 
-                headers['login-customer-id'] = selectedSa360Customer.id;
+                headers['login-customer-id'] = selectedSa360Customer.id.replace(/-/g, '');
 
             }
 
-            const res = await fetch(`/api/sa360/v0/customers/${selectedSa360SubAccount.id}/searchAds360:searchStream`, {
+            // Remove formatting to ensure clean ID
+
+            const targetId = selectedSa360SubAccount.id.replace(/-/g, '');
+
+            
+
+            const res = await fetch(`/api/sa360/v0/customers/${targetId}/searchAds360:searchStream`, {
 
                 method: 'POST',
 
@@ -1107,9 +1113,25 @@ const fetchBridgeData = async () => {
 
             });
 
+            
+
+            if (!res.ok) {
+
+                const text = await res.text();
+
+                console.error("SA360 API Error:", text);
+
+                throw new Error(`SA360 Error: ${res.status} - ${text.substring(0, 100)}`);
+
+            }
+
+
+
             const json = await res.json();
 
-            return (json || []).flatMap((batch: any) => batch.results || []);
+            // SA360 v0 searchStream returns array of batches
+
+            return (Array.isArray(json) ? json : []).flatMap((batch: any) => batch.results || []);
 
          };
 
@@ -1291,9 +1313,13 @@ const fetchBridgeData = async () => {
 
             setKeywordBridgeDataSA360(sa360KwResults.sort((a,b) => b.paidSessions - a.paidSessions));
 
-         } catch (err) {
+
+
+         } catch (err: any) {
 
              console.error("Error fetching SA360 data:", err);
+
+             setError(err.message || "Failed to fetch SA360 data");
 
              setBridgeDataSA360([]);
 
@@ -1542,6 +1568,18 @@ const fetchBridgeData = async () => {
   };
 
 
+
+  // Restore SA360 Data on Load if Auth exists (Persistency Logic)
+
+  useEffect(() => {
+
+    if (sa360Auth?.token && availableSa360Customers.length === 0 && !isLoadingSa360) {
+
+        fetchSa360Customers(sa360Auth.token);
+
+    }
+
+  }, [sa360Auth]);
 
 
 
