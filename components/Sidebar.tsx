@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Layers, Globe, Target, LogOut, ChevronRight, ChevronLeft, Activity, Cable, Bot, Settings } from 'lucide-react';
+import { Layers, Globe, Target, LogOut, ChevronRight, ChevronLeft, Activity, Cable, Bot, Settings, Megaphone } from 'lucide-react';
 import { DashboardTab } from '../types';
 
 const SidebarLink: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string; isCollapsed: boolean }> = ({ active, onClick, icon, label, isCollapsed }) => (
@@ -103,6 +103,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           />
           <SidebarLink 
             isCollapsed={isCollapsed}
+            active={activeTab === DashboardTab.SA360_PERFORMANCE} 
+            onClick={() => setActiveTab(DashboardTab.SA360_PERFORMANCE)} 
+            icon={<Megaphone />} 
+            label="SA360 Performance" 
+          />
+          <SidebarLink 
+            isCollapsed={isCollapsed}
             active={activeTab === DashboardTab.AI_TRAFFIC_MONITOR} 
             onClick={() => setActiveTab(DashboardTab.AI_TRAFFIC_MONITOR)} 
             icon={<Bot />} 
@@ -111,7 +118,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      <div className={`border-t border-white/5 bg-slate-950 ${isCollapsed ? 'p-2' : 'p-6'}`}>
+      <div className={`border-t border-white/5 bg-slate-900 ${isCollapsed ? 'p-2' : 'p-6'}`}>
          <div className={`bg-white/5 rounded-2xl ${isCollapsed ? 'p-2 flex flex-col items-center gap-4' : 'p-4'}`}>
             <div className={`flex items-center ${isCollapsed ? 'justify-center flex-col gap-3' : 'justify-between mb-6'}`}>
                 <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>

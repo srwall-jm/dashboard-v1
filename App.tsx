@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   RefreshCw, Filter, Globe, Tag, AlertCircle, Sparkles, Cpu, Activity, Menu, X
@@ -17,6 +18,7 @@ import { SeoMarketplaceView } from './views/SeoMarketplaceView';
 import { SeoDeepDiveView } from './views/SeoDeepDiveView';
 import { SeoPpcBridgeView } from './views/SeoPpcBridgeView';
 import { AiTrafficView } from './views/AiTrafficView';
+import { Sa360PerformanceView } from './views/Sa360PerformanceView';
 
 const CLIENT_ID = "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com"; 
 const SCOPE_GA4 = "https://www.googleapis.com/auth/analytics.readonly";
@@ -111,6 +113,7 @@ const App: React.FC = () => {
     [DashboardTab.SEO_BY_COUNTRY]: null,
     [DashboardTab.KEYWORD_DEEP_DIVE]: null,
     [DashboardTab.PPC_SEO_BRIDGE]: null,
+    [DashboardTab.SA360_PERFORMANCE]: null,
     [DashboardTab.AI_TRAFFIC_MONITOR]: null
   });
   const [loadingInsights, setLoadingInsights] = useState(false);
@@ -534,25 +537,41 @@ const App: React.FC = () => {
 
                 // BUILD SA360 BRIDGE DATA
                 const sa360Results: BridgeData[] = [];
-                organicRows.forEach((org: any) => {
-                    const paidStats = sa360PaidMap[org.cleanPath];
-                    const organicProxy = org.gscClicks; 
+                // Combine organic list with pure paid URLs (even if no organic data)
+                const allPaths = new Set([...organicRows.map(o => o.cleanPath), ...Object.keys(sa360PaidMap)]);
+                
+                allPaths.forEach(path => {
+                    const org = organicRows.find(o => o.cleanPath === path); // Simple lookup, simplified for loop performance
+                    const paidStats = sa360PaidMap[path];
+                    const organicProxy = org ? org.gscClicks : 0;
+                    const organicRank = org ? org.rank : null;
                     const paidVolume = paidStats ? paidStats.clicksOrSessions : 0;
+                    
                     if (organicProxy === 0 && paidVolume === 0) return;
                     
                     const totalVolume = organicProxy + paidVolume;
                     const paidShare = totalVolume > 0 ? (paidVolume / totalVolume) : 0;
                     
                     let action = "MAINTAIN";
-                    if (org.rank <= 3.0 && paidShare > 0.4) action = "CRITICAL (Overlap)";
-                    else if (org.rank <= 3.0 && paidVolume > 0) action = "REVIEW";
-                    else if (org.rank > 10.0 && paidVolume === 0) action = "INCREASE";
+                    if (organicRank && organicRank <= 3.0 && paidShare > 0.4) action = "CRITICAL (Overlap)";
+                    else if (organicRank && organicRank <= 3.0 && paidVolume > 0) action = "REVIEW";
+                    else if (organicRank && organicRank > 10.0 && paidVolume === 0) action = "INCREASE";
 
-                    let campDisplay = "SA360";
                     sa360Results.push({
-                        url: org.cleanPath, query: org.query, organicRank: org.rank, organicClicks: org.gscClicks, organicSessions: org.gscClicks, 
-                        ppcCampaign: campDisplay, ppcCost: paidStats?.cost || 0, ppcConversions: paidStats?.conversions || 0, ppcCpa: 0,
-                        ppcSessions: paidVolume, ppcImpressions: paidStats?.impressions || 0, blendedCostRatio: paidShare, actionLabel: action, dataSource: 'SA360'
+                        url: path, 
+                        query: org?.query || '(direct/none)', // Simplified
+                        organicRank: organicRank, 
+                        organicClicks: organicProxy, 
+                        organicSessions: organicProxy, 
+                        ppcCampaign: "SA360", 
+                        ppcCost: paidStats?.cost || 0, 
+                        ppcConversions: paidStats?.conversions || 0, 
+                        ppcCpa: paidStats?.conversions ? paidStats.cost / paidStats.conversions : 0,
+                        ppcSessions: paidVolume, 
+                        ppcImpressions: paidStats?.impressions || 0, 
+                        blendedCostRatio: paidShare, 
+                        actionLabel: action, 
+                        dataSource: 'SA360'
                     });
                 });
                 setBridgeDataSA360(sa360Results.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
@@ -883,7 +902,7 @@ const fetchGa4Data = async () => {
 
   // Re-fetch Bridge data whenever selected sub-account changes
   useEffect(() => {
-    if (activeTab === DashboardTab.PPC_SEO_BRIDGE) {
+    if (activeTab === DashboardTab.PPC_SEO_BRIDGE || activeTab === DashboardTab.SA360_PERFORMANCE) {
       fetchBridgeData();
     } else if (activeTab === DashboardTab.AI_TRAFFIC_MONITOR) {
       fetchAiTrafficData();
@@ -1030,6 +1049,7 @@ const fetchGa4Data = async () => {
       const dashboardName = activeTab === DashboardTab.ORGANIC_VS_PAID ? "Organic vs Paid Performance" : 
                            (activeTab === DashboardTab.SEO_BY_COUNTRY ? "SEO Performance by Country" : 
                            activeTab === DashboardTab.PPC_SEO_BRIDGE ? "PPC & SEO Bridge Intelligence" :
+                           activeTab === DashboardTab.SA360_PERFORMANCE ? "SA360 Paid Search Performance" :
                            activeTab === DashboardTab.AI_TRAFFIC_MONITOR ? "AI Traffic Tracker" :
                            "Deep URL and Keyword Analysis");
 
@@ -1055,6 +1075,18 @@ const fetchGa4Data = async () => {
           Cannibalization Risks detected: ${riskCount} keywords where we rank Top 3 organically but still pay for Sessions.
           Growth Opportunities detected: ${opportunityCount} keywords where we rank 5-20 and could increase ad spend.
         `;
+      } else if (activeTab === DashboardTab.SA360_PERFORMANCE) {
+          const primaryData = bridgeDataSA360.length > 0 ? bridgeDataSA360 : bridgeDataGA4;
+          const totalCost = primaryData.reduce((acc, c) => acc + c.ppcCost, 0);
+          const totalConv = primaryData.reduce((acc, c) => acc + c.ppcConversions, 0);
+          const avgCpa = totalConv > 0 ? totalCost / totalConv : 0;
+          summary = `
+            Context: SA360 / Paid Search Performance Analysis by URL.
+            Total Spend: ${currencySymbol}${totalCost.toLocaleString()}.
+            Total Conversions: ${totalConv}.
+            Average CPA: ${currencySymbol}${avgCpa.toFixed(2)}.
+            Look for high CPA URLs and efficient high-volume URLs in the data provided.
+          `;
       } else if (activeTab === DashboardTab.AI_TRAFFIC_MONITOR) {
         const totalAi = aiTrafficData.reduce((acc, curr) => acc + curr.sessions, 0);
         summary = `
@@ -1164,6 +1196,7 @@ const fetchGa4Data = async () => {
           {activeTab === DashboardTab.SEO_BY_COUNTRY && "SEO Performance by Country"}
           {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && "URL & Keyword Analysis"}
           {activeTab === DashboardTab.PPC_SEO_BRIDGE && "The Bridge: SEO vs PPC Intelligence"}
+          {activeTab === DashboardTab.SA360_PERFORMANCE && "SA360 & Paid Search Analysis"}
           {activeTab === DashboardTab.AI_TRAFFIC_MONITOR && "AI Traffic Monitor"}
         </h2>
       </div>
@@ -1216,7 +1249,7 @@ const fetchGa4Data = async () => {
               <div className="flex items-center gap-3">
                 {aiProvider === 'openai' ? <Cpu className="w-5 h-5 text-emerald-400" /> : <Sparkles className="w-5 h-5 text-indigo-400" />}
                 <div className="flex flex-col">
-                  <h3 className="text-xl font-black">Strategic Report: {activeTab === DashboardTab.ORGANIC_VS_PAID ? "Channels" : activeTab === DashboardTab.SEO_BY_COUNTRY ? "Markets" : activeTab === DashboardTab.PPC_SEO_BRIDGE ? "The Bridge" : activeTab === DashboardTab.AI_TRAFFIC_MONITOR ? "AI Intelligence" : "Deep Dive"}</h3>
+                  <h3 className="text-xl font-black">Strategic Report: {activeTab === DashboardTab.ORGANIC_VS_PAID ? "Channels" : activeTab === DashboardTab.SEO_BY_COUNTRY ? "Markets" : activeTab === DashboardTab.PPC_SEO_BRIDGE ? "The Bridge" : activeTab === DashboardTab.SA360_PERFORMANCE ? "Paid Search" : activeTab === DashboardTab.AI_TRAFFIC_MONITOR ? "AI Intelligence" : "Deep Dive"}</h3>
                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Generated by {aiProvider === 'openai' ? 'OpenAI GPT-4o-mini' : 'Google Gemini 3 Pro'}</p>
                 </div>
               </div>
@@ -1247,6 +1280,13 @@ const fetchGa4Data = async () => {
                 setSelectedSa360Customer={setSelectedSa360Customer}
             />
           )}
+          
+          {activeTab === DashboardTab.SA360_PERFORMANCE && (
+             <Sa360PerformanceView 
+                data={bridgeDataSA360.length > 0 ? bridgeDataSA360 : bridgeDataGA4} 
+                currencySymbol={currencySymbol} 
+             />
+          )}
 
           {activeTab === DashboardTab.AI_TRAFFIC_MONITOR && <AiTrafficView data={aiTrafficData} currencySymbol={currencySymbol} />}
         </div>
@@ -1258,7 +1298,7 @@ const fetchGa4Data = async () => {
             className={`flex items-center gap-3 px-10 py-4 ${aiProvider === 'openai' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20' : 'bg-slate-950 hover:bg-slate-800 shadow-slate-900/20'} text-white rounded-3xl text-xs font-black shadow-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50`}
           >
             {loadingInsights ? <RefreshCw className="w-4 h-4 animate-spin" /> : (aiProvider === 'openai' ? <Cpu className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />)} 
-            Generate {activeTab === DashboardTab.ORGANIC_VS_PAID ? 'Channel' : activeTab === DashboardTab.SEO_BY_COUNTRY ? 'Market' : activeTab === DashboardTab.PPC_SEO_BRIDGE ? 'Bridge' : activeTab === DashboardTab.AI_TRAFFIC_MONITOR ? 'AI' : 'SEO'} Insights
+            Generate {activeTab === DashboardTab.ORGANIC_VS_PAID ? 'Channel' : activeTab === DashboardTab.SEO_BY_COUNTRY ? 'Market' : activeTab === DashboardTab.PPC_SEO_BRIDGE ? 'Bridge' : activeTab === DashboardTab.SA360_PERFORMANCE ? 'Paid' : activeTab === DashboardTab.AI_TRAFFIC_MONITOR ? 'AI' : 'SEO'} Insights
           </button>
         </div>
       </main>
