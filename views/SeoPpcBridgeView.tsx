@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState } from 'react';
 import { 
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, BarChart, Bar, LineChart, Line, Legend, LabelList
@@ -355,8 +354,8 @@ export const SeoPpcBridgeView: React.FC<{
           />
       )}
 
-      {/* 2. SA360 TABLE (Only if data exists) */}
-      {availableSa360Customers && availableSa360Customers.length > 0 && (
+      {/* 2. SA360 TABLE (Only if data exists and selected from settings) */}
+      {sa360Data.length > 0 && (
           <BridgeAnalysisTable 
              title="Traffic Source Audit (SA360 Scope)" 
              subTitle="Comparing Organic (GSC) vs Paid Clicks (SA360)"
@@ -364,32 +363,14 @@ export const SeoPpcBridgeView: React.FC<{
              keywordData={sa360KeywordData}
              metricLabel="Paid Clicks (SA360)"
              dataSourceName="SA360"
-             headerContent={
-                 <div className="relative group">
-                     <select 
-                        value={selectedSa360Customer?.resourceName || ''}
-                        onChange={(e) => {
-                             const customer = availableSa360Customers.find(c => c.resourceName === e.target.value);
-                             if (setSelectedSa360Customer) setSelectedSa360Customer(customer || null);
-                        }}
-                        className="bg-slate-100 text-slate-700 text-[9px] font-black uppercase py-1 pl-2 pr-6 rounded-lg appearance-none cursor-pointer outline-none hover:bg-slate-200 transition-colors border border-transparent focus:border-indigo-400"
-                     >
-                         {availableSa360Customers.map(c => (
-                             <option key={c.resourceName} value={c.resourceName}>
-                                 {c.descriptiveName} ({c.id})
-                             </option>
-                         ))}
-                     </select>
-                     <Settings size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                 </div>
-             }
+             headerContent={null}
           />
       )}
 
       {ga4Data.length === 0 && sa360Data.length === 0 && (
          <div className="bg-white p-12 rounded-[32px] border border-slate-200 shadow-sm text-center flex flex-col items-center opacity-50">
              <Info size={48} className="text-slate-300 mb-4" />
-             <p className="text-slate-400 font-bold">No bridge data available. Please connect GSC and (GA4 or SA360).</p>
+             <p className="text-slate-400 font-bold">No bridge data available. Please connect GSC and (GA4 or SA360) in Settings.</p>
          </div>
       )}
 

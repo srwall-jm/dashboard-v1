@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { X, Cpu, Settings2, Database, ExternalLink, Search } from 'lucide-react';
+import { X, Cpu, Settings2, Database, ExternalLink, Search, CornerDownRight } from 'lucide-react';
 import { Ga4Property, GscSite, Sa360Customer } from '../types';
 
 interface SettingsModalProps {
@@ -27,6 +26,11 @@ interface SettingsModalProps {
   availableProperties: Ga4Property[];
   availableSites: GscSite[];
   availableSa360Customers: Sa360Customer[];
+  availableSa360SubAccounts?: Sa360Customer[];
+  selectedSa360Customer?: Sa360Customer | null;
+  selectedSa360SubAccount?: Sa360Customer | null;
+  onSa360CustomerChange?: (customer: Sa360Customer | null) => void;
+  onSa360SubAccountChange?: (customer: Sa360Customer | null) => void;
   setGa4Auth: (auth: any) => void;
   setGscAuth: (auth: any) => void;
   setSa360Auth: (auth: any) => void;
@@ -42,7 +46,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   ga4Auth, gscAuth, sa360Auth,
   handleConnectGa4, handleConnectGsc, handleConnectSa360,
   ga4Search, setGa4Search, gscSearch, setGscSearch, sa360Search, setSa360Search,
-  availableProperties, availableSites, availableSa360Customers,
+  availableProperties, availableSites, availableSa360Customers, availableSa360SubAccounts,
+  selectedSa360Customer, selectedSa360SubAccount, onSa360CustomerChange, onSa360SubAccountChange,
   setGa4Auth, setGscAuth, setSa360Auth,
   filteredProperties, filteredSites, filteredSa360Customers
 }) => {
@@ -120,15 +125,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {!sa360Auth?.token ? (
                     <button onClick={handleConnectSa360} className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Connect SA360</button>
                   ) : (
-                    <div className="space-y-2">
-                      <div className="relative">
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
-                        <input type="text" placeholder="Search Customer..." value={sa360Search} onChange={e => setSa360Search(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl text-[10px] pl-8 pr-2 py-2 outline-none focus:border-orange-500" />
+                    <div className="space-y-3">
+                      {/* Main Account Selection */}
+                      <div className="space-y-1">
+                        <label className="text-[8px] font-bold text-slate-500 uppercase">Main Account / Manager</label>
+                        <select 
+                            className="w-full bg-white border border-slate-200 rounded-xl text-[10px] p-2 outline-none cursor-pointer" 
+                            value={selectedSa360Customer?.resourceName || ''} 
+                            onChange={e => {
+                                const cust = availableSa360Customers.find(c => c.resourceName === e.target.value) || null;
+                                if (onSa360CustomerChange) onSa360CustomerChange(cust);
+                            }}
+                        >
+                            {filteredSa360Customers.map(c => <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName} ({c.id})</option>)}
+                        </select>
                       </div>
-                      <select className="w-full bg-white border border-slate-200 rounded-xl text-[10px] p-2 outline-none cursor-pointer" value={sa360Auth?.customer?.resourceName || ''} onChange={e => setSa360Auth({...sa360Auth, customer: availableSa360Customers.find(c => c.resourceName === e.target.value) || null})}>
-                        {filteredSa360Customers.map(c => <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName} ({c.id})</option>)}
-                      </select>
-                      <div className="flex items-center gap-1.5 text-[9px] text-emerald-600 font-bold px-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> Connected</div>
+
+                      {/* Sub Account Selection */}
+                      {selectedSa360Customer && availableSa360SubAccounts && (
+                          <div className="space-y-1 animate-in fade-in slide-in-from-top-1">
+                              <label className="text-[8px] font-bold text-slate-500 uppercase flex items-center gap-1"><CornerDownRight size={10} /> Sub Account / Client</label>
+                              <select 
+                                  className="w-full bg-white border border-slate-200 rounded-xl text-[10px] p-2 outline-none cursor-pointer border-l-4 border-l-orange-400" 
+                                  value={selectedSa360SubAccount?.resourceName || ''} 
+                                  onChange={e => {
+                                      const cust = availableSa360SubAccounts.find(c => c.resourceName === e.target.value) || null;
+                                      if (onSa360SubAccountChange) onSa360SubAccountChange(cust);
+                                  }}
+                                  disabled={availableSa360SubAccounts.length === 0}
+                              >
+                                  {availableSa360SubAccounts.length === 0 && <option value="">No sub-accounts found</option>}
+                                  {availableSa360SubAccounts.map(c => <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName} ({c.id})</option>)}
+                              </select>
+                          </div>
+                      )}
+
+                      <div className="flex items-center gap-1.5 text-[9px] text-emerald-600 font-bold px-1 pt-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> Connected</div>
                     </div>
                   )}
                </div>

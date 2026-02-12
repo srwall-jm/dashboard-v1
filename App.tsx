@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   RefreshCw, Filter, Globe, Tag, AlertCircle, Sparkles, Cpu, Activity, Menu, X
@@ -56,10 +55,14 @@ const App: React.FC = () => {
 
   const [availableProperties, setAvailableProperties] = useState<Ga4Property[]>([]);
   const [availableSites, setAvailableSites] = useState<GscSite[]>([]);
+  
+  // SA360: Main Accounts (Managers) and Sub Accounts (Clients)
   const [availableSa360Customers, setAvailableSa360Customers] = useState<Sa360Customer[]>([]);
-
-  // NEW: State to track the specifically selected SA360 account for analysis
+  const [availableSa360SubAccounts, setAvailableSa360SubAccounts] = useState<Sa360Customer[]>([]);
+  
+  // Track selected Manager and selected Sub-account
   const [selectedSa360Customer, setSelectedSa360Customer] = useState<Sa360Customer | null>(null);
+  const [selectedSa360SubAccount, setSelectedSa360SubAccount] = useState<Sa360Customer | null>(null);
 
   const [availableDimensions, setAvailableDimensions] = useState<{ label: string; value: string }[]>([]);
   const [currencySymbol, setCurrencySymbol] = useState('£');
@@ -237,6 +240,7 @@ const App: React.FC = () => {
     }
   };
 
+  // Fetch Main Managers (Accessible Customers)
   const fetchSa360Customers = async (token: string) => {
     try {
         setIsLoadingSa360(true);
@@ -265,7 +269,10 @@ const App: React.FC = () => {
                setSa360Auth({ token, customer: customers[0] });
            }
            if (!selectedSa360Customer) {
-               setSelectedSa360Customer(customers[0]);
+               const defaultCust = customers[0];
+               setSelectedSa360Customer(defaultCust);
+               // Trigger fetching sub-accounts for this default customer
+               fetchSa360SubAccounts(token, defaultCust.id);
            }
         }
     } catch (e) {
@@ -273,6 +280,54 @@ const App: React.FC = () => {
         setError("Error connecting to Search Ads 360 API.");
     } finally {
         setIsLoadingSa360(false);
+    }
+  };
+
+  // Fetch Sub Accounts (Client Customers) for a given Manager
+  const fetchSa360SubAccounts = async (token: string, managerId: string) => {
+    try {
+        const query = `
+            SELECT customer_client.id, customer_client.descriptive_name, customer_client.level 
+            FROM customer_client 
+            WHERE customer_client.status = 'ENABLED' AND customer_client.manager = FALSE
+        `;
+
+        const resp = await fetch(`https://searchads360.googleapis.com/v0/customers/${managerId}/googleAds:searchStream`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query })
+        });
+        
+        const json = await resp.json();
+        
+        const subAccounts: Sa360Customer[] = (json || []).flatMap((batch: any) => 
+            (batch.results || []).map((row: any) => ({
+                resourceName: row.customerClient?.resourceName,
+                id: row.customerClient?.id,
+                descriptiveName: row.customerClient?.descriptiveName || `Client ${row.customerClient?.id}`
+            }))
+        );
+
+        setAvailableSa360SubAccounts(subAccounts);
+        
+        // Auto select first sub-account if available
+        if (subAccounts.length > 0 && !selectedSa360SubAccount) {
+            setSelectedSa360SubAccount(subAccounts[0]);
+        }
+    } catch (e) {
+        console.error("Error fetching SA360 sub-accounts:", e);
+        // Don't show critical error, just log. 
+    }
+  };
+
+  // When selectedSa360Customer changes manually, fetch its sub-accounts
+  const handleSa360CustomerChange = (customer: Sa360Customer | null) => {
+    setSelectedSa360Customer(customer);
+    setAvailableSa360SubAccounts([]); // Clear previous
+    setSelectedSa360SubAccount(null); // Clear previous selection
+    
+    if (customer && sa360Auth?.token) {
+        fetchSa360SubAccounts(sa360Auth.token, customer.id);
     }
   };
 
@@ -337,7 +392,7 @@ const App: React.FC = () => {
   };
 
 // --- BRIDGE DATA: GA4 SESSIONS (ORGANIC vs PAID) ---
-// UPDATED: Uses selectedSa360Customer for the SA360 portion
+// UPDATED: Uses selectedSa360SubAccount for the SA360 portion
   const fetchBridgeData = async () => {
     if (!gscAuth?.site || !gscAuth.token) {
          if (!bridgeDataGA4.length) setBridgeDataGA4(generateMockBridgeData());
@@ -394,10 +449,10 @@ const App: React.FC = () => {
         });
 
         // ---------------------------------------------------------
-        // PROCESS A: SA360 DATA (Use selectedSa360Customer)
+        // PROCESS A: SA360 DATA (Use selectedSa360SubAccount)
         // ---------------------------------------------------------
-        // We use sa360Auth.token for authorization, but selectedSa360Customer.id for the target customer
-        if (sa360Auth?.token && selectedSa360Customer) {
+        // CRITICAL: We query the *Sub-account* ID, not the Manager ID, for accurate ad data.
+        if (sa360Auth?.token && selectedSa360SubAccount) {
              const sa360PaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
              const sa360KeywordMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number }> = {};
 
@@ -423,8 +478,8 @@ const App: React.FC = () => {
              `;
              
              const fetchSa360 = async (query: string) => {
-                // Using selectedSa360Customer.id specifically
-                const res = await fetch(`https://searchads360.googleapis.com/v0/customers/${selectedSa360Customer.id}/googleAds:searchStream`, {
+                // Using selectedSa360SubAccount.id specifically
+                const res = await fetch(`https://searchads360.googleapis.com/v0/customers/${selectedSa360SubAccount.id}/googleAds:searchStream`, {
                     method: 'POST',
                     headers: { Authorization: `Bearer ${sa360Auth.token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ query })
@@ -508,6 +563,10 @@ const App: React.FC = () => {
              } catch (err) {
                  console.error("Error fetching specific SA360 account data:", err);
              }
+        } else {
+             // Clear data if no sub-account selected
+             setBridgeDataSA360([]);
+             setKeywordBridgeDataSA360([]);
         }
 
         // ---------------------------------------------------------
@@ -805,14 +864,14 @@ const fetchGa4Data = async () => {
     }
   };
 
-  // Re-fetch Bridge data whenever selected customer changes
+  // Re-fetch Bridge data whenever selected sub-account changes
   useEffect(() => {
     if (activeTab === DashboardTab.PPC_SEO_BRIDGE) {
       fetchBridgeData();
     } else if (activeTab === DashboardTab.AI_TRAFFIC_MONITOR) {
       fetchAiTrafficData();
     }
-  }, [activeTab, ga4Auth?.property?.id, gscAuth?.site?.siteUrl, filters.dateRange, selectedSa360Customer?.id]);
+  }, [activeTab, ga4Auth?.property?.id, gscAuth?.site?.siteUrl, filters.dateRange, selectedSa360SubAccount?.id]);
 
   useEffect(() => {
     const initializeOAuth = () => {
@@ -1057,7 +1116,13 @@ const fetchGa4Data = async () => {
         ga4Search={ga4Search} setGa4Search={setGa4Search}
         gscSearch={gscSearch} setGscSearch={setGscSearch}
         sa360Search={sa360Search} setSa360Search={setSa360Search}
-        availableProperties={availableProperties} availableSites={availableSites} availableSa360Customers={availableSa360Customers}
+        availableProperties={availableProperties} availableSites={availableSites} 
+        availableSa360Customers={availableSa360Customers}
+        availableSa360SubAccounts={availableSa360SubAccounts}
+        selectedSa360Customer={selectedSa360Customer}
+        selectedSa360SubAccount={selectedSa360SubAccount}
+        onSa360CustomerChange={handleSa360CustomerChange}
+        onSa360SubAccountChange={setSelectedSa360SubAccount}
         setGa4Auth={setGa4Auth} setGscAuth={setGscAuth} setSa360Auth={setSa360Auth}
         filteredProperties={filteredProperties} filteredSites={filteredSites} filteredSa360Customers={filteredSa360Customers}
       />
