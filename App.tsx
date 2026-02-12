@@ -58,6 +58,9 @@ const App: React.FC = () => {
   const [availableSites, setAvailableSites] = useState<GscSite[]>([]);
   const [availableSa360Customers, setAvailableSa360Customers] = useState<Sa360Customer[]>([]);
 
+  // NEW: State to track the specifically selected SA360 account for analysis
+  const [selectedSa360Customer, setSelectedSa360Customer] = useState<Sa360Customer | null>(null);
+
   const [availableDimensions, setAvailableDimensions] = useState<{ label: string; value: string }[]>([]);
   const [currencySymbol, setCurrencySymbol] = useState('£');
   
@@ -68,7 +71,6 @@ const App: React.FC = () => {
   const [realDailyData, setRealDailyData] = useState<DailyData[]>([]);
   const [realKeywordData, setRealKeywordData] = useState<KeywordData[]>([]);
   
-  // Revised Bridge Data States
   const [bridgeDataGA4, setBridgeDataGA4] = useState<BridgeData[]>([]); 
   const [bridgeDataSA360, setBridgeDataSA360] = useState<BridgeData[]>([]); 
   const [keywordBridgeDataGA4, setKeywordBridgeDataGA4] = useState<KeywordBridgeData[]>([]);
@@ -251,13 +253,20 @@ const App: React.FC = () => {
             return {
                 resourceName: rn,
                 id: id,
-                descriptiveName: `Customer ${id}` 
+                descriptiveName: `Account ${id}` // Default name if not fetched deeper
             };
         });
         
         setAvailableSa360Customers(customers);
-        if (customers.length > 0 && !sa360Auth?.customer) {
-            setSa360Auth({ token, customer: customers[0] });
+        
+        // Auto-select the first one if not set
+        if (customers.length > 0) {
+           if (!sa360Auth?.customer) {
+               setSa360Auth({ token, customer: customers[0] });
+           }
+           if (!selectedSa360Customer) {
+               setSelectedSa360Customer(customers[0]);
+           }
         }
     } catch (e) {
         console.error(e);
@@ -328,11 +337,10 @@ const App: React.FC = () => {
   };
 
 // --- BRIDGE DATA: GA4 SESSIONS (ORGANIC vs PAID) ---
-// UPDATED: Now fetches BOTH GA4 and SA360 data independently if credentials exist.
+// UPDATED: Uses selectedSa360Customer for the SA360 portion
   const fetchBridgeData = async () => {
     if (!gscAuth?.site || !gscAuth.token) {
          if (!bridgeDataGA4.length) setBridgeDataGA4(generateMockBridgeData());
-         // Mock SA360 data if needed or just leave empty in mock mode
          return;
     }
 
@@ -375,7 +383,6 @@ const App: React.FC = () => {
             gscClicks: row.clicks
         }));
 
-        // 1. Aggregate GSC by Query (for Keyword View)
         const uniqueQueryMap: Record<string, { rankSum: number, count: number, bestRank: number, clicks: number }> = {};
         organicRows.forEach((row: any) => {
            const q = row.query.toLowerCase().trim();
@@ -387,9 +394,10 @@ const App: React.FC = () => {
         });
 
         // ---------------------------------------------------------
-        // PROCESS A: SA360 DATA (If available)
+        // PROCESS A: SA360 DATA (Use selectedSa360Customer)
         // ---------------------------------------------------------
-        if (sa360Auth?.customer && sa360Auth.token) {
+        // We use sa360Auth.token for authorization, but selectedSa360Customer.id for the target customer
+        if (sa360Auth?.token && selectedSa360Customer) {
              const sa360PaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
              const sa360KeywordMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number }> = {};
 
@@ -415,7 +423,8 @@ const App: React.FC = () => {
              `;
              
              const fetchSa360 = async (query: string) => {
-                const res = await fetch(`https://searchads360.googleapis.com/v0/customers/${sa360Auth.customer!.id}/googleAds:searchStream`, {
+                // Using selectedSa360Customer.id specifically
+                const res = await fetch(`https://searchads360.googleapis.com/v0/customers/${selectedSa360Customer.id}/googleAds:searchStream`, {
                     method: 'POST',
                     headers: { Authorization: `Bearer ${sa360Auth.token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ query })
@@ -424,77 +433,81 @@ const App: React.FC = () => {
                 return (json || []).flatMap((batch: any) => batch.results || []);
              };
 
-             const [urlRows, kwRows] = await Promise.all([fetchSa360(sa360UrlQuery), fetchSa360(sa360KwQuery)]);
+             try {
+                const [urlRows, kwRows] = await Promise.all([fetchSa360(sa360UrlQuery), fetchSa360(sa360KwQuery)]);
 
-             urlRows.forEach((row: any) => {
-                const url = row.landingPageView?.unmaskedUrl;
-                if(!url) return;
-                const path = normalizeUrl(url);
-                
-                if (!sa360PaidMap[path]) sa360PaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set(['SA360']) };
-                const metrics = row.metrics;
-                sa360PaidMap[path].clicksOrSessions += parseInt(metrics.clicks) || 0;
-                sa360PaidMap[path].conversions += parseFloat(metrics.conversions) || 0;
-                sa360PaidMap[path].impressions += parseInt(metrics.impressions) || 0;
-                sa360PaidMap[path].cost += (parseInt(metrics.costMicros) || 0) / 1000000;
-             });
+                urlRows.forEach((row: any) => {
+                    const url = row.landingPageView?.unmaskedUrl;
+                    if(!url) return;
+                    const path = normalizeUrl(url);
+                    
+                    if (!sa360PaidMap[path]) sa360PaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set(['SA360']) };
+                    const metrics = row.metrics;
+                    sa360PaidMap[path].clicksOrSessions += parseInt(metrics.clicks) || 0;
+                    sa360PaidMap[path].conversions += parseFloat(metrics.conversions) || 0;
+                    sa360PaidMap[path].impressions += parseInt(metrics.impressions) || 0;
+                    sa360PaidMap[path].cost += (parseInt(metrics.costMicros) || 0) / 1000000;
+                });
 
-             kwRows.forEach((row: any) => {
-                 const kw = row.adGroupCriterion?.keyword?.text;
-                 if(!kw) return;
-                 const cleanKw = kw.toLowerCase().trim();
-                 if (!sa360KeywordMap[cleanKw]) sa360KeywordMap[cleanKw] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
-                 const metrics = row.metrics;
-                 sa360KeywordMap[cleanKw].clicksOrSessions += parseInt(metrics.clicks) || 0;
-                 sa360KeywordMap[cleanKw].conversions += parseFloat(metrics.conversions) || 0;
-                 sa360KeywordMap[cleanKw].cost += (parseInt(metrics.costMicros) || 0) / 1000000;
-             });
+                kwRows.forEach((row: any) => {
+                    const kw = row.adGroupCriterion?.keyword?.text;
+                    if(!kw) return;
+                    const cleanKw = kw.toLowerCase().trim();
+                    if (!sa360KeywordMap[cleanKw]) sa360KeywordMap[cleanKw] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
+                    const metrics = row.metrics;
+                    sa360KeywordMap[cleanKw].clicksOrSessions += parseInt(metrics.clicks) || 0;
+                    sa360KeywordMap[cleanKw].conversions += parseFloat(metrics.conversions) || 0;
+                    sa360KeywordMap[cleanKw].cost += (parseInt(metrics.costMicros) || 0) / 1000000;
+                });
 
-             // BUILD SA360 BRIDGE DATA
-             const sa360Results: BridgeData[] = [];
-             organicRows.forEach((org: any) => {
-                 const paidStats = sa360PaidMap[org.cleanPath];
-                 const organicProxy = org.gscClicks; 
-                 const paidVolume = paidStats ? paidStats.clicksOrSessions : 0;
-                 if (organicProxy === 0 && paidVolume === 0) return;
-                 
-                 const totalVolume = organicProxy + paidVolume;
-                 const paidShare = totalVolume > 0 ? (paidVolume / totalVolume) : 0;
-                 
-                 let action = "MAINTAIN";
-                 if (org.rank <= 3.0 && paidShare > 0.4) action = "CRITICAL (Overlap)";
-                 else if (org.rank <= 3.0 && paidVolume > 0) action = "REVIEW";
-                 else if (org.rank > 10.0 && paidVolume === 0) action = "INCREASE";
+                // BUILD SA360 BRIDGE DATA
+                const sa360Results: BridgeData[] = [];
+                organicRows.forEach((org: any) => {
+                    const paidStats = sa360PaidMap[org.cleanPath];
+                    const organicProxy = org.gscClicks; 
+                    const paidVolume = paidStats ? paidStats.clicksOrSessions : 0;
+                    if (organicProxy === 0 && paidVolume === 0) return;
+                    
+                    const totalVolume = organicProxy + paidVolume;
+                    const paidShare = totalVolume > 0 ? (paidVolume / totalVolume) : 0;
+                    
+                    let action = "MAINTAIN";
+                    if (org.rank <= 3.0 && paidShare > 0.4) action = "CRITICAL (Overlap)";
+                    else if (org.rank <= 3.0 && paidVolume > 0) action = "REVIEW";
+                    else if (org.rank > 10.0 && paidVolume === 0) action = "INCREASE";
 
-                 let campDisplay = "SA360";
-                 sa360Results.push({
-                    url: org.cleanPath, query: org.query, organicRank: org.rank, organicClicks: org.gscClicks, organicSessions: org.gscClicks, 
-                    ppcCampaign: campDisplay, ppcCost: paidStats?.cost || 0, ppcConversions: paidStats?.conversions || 0, ppcCpa: 0,
-                    ppcSessions: paidVolume, ppcImpressions: paidStats?.impressions || 0, blendedCostRatio: paidShare, actionLabel: action, dataSource: 'SA360'
-                 });
-             });
-             setBridgeDataSA360(sa360Results.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
+                    let campDisplay = "SA360";
+                    sa360Results.push({
+                        url: org.cleanPath, query: org.query, organicRank: org.rank, organicClicks: org.gscClicks, organicSessions: org.gscClicks, 
+                        ppcCampaign: campDisplay, ppcCost: paidStats?.cost || 0, ppcConversions: paidStats?.conversions || 0, ppcCpa: 0,
+                        ppcSessions: paidVolume, ppcImpressions: paidStats?.impressions || 0, blendedCostRatio: paidShare, actionLabel: action, dataSource: 'SA360'
+                    });
+                });
+                setBridgeDataSA360(sa360Results.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
 
-             // BUILD SA360 KEYWORD DATA
-             const sa360KwResults: KeywordBridgeData[] = [];
-             const allKeysSA = new Set([...Object.keys(sa360KeywordMap), ...Object.keys(uniqueQueryMap)]);
-             allKeysSA.forEach(key => {
-                 const paidData = sa360KeywordMap[key] || { clicksOrSessions: 0, conversions: 0 };
-                 const gscData = uniqueQueryMap[key];
-                 const paidVol = paidData.clicksOrSessions;
-                 const orgVol = gscData ? gscData.clicks : 0;
-                 if (paidVol === 0 && orgVol === 0) return;
-                 const cvr = paidVol > 0 ? (paidData.conversions / paidVol) * 100 : 0;
-                 let action = "MAINTAIN";
-                 if (gscData?.bestRank && gscData.bestRank <= 3 && paidVol > 50) action = "CRITICAL (Cannibalization)";
-                 else if (gscData?.bestRank && gscData.bestRank > 10 && paidVol === 0) action = "OPPORTUNITY (Growth)";
+                // BUILD SA360 KEYWORD DATA
+                const sa360KwResults: KeywordBridgeData[] = [];
+                const allKeysSA = new Set([...Object.keys(sa360KeywordMap), ...Object.keys(uniqueQueryMap)]);
+                allKeysSA.forEach(key => {
+                    const paidData = sa360KeywordMap[key] || { clicksOrSessions: 0, conversions: 0 };
+                    const gscData = uniqueQueryMap[key];
+                    const paidVol = paidData.clicksOrSessions;
+                    const orgVol = gscData ? gscData.clicks : 0;
+                    if (paidVol === 0 && orgVol === 0) return;
+                    const cvr = paidVol > 0 ? (paidData.conversions / paidVol) * 100 : 0;
+                    let action = "MAINTAIN";
+                    if (gscData?.bestRank && gscData.bestRank <= 3 && paidVol > 50) action = "CRITICAL (Cannibalization)";
+                    else if (gscData?.bestRank && gscData.bestRank > 10 && paidVol === 0) action = "OPPORTUNITY (Growth)";
 
-                 sa360KwResults.push({
-                    keyword: key, organicRank: gscData?.bestRank || null, organicClicks: orgVol,
-                    paidSessions: paidVol, paidCvr: cvr, actionLabel: action, dataSource: 'SA360'
-                 });
-             });
-             setKeywordBridgeDataSA360(sa360KwResults.sort((a,b) => b.paidSessions - a.paidSessions));
+                    sa360KwResults.push({
+                        keyword: key, organicRank: gscData?.bestRank || null, organicClicks: orgVol,
+                        paidSessions: paidVol, paidCvr: cvr, actionLabel: action, dataSource: 'SA360'
+                    });
+                });
+                setKeywordBridgeDataSA360(sa360KwResults.sort((a,b) => b.paidSessions - a.paidSessions));
+             } catch (err) {
+                 console.error("Error fetching specific SA360 account data:", err);
+             }
         }
 
         // ---------------------------------------------------------
@@ -792,14 +805,14 @@ const fetchGa4Data = async () => {
     }
   };
 
+  // Re-fetch Bridge data whenever selected customer changes
   useEffect(() => {
-    // Fetch Data depending on Active Tab
     if (activeTab === DashboardTab.PPC_SEO_BRIDGE) {
       fetchBridgeData();
     } else if (activeTab === DashboardTab.AI_TRAFFIC_MONITOR) {
       fetchAiTrafficData();
     }
-  }, [activeTab, ga4Auth?.property?.id, gscAuth?.site?.siteUrl, filters.dateRange]);
+  }, [activeTab, ga4Auth?.property?.id, gscAuth?.site?.siteUrl, filters.dateRange, selectedSa360Customer?.id]);
 
   useEffect(() => {
     const initializeOAuth = () => {
@@ -1138,7 +1151,7 @@ const fetchGa4Data = async () => {
           
           {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && <SeoDeepDiveView keywords={filteredKeywordData} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isLoading={isAnythingLoading} comparisonEnabled={filters.comparison.enabled} />}
 
-          {/* PPC BRIDGE VIEW UPDATE: Passing individual datasets */}
+          {/* PPC BRIDGE VIEW UPDATE: Passing selection props */}
           {activeTab === DashboardTab.PPC_SEO_BRIDGE && (
             <SeoPpcBridgeView 
                 ga4Data={bridgeDataGA4} 
@@ -1147,6 +1160,9 @@ const fetchGa4Data = async () => {
                 sa360KeywordData={keywordBridgeDataSA360}
                 dailyData={filteredDailyData} 
                 currencySymbol={currencySymbol} 
+                availableSa360Customers={availableSa360Customers}
+                selectedSa360Customer={selectedSa360Customer}
+                setSelectedSa360Customer={setSelectedSa360Customer}
             />
           )}
 

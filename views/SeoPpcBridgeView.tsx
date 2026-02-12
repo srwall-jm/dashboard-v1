@@ -4,9 +4,9 @@ import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, BarChart, Bar, LineChart, Line, Legend, LabelList
 } from 'recharts';
 import { 
-  AlertOctagon, Zap, ShieldCheck, FileText, ExternalLink, Search, Filter, ChevronDown, ChevronRight, CornerDownRight, BarChart2, TrendingUp, DollarSign, Info, LayoutList, Key
+  AlertOctagon, Zap, ShieldCheck, FileText, ExternalLink, Search, Filter, ChevronDown, ChevronRight, CornerDownRight, BarChart2, TrendingUp, DollarSign, Info, LayoutList, Key, Settings
 } from 'lucide-react';
-import { BridgeData, DailyData, KeywordBridgeData } from '../types';
+import { BridgeData, DailyData, KeywordBridgeData, Sa360Customer } from '../types';
 import { exportToCSV } from '../utils';
 import { KpiCard } from '../components/KpiCard';
 
@@ -49,7 +49,8 @@ const BridgeAnalysisTable: React.FC<{
   keywordData: KeywordBridgeData[];
   metricLabel: string;
   dataSourceName: string;
-}> = ({ title, subTitle, data, keywordData, metricLabel, dataSourceName }) => {
+  headerContent?: React.ReactNode;
+}> = ({ title, subTitle, data, keywordData, metricLabel, dataSourceName, headerContent }) => {
   const [urlFilter, setUrlFilter] = useState('');
   const [keywordFilter, setKeywordFilter] = useState('');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -76,7 +77,10 @@ const BridgeAnalysisTable: React.FC<{
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
             <div className="flex flex-col gap-2">
               <div>
-                <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{title}</h4>
+                <div className="flex items-center gap-3">
+                    <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{title}</h4>
+                    {headerContent}
+                </div>
                 <p className="text-[11px] font-bold text-slate-600">{subTitle}</p>
               </div>
               <div className="flex bg-slate-100 p-1 rounded-xl w-fit">
@@ -205,7 +209,10 @@ export const SeoPpcBridgeView: React.FC<{
   sa360KeywordData: KeywordBridgeData[];
   dailyData: DailyData[];
   currencySymbol: string;
-}> = ({ ga4Data, sa360Data, ga4KeywordData, sa360KeywordData, dailyData, currencySymbol }) => {
+  availableSa360Customers?: Sa360Customer[];
+  selectedSa360Customer?: Sa360Customer | null;
+  setSelectedSa360Customer?: (c: Sa360Customer | null) => void;
+}> = ({ ga4Data, sa360Data, ga4KeywordData, sa360KeywordData, dailyData, currencySymbol, availableSa360Customers, selectedSa360Customer, setSelectedSa360Customer }) => {
   
   // Decide which dataset to use for top-level stats (Prefer SA360 if available)
   const primaryData = sa360Data.length > 0 ? sa360Data : ga4Data;
@@ -349,7 +356,7 @@ export const SeoPpcBridgeView: React.FC<{
       )}
 
       {/* 2. SA360 TABLE (Only if data exists) */}
-      {sa360Data.length > 0 && (
+      {availableSa360Customers && availableSa360Customers.length > 0 && (
           <BridgeAnalysisTable 
              title="Traffic Source Audit (SA360 Scope)" 
              subTitle="Comparing Organic (GSC) vs Paid Clicks (SA360)"
@@ -357,6 +364,25 @@ export const SeoPpcBridgeView: React.FC<{
              keywordData={sa360KeywordData}
              metricLabel="Paid Clicks (SA360)"
              dataSourceName="SA360"
+             headerContent={
+                 <div className="relative group">
+                     <select 
+                        value={selectedSa360Customer?.resourceName || ''}
+                        onChange={(e) => {
+                             const customer = availableSa360Customers.find(c => c.resourceName === e.target.value);
+                             if (setSelectedSa360Customer) setSelectedSa360Customer(customer || null);
+                        }}
+                        className="bg-slate-100 text-slate-700 text-[9px] font-black uppercase py-1 pl-2 pr-6 rounded-lg appearance-none cursor-pointer outline-none hover:bg-slate-200 transition-colors border border-transparent focus:border-indigo-400"
+                     >
+                         {availableSa360Customers.map(c => (
+                             <option key={c.resourceName} value={c.resourceName}>
+                                 {c.descriptiveName} ({c.id})
+                             </option>
+                         ))}
+                     </select>
+                     <Settings size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                 </div>
+             }
           />
       )}
 
