@@ -977,54 +977,50 @@ if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
         try {
 
             const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
+            const batchSize = 25000;
+            // Loop to fetch more data (up to 4 batches = 100k rows) to ensure we get "long tail" queries for URLs that might have paid traffic but low organic rank
+            for (let i = 0; i < 4; i++) {
+                const gscResp = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        startDate: filters.dateRange.start,
+                        endDate: filters.dateRange.end,
+                        dimensions: ['page', 'query'], 
+                        rowLimit: batchSize,
+                        startRow: i * batchSize
+                    })
+                });
 
-            const gscResp = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
+                const gscDataRaw = await gscResp.json();
+                const rows = gscDataRaw.rows || [];
 
-                method: 'POST',
+                // Process GSC rows into a Map grouped by URL
+                rows.forEach((row: any) => {
+                    const fullUrl = row.keys[0];
+                    const query = row.keys[1];
+                    const clicks = row.clicks;
+                    const rank = row.position;
+                    const cleanPath = normalizeUrl(fullUrl);
 
-                headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
+                    if (!gscUrlMap[cleanPath]) {
+                        gscUrlMap[cleanPath] = { queries: [], totalClicks: 0, bestRank: 999 };
+                    }
+                    gscUrlMap[cleanPath].queries.push({ query, rank, clicks });
+                    gscUrlMap[cleanPath].totalClicks += clicks;
+                    if (rank < gscUrlMap[cleanPath].bestRank) gscUrlMap[cleanPath].bestRank = rank;
 
-                body: JSON.stringify({
-
-                    startDate: filters.dateRange.start,
-
-                    endDate: filters.dateRange.end,
-
-                    dimensions: ['page', 'query'], 
-
-                    rowLimit: 25000 
-
-                })
-
-            });
-
-
-
-            const gscDataRaw = await gscResp.json();
-            
-            // Process GSC rows into a Map grouped by URL
-            (gscDataRaw.rows || []).forEach((row: any) => {
-                const fullUrl = row.keys[0];
-                const query = row.keys[1];
-                const clicks = row.clicks;
-                const rank = row.position;
-                const cleanPath = normalizeUrl(fullUrl);
-
-                if (!gscUrlMap[cleanPath]) {
-                    gscUrlMap[cleanPath] = { queries: [], totalClicks: 0, bestRank: 999 };
-                }
-                gscUrlMap[cleanPath].queries.push({ query, rank, clicks });
-                gscUrlMap[cleanPath].totalClicks += clicks;
-                if (rank < gscUrlMap[cleanPath].bestRank) gscUrlMap[cleanPath].bestRank = rank;
-
-                // Keyword Map logic (existing)
-                const q = query.toLowerCase().trim();
-                if (!uniqueQueryMap[q]) uniqueQueryMap[q] = { rankSum: 0, count: 0, bestRank: 999, clicks: 0 };
-                uniqueQueryMap[q].rankSum += rank;
-                uniqueQueryMap[q].count += 1;
-                uniqueQueryMap[q].clicks += clicks;
-                if (rank < uniqueQueryMap[q].bestRank) uniqueQueryMap[q].bestRank = rank;
-            });
+                    // Keyword Map logic (existing)
+                    const q = query.toLowerCase().trim();
+                    if (!uniqueQueryMap[q]) uniqueQueryMap[q] = { rankSum: 0, count: 0, bestRank: 999, clicks: 0 };
+                    uniqueQueryMap[q].rankSum += rank;
+                    uniqueQueryMap[q].count += 1;
+                    uniqueQueryMap[q].clicks += clicks;
+                    if (rank < uniqueQueryMap[q].bestRank) uniqueQueryMap[q].bestRank = rank;
+                });
+                
+                if (rows.length < batchSize) break; // Stop if less than full batch
+            }
             
             // Sort queries per URL by clicks desc
             Object.values(gscUrlMap).forEach(item => {
@@ -1057,7 +1053,7 @@ if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
 
             SELECT 
 
-              landing_page_view.unexpanded_url,, 
+              landing_page_view.unexpanded_url, 
 
               metrics.cost_micros, 
 
