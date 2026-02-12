@@ -307,12 +307,17 @@ const App: React.FC = () => {
           customer_client.id
         FROM customer_client 
         WHERE customer_client.status = 'ENABLED'
-      `;
+      `.trim();
 
-const resp = await fetch(`/api/sa360/v0/customers/${currentId}/searchAds360:searchStream`, {        headers: { 
+      // ESTA ES LA URL CORRECTA PARA SA360 v0
+      const targetUrl = `/api/sa360/v0/customers/${currentId}/searchAds360:searchStream`;
+
+      const resp = await fetch(targetUrl, {
+        method: 'POST', // Forzamos POST
+        headers: { 
           'Authorization': `Bearer ${token}`, 
           'Content-Type': 'application/json',
-          'login-customer-id': managerId // El ID de la cuenta nivel superior
+          'login-customer-id': managerId 
         },
         body: JSON.stringify({ query })
       });
