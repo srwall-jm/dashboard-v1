@@ -309,8 +309,7 @@ const App: React.FC = () => {
         WHERE customer_client.status = 'ENABLED'
       `;
 
-const resp = await fetch(`/api/sa360/v0/customers/${currentId}:searchStream`, {        method: 'POST',
-        headers: { 
+const resp = await fetch(`/api/sa360/v0/customers/${currentId}/searchAds360:searchStream`, {        headers: { 
           'Authorization': `Bearer ${token}`, 
           'Content-Type': 'application/json',
           'login-customer-id': managerId // El ID de la cuenta nivel superior
