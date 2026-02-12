@@ -36,9 +36,15 @@ const PRIORITY_DIMENSIONS = [
 ];
 
 const App: React.FC = () => {
+  // --- AQUI ES EL SITIO CORRECTO (Nivel Superior) ---
+  // Guardará la "firma" de la última petición para evitar recargas tontas
+const lastFetchParams = useRef<string>('');
+  // -------------------------------------------------
+
   const [user, setUser] = useState<{ name: string; email: string; picture: string } | null>(() => {
     const saved = localStorage.getItem('seo_suite_user');
     return saved ? JSON.parse(saved) : null;
+    // NUNCA pongas hooks aquí dentro
   });
 
   const [ga4Auth, setGa4Auth] = useState<{ token: string; property: Ga4Property | null } | null>(() => {
@@ -450,8 +456,7 @@ const App: React.FC = () => {
 // UPDATED: Completely refactored to handle SA360 independently of GSC
 const fetchBridgeData = async () => {
     setIsLoadingBridge(true);
-    setBridgeDataSA360([]); 
-    setKeywordBridgeDataSA360([]);
+
     
     // --- MOCK FALLBACK IF NOTHING CONNECTED ---
     // Si no hay ningún token de nada, entonces sí ponemos Mock Data
