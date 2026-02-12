@@ -1053,7 +1053,7 @@ if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
 
             SELECT 
 
-              landing_page_view.unexpanded_url, 
+              landing_page_view.unmasked_url, 
 
               metrics.cost_micros, 
 
@@ -1141,13 +1141,12 @@ if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
 
 
 
-            urlRows.forEach((row: any) => {
-
-                const url = row.landingPageView?.unexpanded_url || row.landingPageView?.unexpandedUrl;
-
-                if(!url) return;
-
-                const path = normalizeUrl(url);
+urlRows.forEach((row: any) => {
+    // Intentamos leer unmaskedUrl (CamelCase de la API) o el objeto completo
+    const url = row.landingPageView?.unmaskedUrl; // <--- CAMBIADO
+    
+    if(!url) return;
+    const path = normalizeUrl(url);
 
                 
 
