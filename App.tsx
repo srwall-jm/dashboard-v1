@@ -1041,7 +1041,7 @@ const fetchBridgeData = async () => {
 
             SELECT 
 
-              landing_page_view.unexpanded_url, 
+              landing_page_view.unmasked_url, 
 
               metrics.cost_micros, 
 
@@ -1145,7 +1145,7 @@ const fetchBridgeData = async () => {
 
             urlRows.forEach((row: any) => {
 
-                const url = row.landingPageView?.unexpandedUrl;
+                const url = row.landingPageView?.unmaskedUrl;
 
                 if(!url) return;
 
