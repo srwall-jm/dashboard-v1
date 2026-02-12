@@ -286,96 +286,98 @@ const App: React.FC = () => {
     }
   };
 
-  // Fetch Sub Accounts (Client Customers) for a given Manager
+  // ===========================================================================
+  // CORRECCIÓN: Búsqueda Recursiva para encontrar cuentas dentro de Sub-Managers
+  // ===========================================================================
   const fetchSa360SubAccounts = async (token: string, managerId: string) => {
-    let subAccounts: Sa360Customer[] = [];
+    setIsLoadingSa360(true);
+    let allLeafAccounts: Sa360Customer[] = [];
+    
+    // Cola de IDs que tenemos que inspeccionar (empezamos por el Manager Principal)
+    let processingQueue = [managerId];
+    // Evitar bucles infinitos
+    let processedIds = new Set<string>();
+
     try {
-        // Updated Query: 
-        // 1. Removed filters on manager status to allow Sub-managers to appear.
-        // 2. Included 'level' to help visualize hierarchy.
-        // 3. Ensuring we fetch everything under the root.
+      while (processingQueue.length > 0) {
+        const currentId = processingQueue.shift();
+        if (!currentId || processedIds.has(currentId)) continue;
+        processedIds.add(currentId);
+
+        // Query estándar para ver hijos directos
         const query = `
-            SELECT 
-                customer_client.id, 
-                customer_client.resource_name, 
-                customer_client.client_customer, 
-                customer_client.descriptive_name, 
-                customer_client.manager, 
-                customer_client.status, 
-                customer_client.level 
+            SELECT customer_client.resource_name, customer_client.client_customer, customer_client.descriptive_name, customer_client.manager, customer_client.status, customer_client.id
             FROM customer_client 
             WHERE customer_client.status = 'ENABLED'
         `;
 
-        const resp = await fetch(`https://searchads360.googleapis.com/v0/customers/${managerId}/googleAds:searchStream`, {
+        // NOTA: Mantenemos el login-customer-id fijo en el Manager original para no perder permisos
+        const resp = await fetch(`https://searchads360.googleapis.com/v0/customers/${currentId}/googleAds:searchStream`, {
             method: 'POST',
             headers: { 
                 Authorization: `Bearer ${token}`, 
                 'Content-Type': 'application/json',
-                'login-customer-id': managerId 
+                'login-customer-id': managerId // Clave: Usamos el ID del Manager Supremo para la auth
             },
             body: JSON.stringify({ query })
         });
-        
+
         const json = await resp.json();
-        
-        // Robust parsing of the response
+
         if (json && Array.isArray(json)) {
-             subAccounts = json.flatMap((batch: any) => 
+             const foundChildren = json.flatMap((batch: any) => 
                 (batch.results || []).map((row: any) => {
                     const client = row.customerClient;
                     if (!client) return null;
                     
-                    // ID parsing fallback
+                    // Extraer ID limpio
                     let id = client.id;
                     if (!id && client.clientCustomer) {
                         const parts = client.clientCustomer.split('/');
                         if (parts.length > 1) id = parts[1];
                     }
-                    
-                    const isManager = client.manager;
-                    const level = client.level ? parseInt(client.level) : 0;
-                    
+                    if(!id) return null;
+
                     return {
                         resourceName: client.resourceName,
-                        id: id ? String(id) : 'unknown',
-                        descriptiveName: client.descriptiveName || `Account ${id}`,
-                        level: level,
-                        isManager: isManager
+                        id: String(id),
+                        descriptiveName: client.descriptiveName || 'Unknown Account',
+                        isManager: client.manager // Detectamos si es manager
                     };
                 })
             ).filter(Boolean);
+
+            // LOGICA DE CLASIFICACIÓN
+            for (const child of foundChildren) {
+                if (child.isManager) {
+                    // Si es un Sub-Manager (ej: Vueling ES Performance), lo metemos a la cola para inspeccionarlo en la siguiente vuelta
+                    if (!processedIds.has(child.id)) {
+                        processingQueue.push(child.id);
+                    }
+                } else {
+                    // Si NO es manager, es una cuenta final (ej: Vueling - ES). ¡Esta es la que queremos!
+                    allLeafAccounts.push({
+                        resourceName: child.resourceName,
+                        id: child.id,
+                        descriptiveName: child.descriptiveName
+                    });
+                }
+            }
         }
-        
-        // Sort by Hierarchy (Level) then Name to try and keep parents near children visually
-        subAccounts.sort((a, b) => {
-            if ((a.level || 0) !== (b.level || 0)) return (a.level || 0) - (b.level || 0);
-            return (a.descriptiveName || '').localeCompare(b.descriptiveName || '');
-        });
-
+      }
     } catch (e) {
-        console.error("Error fetching SA360 sub-accounts:", e);
+        console.error("Error fetching SA360 recursive sub-accounts:", e);
+        setError("Error traversing SA360 account hierarchy.");
+    } finally {
+        setIsLoadingSa360(false);
     }
 
-    // FALLBACK LOGIC:
-    // Add Self (Main Account) if list is empty, allowing direct reporting from the manager account itself
-    if (subAccounts.length === 0 && selectedSa360Customer) {
-        subAccounts.push({
-            ...selectedSa360Customer,
-            descriptiveName: `${selectedSa360Customer.descriptiveName || 'Main Account'} (Direct)`,
-            level: 0,
-            isManager: true
-        });
-    }
-
-    setAvailableSa360SubAccounts(subAccounts);
+    // Actualizamos el estado con las cuentas REALES encontradas
+    setAvailableSa360SubAccounts(allLeafAccounts);
     
-    // Auto Select Logic:
-    // Prefer the first leaf node (Account) if available, otherwise just the first item
-    // This helps avoid selecting a top-level empty manager by default if children exist.
-    if (subAccounts.length > 0) {
-        const clientAccount = subAccounts.find(s => s.isManager === false) || subAccounts[0];
-        setSelectedSa360SubAccount(clientAccount);
+    // Auto-seleccionar la primera cuenta real si existe
+    if (allLeafAccounts.length > 0) {
+        setSelectedSa360SubAccount(allLeafAccounts[0]);
     } else {
         setSelectedSa360SubAccount(null);
     }
