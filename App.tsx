@@ -247,7 +247,7 @@ const App: React.FC = () => {
   const fetchSa360Customers = async (token: string) => {
     try {
         setIsLoadingSa360(true);
-        const resp = await fetch('https://searchads360.googleapis.com/v0/customers:listAccessibleCustomers', {
+        const resp = await fetch('/api/sa360/v0/customers:listAccessibleCustomers', {
             method: 'GET',
             headers: { Authorization: `Bearer ${token}` }
         });
@@ -310,8 +310,7 @@ const App: React.FC = () => {
         `;
 
         // REVERTED to direct URL to avoid 404 in non-proxy environments
-        const resp = await fetch(`https://searchads360.googleapis.com/v0/customers/${currentId}/googleAds:searchStream`, {
-            method: 'POST',
+const resp = await fetch(`/api/sa360/v0/customers/${currentId}/googleAds:searchStream`, {            method: 'POST',
             headers: { 
                 Authorization: `Bearer ${token}`, 
                 'Content-Type': 'application/json',
@@ -551,7 +550,7 @@ const App: React.FC = () => {
                 }
 
                 // REVERTED to direct URL to avoid 404 in non-proxy environments
-                const res = await fetch(`https://searchads360.googleapis.com/v0/customers/${selectedSa360SubAccount.id}/googleAds:searchStream`, {
+                const res = await fetch(`/api/sa360/v0/customers/${selectedSa360SubAccount.id}/googleAds:searchStream`, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify({ query })
