@@ -309,8 +309,7 @@ const App: React.FC = () => {
         WHERE customer_client.status = 'ENABLED'
       `;
 
-      const resp = await fetch(`/api/sa360/v0/customers/${currentId}/googleAds:searchStream`, {
-        method: 'POST',
+const resp = await fetch(`/api/sa360/v0/customers/${currentId}:searchStream`, {        method: 'POST',
         headers: { 
           'Authorization': `Bearer ${token}`, 
           'Content-Type': 'application/json',
