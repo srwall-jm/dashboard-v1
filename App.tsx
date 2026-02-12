@@ -907,15 +907,13 @@ const fetchBridgeData = async () => {
 
     // --- MOCK FALLBACK IF NOTHING CONNECTED ---
 
-    if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
-
-         if (!bridgeDataGA4.length) setBridgeDataGA4(generateMockBridgeData());
-
-         setIsLoadingBridge(false);
-
-         return;
-
-    }
+// Si no hay ningún token de nada, entonces sí ponemos Mock Data
+if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
+     if (!bridgeDataGA4.length) setBridgeDataGA4(generateMockBridgeData());
+     setIsLoadingBridge(false);
+     return;
+}
+// Si falta alguno pero tenemos otros, seguimos adelante...
 
 
 
@@ -1041,7 +1039,7 @@ const fetchBridgeData = async () => {
 
             SELECT 
 
-              landing_page_view.unmasked_url, 
+              landing_page_view.unexpanded_url,, 
 
               metrics.cost_micros, 
 
@@ -1080,38 +1078,24 @@ const fetchBridgeData = async () => {
          
 
          const fetchSa360 = async (query: string) => {
+    const headers: any = { 
+        Authorization: `Bearer ${sa360Auth.token}`, 
+        'Content-Type': 'application/json' 
+    };
+    
+    // Limpiamos el ID del Manager (quitamos guiones)
+    if (selectedSa360Customer) {
+        headers['login-customer-id'] = selectedSa360Customer.id.toString().replace(/-/g, '');
+    }
 
-            const headers: any = { 
+    // Limpiamos el ID de la Subcuenta (quitamos guiones)
+    const targetId = selectedSa360SubAccount.id.toString().replace(/-/g, '');
 
-                Authorization: `Bearer ${sa360Auth.token}`, 
-
-                'Content-Type': 'application/json' 
-
-            };
-
-            // Remove formatting to ensure clean ID
-
-            if (selectedSa360Customer) {
-
-                headers['login-customer-id'] = selectedSa360Customer.id.replace(/-/g, '');
-
-            }
-
-            // Remove formatting to ensure clean ID
-
-            const targetId = selectedSa360SubAccount.id.replace(/-/g, '');
-
-            
-
-            const res = await fetch(`/api/sa360/v0/customers/${targetId}/searchAds360:searchStream`, {
-
-                method: 'POST',
-
-                headers: headers,
-
-                body: JSON.stringify({ query })
-
-            });
+    const res = await fetch(`/api/sa360/v0/customers/${targetId}/searchAds360:searchStream`, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({ query })
+    });
 
             
 
@@ -1145,7 +1129,7 @@ const fetchBridgeData = async () => {
 
             urlRows.forEach((row: any) => {
 
-                const url = row.landingPageView?.unmaskedUrl;
+                const url = row.landingPageView?.unexpanded_url || row.landingPageView?.unexpandedUrl;
 
                 if(!url) return;
 
