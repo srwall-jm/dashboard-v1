@@ -3,7 +3,7 @@ import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, BarChart, Bar, LineChart, Line, Legend, LabelList
 } from 'recharts';
 import { 
-  AlertOctagon, Zap, ShieldCheck, FileText, ExternalLink, Search, Filter, ChevronDown, ChevronRight, CornerDownRight, BarChart2, TrendingUp, DollarSign, Info, LayoutList, Key, Settings
+  AlertOctagon, Zap, ShieldCheck, FileText, ExternalLink, Search, Filter, ChevronDown, ChevronRight, CornerDownRight, BarChart2, TrendingUp, DollarSign, Info, LayoutList, Key, Settings, MousePointer2, Coins
 } from 'lucide-react';
 import { BridgeData, DailyData, KeywordBridgeData, Sa360Customer } from '../types';
 import { exportToCSV } from '../utils';
@@ -38,6 +38,91 @@ const getActionInfo = (label: string) => {
     if (label.includes('REVIEW')) return { desc: "Potential Inefficiency", logic: "Ranking Top 3 Organic with active Paid Spend." };
     if (label === 'INCREASE') return { desc: "Growth Opportunity", logic: "Ranking below Top 10 Organic with NO Paid Spend." };
     return { desc: "Healthy State", logic: "Balanced Organic & Paid visibility." };
+};
+
+// NEW: SA360 Performance Table Component
+const Sa360PerformanceTable: React.FC<{
+  data: BridgeData[];
+  currencySymbol: string;
+}> = ({ data, currencySymbol }) => {
+  const [sortField, setSortField] = useState<'ppcSessions' | 'ppcCost' | 'ppcRevenue'>('ppcRevenue');
+
+  const sortedData = useMemo(() => {
+    // Only aggregate data by URL for this table to show unique URLs
+    const groups: Record<string, { url: string, clicks: number, cost: number, revenue: number }> = {};
+    data.forEach(item => {
+        if (!groups[item.url]) groups[item.url] = { url: item.url, clicks: 0, cost: 0, revenue: 0 };
+        groups[item.url].clicks += item.ppcSessions; // ppcSessions stores Clicks for SA360
+        groups[item.url].cost += item.ppcCost;
+        groups[item.url].revenue += item.ppcRevenue || 0;
+    });
+    
+    return Object.values(groups)
+        .filter(d => d.clicks > 0 || d.cost > 0)
+        .sort((a, b) => b[sortField === 'ppcSessions' ? 'clicks' : sortField === 'ppcCost' ? 'cost' : 'revenue'] - a[sortField === 'ppcSessions' ? 'clicks' : sortField === 'ppcCost' ? 'cost' : 'revenue'])
+        .slice(0, 50);
+  }, [data, sortField]);
+
+  return (
+    <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+            <div>
+               <div className="flex items-center gap-3">
+                   <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">SA360 Top Performers (High Impact URLs)</h4>
+                   <div className="px-2 py-0.5 bg-orange-100 text-orange-600 rounded-md text-[8px] font-black uppercase">SA360 Only</div>
+               </div>
+               <p className="text-[11px] font-bold text-slate-600">Breakdown by Clicks, Cost, and Conversion Value</p>
+            </div>
+            
+            <div className="flex items-center gap-2">
+               <div className="flex bg-slate-100 p-1 rounded-xl">
+                  <button onClick={() => setSortField('ppcRevenue')} className={`px-3 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${sortField === 'ppcRevenue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>By Revenue</button>
+                  <button onClick={() => setSortField('ppcCost')} className={`px-3 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${sortField === 'ppcCost' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>By Cost</button>
+                  <button onClick={() => setSortField('ppcSessions')} className={`px-3 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${sortField === 'ppcSessions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>By Clicks</button>
+               </div>
+               <button onClick={() => exportToCSV(sortedData, `SA360_Top_Performers`)} className="p-2 bg-slate-900 text-white hover:bg-slate-800 rounded-xl transition-all shadow-md">
+                  <FileText size={14} />
+               </button>
+            </div>
+        </div>
+        
+        <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/50">
+                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest w-1/3">URL</th>
+                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Clicks</th>
+                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Cost</th>
+                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Revenue (Conv. Value)</th>
+                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">ROAS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedData.length > 0 ? sortedData.map((row, idx) => {
+                  const roas = row.cost > 0 ? row.revenue / row.cost : 0;
+                  return (
+                    <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-4 max-w-xs">
+                          <div className="flex items-center gap-2 text-[10px] font-bold text-slate-800 truncate" title={row.url}>
+                            <ExternalLink size={10} className="text-indigo-400 flex-shrink-0" /> {row.url}
+                          </div>
+                      </td>
+                      <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-slate-600">{row.clicks.toLocaleString()}</span></td>
+                      <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-slate-600">{currencySymbol}{row.cost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                      <td className="py-3 px-4 text-right"><span className="text-[10px] font-black text-emerald-600">{currencySymbol}{row.revenue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                      <td className="py-3 px-4 text-right">
+                          <span className={`px-2 py-1 rounded-lg text-[9px] font-black ${roas > 4 ? 'bg-emerald-100 text-emerald-700' : roas > 1 ? 'bg-indigo-50 text-indigo-600' : 'bg-rose-50 text-rose-600'}`}>
+                              {roas.toFixed(2)}x
+                          </span>
+                      </td>
+                    </tr>
+                  );
+                }) : <tr><td colSpan={5} className="py-12 text-center text-xs text-slate-400">No SA360 data available for this range</td></tr>}
+              </tbody>
+            </table>
+        </div>
+    </div>
+  );
 };
 
 // Reusable Table Component
@@ -339,6 +424,11 @@ export const SeoPpcBridgeView: React.FC<{
            </div>
         </div>
       </div>
+
+      {/* NEW SECTION: SA360 PERFORMANCE TABLE */}
+      {sa360Data.length > 0 && (
+          <Sa360PerformanceTable data={sa360Data} currencySymbol={currencySymbol} />
+      )}
 
       {/* SECTION E: DUAL TABLES */}
       

@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  RefreshCw, Filter, Globe, Tag, AlertCircle, Sparkles, Cpu, Activity, Menu, X, Bot
+  RefreshCw, Filter, Globe, Tag, AlertCircle, Sparkles, Cpu, Activity, Menu, X
 } from 'lucide-react';
 import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, Sa360Customer, QueryType, BridgeData, AiTrafficData, KeywordBridgeData } from './types';
 import { getDashboardInsights, getOpenAiInsights } from './geminiService';
@@ -286,6 +287,8 @@ const App: React.FC = () => {
   // Fetch Sub Accounts (Client Customers) for a given Manager
   const fetchSa360SubAccounts = async (token: string, managerId: string) => {
     try {
+        // Point 3: Query customer_client.
+        // Also removed "manager = FALSE" to allow seeing sub-managers if needed, but added "level <= 1" as recommended.
         const query = `
             SELECT customer_client.id, customer_client.descriptive_name, customer_client.client_customer, customer_client.status, customer_client.manager
             FROM customer_client 
@@ -294,6 +297,7 @@ const App: React.FC = () => {
 
         const resp = await fetch(`https://searchads360.googleapis.com/v0/customers/${managerId}/googleAds:searchStream`, {
             method: 'POST',
+            // Point 2: login-customer-id Header included for manager context
             headers: { 
                 Authorization: `Bearer ${token}`, 
                 'Content-Type': 'application/json',
@@ -314,19 +318,21 @@ const App: React.FC = () => {
 
         setAvailableSa360SubAccounts(subAccounts);
         
+        // Auto select first sub-account if available
         if (subAccounts.length > 0 && !selectedSa360SubAccount) {
             setSelectedSa360SubAccount(subAccounts[0]);
         }
     } catch (e) {
         console.error("Error fetching SA360 sub-accounts:", e);
+        // Don't show critical error, just log. 
     }
   };
 
   // When selectedSa360Customer changes manually, fetch its sub-accounts
   const handleSa360CustomerChange = (customer: Sa360Customer | null) => {
     setSelectedSa360Customer(customer);
-    setAvailableSa360SubAccounts([]);
-    setSelectedSa360SubAccount(null);
+    setAvailableSa360SubAccounts([]); // Clear previous
+    setSelectedSa360SubAccount(null); // Clear previous selection
     
     if (customer && sa360Auth?.token) {
         fetchSa360SubAccounts(sa360Auth.token, customer.id);
@@ -393,6 +399,8 @@ const App: React.FC = () => {
     }
   };
 
+// --- BRIDGE DATA: GA4 SESSIONS (ORGANIC vs PAID) ---
+// UPDATED: Uses selectedSa360SubAccount for the SA360 portion
   const fetchBridgeData = async () => {
     if (!gscAuth?.site || !gscAuth.token) {
          if (!bridgeDataGA4.length) setBridgeDataGA4(generateMockBridgeData());
@@ -415,6 +423,8 @@ const App: React.FC = () => {
 
     try {
         const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
+        
+        // 1. GSC RAW DATA (Needed for ALL views)
         const gscResp = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
@@ -446,6 +456,10 @@ const App: React.FC = () => {
            if (row.rank < uniqueQueryMap[q].bestRank) uniqueQueryMap[q].bestRank = row.rank;
         });
 
+        // ---------------------------------------------------------
+        // PROCESS A: SA360 DATA (Use selectedSa360SubAccount)
+        // ---------------------------------------------------------
+        // CRITICAL: We query the *Sub-account* ID, not the Manager ID, for accurate ad data.
         if (sa360Auth?.token && selectedSa360SubAccount) {
              const sa360PaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, revenue: number, campaigns: Set<string> }> = {};
              const sa360KeywordMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number }> = {};
@@ -473,10 +487,13 @@ const App: React.FC = () => {
              `;
              
              const fetchSa360 = async (query: string) => {
+                // Using selectedSa360SubAccount.id specifically
                 const headers: any = { 
                     Authorization: `Bearer ${sa360Auth.token}`, 
                     'Content-Type': 'application/json' 
                 };
+                
+                // Point 2: login-customer-id Header included for manager context in reporting data
                 if (selectedSa360Customer) {
                     headers['login-customer-id'] = selectedSa360Customer.id;
                 }
@@ -518,6 +535,7 @@ const App: React.FC = () => {
                     sa360KeywordMap[cleanKw].cost += (parseInt(metrics.costMicros) || 0) / 1000000;
                 });
 
+                // BUILD SA360 BRIDGE DATA
                 const sa360Results: BridgeData[] = [];
                 organicRows.forEach((org: any) => {
                     const paidStats = sa360PaidMap[org.cleanPath];
@@ -533,15 +551,17 @@ const App: React.FC = () => {
                     else if (org.rank <= 3.0 && paidVolume > 0) action = "REVIEW";
                     else if (org.rank > 10.0 && paidVolume === 0) action = "INCREASE";
 
+                    let campDisplay = "SA360";
                     sa360Results.push({
                         url: org.cleanPath, query: org.query, organicRank: org.rank, organicClicks: org.gscClicks, organicSessions: org.gscClicks, 
-                        ppcCampaign: "SA360", ppcCost: paidStats?.cost || 0, ppcConversions: paidStats?.conversions || 0, ppcCpa: 0,
+                        ppcCampaign: campDisplay, ppcCost: paidStats?.cost || 0, ppcConversions: paidStats?.conversions || 0, ppcCpa: 0,
                         ppcRevenue: paidStats?.revenue || 0,
                         ppcSessions: paidVolume, ppcImpressions: paidStats?.impressions || 0, blendedCostRatio: paidShare, actionLabel: action, dataSource: 'SA360'
                     });
                 });
                 setBridgeDataSA360(sa360Results.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
 
+                // BUILD SA360 KEYWORD DATA
                 const sa360KwResults: KeywordBridgeData[] = [];
                 const allKeysSA = new Set([...Object.keys(sa360KeywordMap), ...Object.keys(uniqueQueryMap)]);
                 allKeysSA.forEach(key => {
@@ -562,13 +582,17 @@ const App: React.FC = () => {
                 });
                 setKeywordBridgeDataSA360(sa360KwResults.sort((a,b) => b.paidSessions - a.paidSessions));
              } catch (err) {
-                 console.error("Error fetching SA360 data:", err);
+                 console.error("Error fetching specific SA360 account data:", err);
              }
         } else {
+             // Clear data if no sub-account selected
              setBridgeDataSA360([]);
              setKeywordBridgeDataSA360([]);
         }
 
+        // ---------------------------------------------------------
+        // PROCESS B: GA4 DATA (If available)
+        // ---------------------------------------------------------
         if (ga4Auth?.property && ga4Auth.token) {
              const ga4PaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
              const ga4KeywordMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number }> = {};
@@ -604,6 +628,7 @@ const App: React.FC = () => {
                 }
             });
 
+            // GA4 Keywords
             const ga4KwResp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
@@ -626,6 +651,7 @@ const App: React.FC = () => {
                  ga4KeywordMap[cleanKw].conversions += (sessions * rate);
             });
 
+            // BUILD GA4 BRIDGE DATA
             const ga4Results: BridgeData[] = [];
             organicRows.forEach((org: any) => {
                 const paidStats = ga4PaidMap[org.cleanPath];
@@ -649,6 +675,7 @@ const App: React.FC = () => {
             });
             setBridgeDataGA4(ga4Results.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
 
+            // BUILD GA4 KEYWORD DATA
             const ga4KwResults: KeywordBridgeData[] = [];
             const allKeysGA = new Set([...Object.keys(ga4KeywordMap), ...Object.keys(uniqueQueryMap)]);
             allKeysGA.forEach(key => {
@@ -676,6 +703,7 @@ const App: React.FC = () => {
         setIsLoadingBridge(false);
     }
   };
+
 
   const fetchGa4Data = async () => {
     if (!ga4Auth?.property || !ga4Auth.token) {
@@ -734,6 +762,7 @@ const App: React.FC = () => {
   const fetchGscData = async () => {
     if (!gscAuth?.site || !gscAuth.token) {
         setRealKeywordData(generateMockKeywordData());
+        // setGscDailyTotals... (omitted for brevity in mock fallback)
         return;
     }
     
@@ -766,6 +795,7 @@ const App: React.FC = () => {
         }));
 
         setRealKeywordData(kwData);
+        // Calculate daily totals logic would go here
     } catch (e) {
         console.error("GSC Fetch Error", e);
         setRealKeywordData(generateMockKeywordData());
@@ -812,6 +842,7 @@ const App: React.FC = () => {
   }, [user, ga4Auth, gscAuth, sa360Auth, filters, selectedSa360SubAccount]);
 
   const handleLoginSuccess = (credential: string) => {
+      // Decode JWT safely
       try {
           const payload = JSON.parse(atob(credential.split('.')[1]));
           const userData = { name: payload.name, email: payload.email, picture: payload.picture };
@@ -833,6 +864,7 @@ const App: React.FC = () => {
      if (!realDailyData.length && !realKeywordData.length) return;
      setLoadingInsights(true);
      
+     // Simple aggregation for insight context
      const summary = `Analyze data for ${activeTab}. Total Sessions: ${realDailyData.reduce((a,b)=>a+b.sessions,0)}. Top Keywords: ${realKeywordData.slice(0,5).map(k=>k.keyword).join(', ')}`;
      
      try {
@@ -882,12 +914,14 @@ const App: React.FC = () => {
       
       <main className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarOpen ? (isCollapsed ? 'ml-20' : 'ml-0 xl:ml-80') : 'ml-0'} p-4 md:p-8 overflow-x-hidden`}>
          
+         {/* Mobile Toggle */}
          {!isSidebarOpen && (
             <button onClick={() => setIsSidebarOpen(true)} className="fixed bottom-6 right-6 z-50 p-4 bg-indigo-600 text-white rounded-full shadow-2xl xl:hidden">
                 <Menu />
             </button>
          )}
 
+         {/* Header */}
          <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 mb-10">
             <div>
                 <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-2">{activeTab.replace(/_/g, ' ')}</h2>
@@ -909,6 +943,7 @@ const App: React.FC = () => {
             </div>
          </div>
 
+         {/* Insights Panel */}
          {tabInsights[activeTab] && (
             <div className="mb-8 p-6 bg-gradient-to-br from-indigo-600 to-violet-700 rounded-[24px] text-white shadow-xl animate-in fade-in slide-in-from-top-4">
                 <div className="flex justify-between items-start mb-4">
@@ -924,9 +959,10 @@ const App: React.FC = () => {
             </div>
          )}
 
+         {/* View Rendering */}
          {activeTab === DashboardTab.ORGANIC_VS_PAID && (
             <OrganicVsPaidView 
-                stats={{ organic: organicStats, paid: organicStats, total: organicStats }} 
+                stats={{ organic: organicStats, paid: organicStats, total: organicStats }} // Simplify for mock/real mix logic
                 data={realDailyData} 
                 comparisonEnabled={filters.comparison.enabled} 
                 grouping={grouping} 
@@ -1001,7 +1037,6 @@ const App: React.FC = () => {
         availableSa360Customers={availableSa360Customers} availableSa360SubAccounts={availableSa360SubAccounts}
         selectedSa360Customer={selectedSa360Customer} selectedSa360SubAccount={selectedSa360SubAccount}
         onSa360CustomerChange={handleSa360CustomerChange}
-        onSa360SubAccountChange={setSelectedSa360SubAccount}
         setGa4Auth={setGa4Auth} setGscAuth={setGscAuth} setSa360Auth={setSa360Auth}
         filteredProperties={availableProperties.filter(p => p.name.toLowerCase().includes(ga4Search.toLowerCase()))}
         filteredSites={availableSites.filter(s => s.siteUrl.toLowerCase().includes(gscSearch.toLowerCase()))}
