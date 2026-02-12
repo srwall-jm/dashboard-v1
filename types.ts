@@ -79,6 +79,8 @@ export interface Sa360Customer {
   resourceName: string;
   id: string;
   descriptiveName?: string;
+  level?: number;
+  isManager?: boolean;
 }
 
 export interface GoogleAdsCustomer {

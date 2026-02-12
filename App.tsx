@@ -290,10 +290,19 @@ const App: React.FC = () => {
   const fetchSa360SubAccounts = async (token: string, managerId: string) => {
     let subAccounts: Sa360Customer[] = [];
     try {
-        // Query to get all accessible clients under the manager
-        // We select key fields. client_customer contains the resource name of the client.
+        // Updated Query: 
+        // 1. Removed filters on manager status to allow Sub-managers to appear.
+        // 2. Included 'level' to help visualize hierarchy.
+        // 3. Ensuring we fetch everything under the root.
         const query = `
-            SELECT customer_client.resource_name, customer_client.client_customer, customer_client.descriptive_name, customer_client.manager, customer_client.status
+            SELECT 
+                customer_client.id, 
+                customer_client.resource_name, 
+                customer_client.client_customer, 
+                customer_client.descriptive_name, 
+                customer_client.manager, 
+                customer_client.status, 
+                customer_client.level 
             FROM customer_client 
             WHERE customer_client.status = 'ENABLED'
         `;
@@ -317,47 +326,56 @@ const App: React.FC = () => {
                     const client = row.customerClient;
                     if (!client) return null;
                     
-                    // Parse ID from client_customer (format: customers/1234567890)
-                    // Fallback to client.id if client_customer is missing
+                    // ID parsing fallback
                     let id = client.id;
-                    if (client.clientCustomer) {
+                    if (!id && client.clientCustomer) {
                         const parts = client.clientCustomer.split('/');
                         if (parts.length > 1) id = parts[1];
                     }
                     
                     const isManager = client.manager;
-                    const typeLabel = isManager ? '(Manager)' : '(Account)';
+                    const level = client.level ? parseInt(client.level) : 0;
                     
                     return {
                         resourceName: client.resourceName,
                         id: id ? String(id) : 'unknown',
-                        descriptiveName: `${client.descriptiveName || 'Unknown'} ${typeLabel}`
+                        descriptiveName: client.descriptiveName || `Account ${id}`,
+                        level: level,
+                        isManager: isManager
                     };
                 })
             ).filter(Boolean);
         }
+        
+        // Sort by Hierarchy (Level) then Name to try and keep parents near children visually
+        subAccounts.sort((a, b) => {
+            if ((a.level || 0) !== (b.level || 0)) return (a.level || 0) - (b.level || 0);
+            return (a.descriptiveName || '').localeCompare(b.descriptiveName || '');
+        });
+
     } catch (e) {
         console.error("Error fetching SA360 sub-accounts:", e);
     }
 
     // FALLBACK LOGIC:
-    // If the API returns no sub-accounts, it might be because the 'Manager' selected is actually a direct Client Account
-    // or the API structure is flat for this user. 
-    // In this case, we allow the user to select the "Main Account" itself as the target for reporting.
+    // Add Self (Main Account) if list is empty, allowing direct reporting from the manager account itself
     if (subAccounts.length === 0 && selectedSa360Customer) {
-        // Only add if not already present (though list is 0 here)
         subAccounts.push({
             ...selectedSa360Customer,
-            descriptiveName: `${selectedSa360Customer.descriptiveName || 'Main Account'} (Direct / Self)`
+            descriptiveName: `${selectedSa360Customer.descriptiveName || 'Main Account'} (Direct)`,
+            level: 0,
+            isManager: true
         });
     }
 
     setAvailableSa360SubAccounts(subAccounts);
     
-    // Auto select logic: Prefer leaf nodes (non-managers)
+    // Auto Select Logic:
+    // Prefer the first leaf node (Account) if available, otherwise just the first item
+    // This helps avoid selecting a top-level empty manager by default if children exist.
     if (subAccounts.length > 0) {
-        const leafNode = subAccounts.find(s => !s.descriptiveName?.includes('(Manager)'));
-        setSelectedSa360SubAccount(leafNode || subAccounts[0]);
+        const clientAccount = subAccounts.find(s => s.isManager === false) || subAccounts[0];
+        setSelectedSa360SubAccount(clientAccount);
     } else {
         setSelectedSa360SubAccount(null);
     }

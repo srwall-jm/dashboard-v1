@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { X, Cpu, Settings2, Database, ExternalLink, Search, CornerDownRight } from 'lucide-react';
 import { Ga4Property, GscSite, Sa360Customer } from '../types';
@@ -155,7 +156,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                   disabled={availableSa360SubAccounts.length === 0}
                               >
                                   {availableSa360SubAccounts.length === 0 && <option value="">No sub-accounts found</option>}
-                                  {availableSa360SubAccounts.map(c => <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName} ({c.id})</option>)}
+                                  {availableSa360SubAccounts.map(c => {
+                                      // Visual Indentation based on Level
+                                      // Level 0 (Direct/Root) -> No indent
+                                      // Level 1 -> 2 spaces
+                                      // Level 2 -> 4 spaces
+                                      const indent = c.level ? '\u00A0\u00A0'.repeat(c.level) : ''; 
+                                      const suffix = c.isManager ? ' (Mgr)' : '';
+                                      return (
+                                        <option key={c.resourceName} value={c.resourceName}>
+                                            {indent}{c.descriptiveName}{suffix} ({c.id})
+                                        </option>
+                                      );
+                                  })}
                               </select>
                           </div>
                       )}
