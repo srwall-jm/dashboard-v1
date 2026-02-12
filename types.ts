@@ -91,7 +91,7 @@ export interface GoogleAdsCustomer {
 
 export interface BridgeData {
   url: string;
-  query: string;
+  query: string; // Primary/Top query
   organicRank: number | null;
   organicClicks: number; // GSC Clicks
   organicSessions: number; // GA4 Sessions (Primary Organic Metric)
@@ -105,7 +105,8 @@ export interface BridgeData {
   actionLabel: string;
   status?: string;
   ppcSourceMedium?: string;
-  dataSource: 'GA4' | 'SA360'; // NEW: Track source
+  dataSource: 'GA4' | 'SA360';
+  gscTopQueries?: { query: string; rank: number; clicks: number }[]; // NEW: Top 10 Queries
 }
 
 export interface KeywordBridgeData {

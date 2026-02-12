@@ -117,10 +117,10 @@ export const generateMockBridgeData = (): BridgeData[] => {
   const campaigns = ['Search - Brand', 'Search - Generic', 'PMax - Products', 'Shopping - Best Sellers'];
 
   return Array.from({ length: 60 }).map((_, i) => {
-    const isPMax = Math.random() > 0.8; // 20% Chance of being PMax (Query might be null/grouped)
-    const hasOrganic = Math.random() > 0.1; // 90% chance of having organic data
+    const isPMax = Math.random() > 0.8; 
+    const hasOrganic = Math.random() > 0.1;
     
-    const organicRank = hasOrganic ? (Math.random() * 50) + 1 : null; // Rank 1 to 50 or Null
+    const organicRank = hasOrganic ? (Math.random() * 50) + 1 : null; 
     
     const scenario = Math.random();
     let ppcCost = 0;
@@ -128,17 +128,14 @@ export const generateMockBridgeData = (): BridgeData[] => {
     let rank = organicRank;
 
     if (scenario < 0.2) {
-      // Cannibalization setup
-      rank = Math.floor(Math.random() * 3) + 1; // 1-3
+      rank = Math.floor(Math.random() * 3) + 1; 
       ppcCost = Math.floor(Math.random() * 500) + 100;
       ppcConversions = Math.floor(Math.random() * 10);
     } else if (scenario < 0.5) {
-      // Opportunity setup
-      rank = Math.floor(Math.random() * 15) + 5; // 5-20
+      rank = Math.floor(Math.random() * 15) + 5; 
       ppcCost = Math.floor(Math.random() * 200) + 50;
-      ppcConversions = Math.floor(Math.random() * 20) + 5; // Good conversions
+      ppcConversions = Math.floor(Math.random() * 20) + 5; 
     } else {
-      // Defense or General
       rank = Math.random() > 0.5 ? Math.floor(Math.random() * 80) + 20 : null;
       ppcCost = Math.floor(Math.random() * 1000) + 50;
       ppcConversions = Math.floor(Math.random() * 50);
@@ -146,45 +143,55 @@ export const generateMockBridgeData = (): BridgeData[] => {
 
     const ppcCpa = ppcConversions > 0 ? ppcCost / ppcConversions : 0;
     const organicClicks = rank && rank < 10 ? Math.floor(Math.random() * 1000) : Math.floor(Math.random() * 50);
-    const organicSessions = Math.floor(organicClicks * 1.3); // GA4 Sessions usually higher than GSC clicks
+    const organicSessions = Math.floor(organicClicks * 1.3) + Math.floor(Math.random() * 50); 
     
-    // Paid Sessions Logic
     const ppcSessions = Math.floor(ppcCost / (0.5 + Math.random()));
     const ppcAvgCpc = ppcSessions > 0 ? ppcCost / ppcSessions : 0;
 
     const blendedDenominator = organicSessions + ppcSessions;
     const blendedCostRatio = blendedDenominator > 0 ? ppcSessions / blendedDenominator : 0;
     
-    // Logic for Action Label
     let action = "MAINTAIN";
     if (rank && rank <= 3.0 && blendedCostRatio > 0.4) action = "CRITICAL (Overlap)";
     else if (rank && rank <= 3.0 && ppcSessions > 0) action = "REVIEW";
     else if (rank && rank > 10.0 && ppcSessions === 0) action = "INCREASE";
+
+    // Generate Mock Nested Queries
+    const gscTopQueries = [];
+    if (hasOrganic) {
+        const numQueries = Math.floor(Math.random() * 5) + 1;
+        for(let j=0; j<numQueries; j++) {
+            gscTopQueries.push({
+                query: queries[(i + j) % queries.length],
+                rank: (rank || 50) + j,
+                clicks: Math.floor(organicClicks / (j+1))
+            });
+        }
+    }
 
     return {
       url: pages[i % pages.length],
       query: isPMax ? '(not provided)' : queries[i % queries.length],
       organicRank: rank,
       organicClicks: organicClicks,
-      organicSessions: organicSessions, // GA4 Metric
+      organicSessions: organicSessions, 
       ppcCampaign: campaigns[i % campaigns.length],
       ppcCost,
       ppcConversions,
       ppcCpa,
-      ppcSessions: ppcSessions, // GA4 Paid Sessions
+      ppcSessions: ppcSessions, 
       ppcAvgCpc,
       ppcImpressions: Math.floor(ppcCost * 20),
       blendedCostRatio,
       actionLabel: action,
-      dataSource: 'GA4' // Default source for mock data
+      dataSource: 'GA4',
+      gscTopQueries: gscTopQueries
     };
   });
 };
 
 export const generateMockAiTrafficData = (): AiTrafficData[] => {
-  // Only the requested sources
   const sources = ['chatgpt.com', 'perplexity.ai', 'gemini.google.com', 'claude.ai'];
-  
   const pages = [
     '/blog/top-running-shoes-2024', '/shop/yoga/kits', '/guide/home-workouts', 
     '/product/smart-dumbbell', '/blog/nutrition-tips', '/shop/sale'
@@ -193,24 +200,22 @@ export const generateMockAiTrafficData = (): AiTrafficData[] => {
   const data: AiTrafficData[] = [];
   const now = new Date();
 
-  // Generate 30 days of data
   for (let i = 0; i < 30; i++) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
     const dateStr = d.toISOString().split('T')[0];
 
     sources.forEach(source => {
-      // Perplexity and ChatGPT usually have higher engagement in mock scenarios
       const isHighQuality = source.includes('perplexity') || source.includes('chatgpt');
       const baseSessions = isHighQuality ? Math.floor(Math.random() * 50) + 10 : Math.floor(Math.random() * 20) + 2;
       
       pages.forEach(page => {
-        if (Math.random() > 0.7) return; // Not every page gets traffic from every source every day
+        if (Math.random() > 0.7) return; 
 
         const sessions = Math.ceil(baseSessions * Math.random());
         const engagementRate = isHighQuality ? 0.6 + (Math.random() * 0.3) : 0.3 + (Math.random() * 0.3);
         const engagedSessions = Math.round(sessions * engagementRate);
-        const revenue = engagedSessions * (Math.random() * 5); // Some random revenue
+        const revenue = engagedSessions * (Math.random() * 5); 
 
         data.push({
           date: dateStr,

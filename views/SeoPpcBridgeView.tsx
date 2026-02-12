@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { 
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, BarChart, Bar, LineChart, Line, Legend, LabelList
@@ -55,14 +56,11 @@ const BridgeAnalysisTable: React.FC<{
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'url' | 'keyword'>('url');
 
-  const groupedData = useMemo(() => {
-    const groups: Record<string, BridgeData & { queries: { q: string, r: number | null, c: number }[] }> = {};
-    data.forEach(item => {
-      if (urlFilter && !item.url.toLowerCase().includes(urlFilter.toLowerCase())) return;
-      if (!groups[item.url]) groups[item.url] = { ...item, queries: [] };
-      groups[item.url].queries.push({ q: item.query, r: item.organicRank, c: item.organicClicks });
-    });
-    return Object.values(groups).sort((a, b) => b.blendedCostRatio - a.blendedCostRatio);
+  // Filtered Data based on URL Filter
+  const filteredUrlData = useMemo(() => {
+    return data
+        .filter(item => !urlFilter || item.url.toLowerCase().includes(urlFilter.toLowerCase()))
+        .sort((a, b) => b.blendedCostRatio - a.blendedCostRatio);
   }, [data, urlFilter]);
 
   const toggleRow = (url: string) => {
@@ -84,10 +82,10 @@ const BridgeAnalysisTable: React.FC<{
               </div>
               <div className="flex bg-slate-100 p-1 rounded-xl w-fit">
                 <button onClick={() => setViewMode('url')} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${viewMode === 'url' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>
-                  <LayoutList size={12} /> Analysis by URL
+                  <LayoutList size={12} /> Analysis by URL / QUERY
                 </button>
                 <button onClick={() => setViewMode('keyword')} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${viewMode === 'keyword' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>
-                  <Key size={12} /> Analysis by Keyword
+                  <Key size={12} /> Analysis by Exact Match
                 </button>
               </div>
             </div>
@@ -113,16 +111,16 @@ const BridgeAnalysisTable: React.FC<{
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
                   <th className="py-3 px-4 w-8"></th>
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">URL / Campaign</th>
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Top Rank</th>
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Org. {dataSourceName === 'SA360' ? 'Clicks' : 'Sessions'}</th>
+                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">URL / Top Query</th>
+                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Top Org. Rank</th>
+                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Org. Sessions (GA4)</th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">{metricLabel}</th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right text-amber-600">Paid Share</th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
                 </tr>
               </thead>
               <tbody>
-                {groupedData.length > 0 ? groupedData.slice(0, 100).map((row, idx) => {
+                {filteredUrlData.length > 0 ? filteredUrlData.slice(0, 100).map((row, idx) => {
                   const actionInfo = getActionInfo(row.actionLabel);
                   return (
                   <React.Fragment key={idx}>
@@ -131,10 +129,10 @@ const BridgeAnalysisTable: React.FC<{
                       <td className="py-3 px-4 max-w-xs">
                           <div className="flex flex-col">
                             <div className="flex items-center gap-2 text-[10px] font-bold text-slate-800 break-all"><ExternalLink size={10} className="text-indigo-400 flex-shrink-0" /> {row.url}</div>
-                            <div className="flex items-center gap-1 text-[9px] text-slate-400 mt-1"><Zap size={8} /> {row.ppcCampaign}</div>
+                            <div className="flex items-center gap-1 text-[9px] text-slate-400 mt-1"><Key size={8} /> Top Query: {row.query}</div>
                           </div>
                       </td>
-                      <td className="py-3 px-4 text-center"><span className="text-[10px] font-bold text-slate-600">#{Math.min(...row.queries.map(q => q.r || 100)).toFixed(1)}</span></td>
+                      <td className="py-3 px-4 text-center"><span className="text-[10px] font-bold text-slate-600">{row.organicRank ? `#${row.organicRank.toFixed(1)}` : '-'}</span></td>
                       <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-emerald-600">{row.organicSessions.toLocaleString()}</span></td>
                       <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-indigo-600">{row.ppcSessions.toLocaleString()}</span></td>
                       <td className="py-3 px-4 text-right">
@@ -153,7 +151,21 @@ const BridgeAnalysisTable: React.FC<{
                       </td>
                     </tr>
                     {expandedRows.has(row.url) && (
-                      <>{[...row.queries].sort((a, b) => b.c - a.c).map((q, qIdx) => (<QueryDetailRow key={`${idx}-${qIdx}`} query={q.q} rank={q.r} clicks={q.c} />))}<tr className="bg-slate-50/50 border-b border-slate-100"><td colSpan={7} className="py-1"></td></tr></>
+                      <>
+                        <tr className="bg-slate-50/50">
+                            <td colSpan={7} className="px-12 py-2">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Top 10 GSC Queries for this URL</p>
+                            </td>
+                        </tr>
+                        {row.gscTopQueries && row.gscTopQueries.length > 0 ? (
+                            row.gscTopQueries.map((q, qIdx) => (
+                                <QueryDetailRow key={`${idx}-${qIdx}`} query={q.query} rank={q.rank} clicks={q.clicks} />
+                            ))
+                        ) : (
+                            <tr><td colSpan={7} className="text-center py-2 text-[10px] text-slate-400 italic">No specific query data available via GSC</td></tr>
+                        )}
+                        <tr className="bg-slate-50/50 border-b border-slate-100"><td colSpan={7} className="py-1"></td></tr>
+                      </>
                     )}
                   </React.Fragment>
                 );
@@ -260,7 +272,7 @@ export const SeoPpcBridgeView: React.FC<{
                 <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Total Visibility (Analysed URLs)</h4>
                 <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-black">{kpis.traffic.organic.toLocaleString()}</span>
-                    <span className="text-sm font-bold text-emerald-400">Organic {primaryDataSource === 'SA360' ? 'Clicks (GSC)' : 'Sessions'}</span>
+                    <span className="text-sm font-bold text-emerald-400">Organic Sessions (GA4)</span>
                 </div>
             </div>
             <div className="md:text-right">

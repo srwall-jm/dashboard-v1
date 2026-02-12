@@ -913,9 +913,6 @@ if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
      setIsLoadingBridge(false);
      return;
 }
-// Si falta alguno pero tenemos otros, seguimos adelante...
-
-
 
     const normalizeUrl = (url: string) => {
 
@@ -939,13 +936,39 @@ if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
 
     };
 
+    // 0. FETCH GA4 ORGANIC SESSIONS (Per URL)
+    const ga4OrganicMap: Record<string, number> = {};
+    if (ga4Auth?.property && ga4Auth.token) {
+        try {
+            const ga4OrgResp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    dateRanges: [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }],
+                    dimensions: [{ name: 'landingPage' }],
+                    metrics: [{ name: 'sessions' }],
+                    dimensionFilter: {
+                        filter: {
+                            fieldName: 'sessionDefaultChannelGroup',
+                            stringFilter: { matchType: 'CONTAINS', value: 'Organic', caseSensitive: false }
+                        }
+                    },
+                    limit: 100000
+                })
+            });
+            const ga4OrgData = await ga4OrgResp.json();
+            (ga4OrgData.rows || []).forEach((row: any) => {
+                const path = normalizeUrl(row.dimensionValues[0].value);
+                const sessions = parseInt(row.metricValues[0].value) || 0;
+                ga4OrganicMap[path] = (ga4OrganicMap[path] || 0) + sessions;
+            });
+        } catch (e) {
+            console.error("Error fetching GA4 Organic Data:", e);
+        }
+    }
 
-
-    let organicRows: { query: string, cleanPath: string, fullUrl: string, rank: number, gscClicks: number }[] = [];
-
+    let gscUrlMap: Record<string, { queries: {query: string, rank: number, clicks: number}[], totalClicks: number, bestRank: number }> = {};
     let uniqueQueryMap: Record<string, { rankSum: number, count: number, bestRank: number, clicks: number }> = {};
-
-
 
     // 1. TRY GSC FETCH (If Available)
 
@@ -978,39 +1001,34 @@ if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
 
 
             const gscDataRaw = await gscResp.json();
-
             
+            // Process GSC rows into a Map grouped by URL
+            (gscDataRaw.rows || []).forEach((row: any) => {
+                const fullUrl = row.keys[0];
+                const query = row.keys[1];
+                const clicks = row.clicks;
+                const rank = row.position;
+                const cleanPath = normalizeUrl(fullUrl);
 
-            organicRows = (gscDataRaw.rows || []).map((row: any) => ({
+                if (!gscUrlMap[cleanPath]) {
+                    gscUrlMap[cleanPath] = { queries: [], totalClicks: 0, bestRank: 999 };
+                }
+                gscUrlMap[cleanPath].queries.push({ query, rank, clicks });
+                gscUrlMap[cleanPath].totalClicks += clicks;
+                if (rank < gscUrlMap[cleanPath].bestRank) gscUrlMap[cleanPath].bestRank = rank;
 
-                query: row.keys[1],
-
-                cleanPath: normalizeUrl(row.keys[0]), 
-
-                fullUrl: row.keys[0], 
-
-                rank: row.position,
-
-                gscClicks: row.clicks
-
-            }));
-
-
-
-            organicRows.forEach((row: any) => {
-
-               const q = row.query.toLowerCase().trim();
-
-               if (!uniqueQueryMap[q]) uniqueQueryMap[q] = { rankSum: 0, count: 0, bestRank: 999, clicks: 0 };
-
-               uniqueQueryMap[q].rankSum += row.rank;
-
-               uniqueQueryMap[q].count += 1;
-
-               uniqueQueryMap[q].clicks += row.gscClicks;
-
-               if (row.rank < uniqueQueryMap[q].bestRank) uniqueQueryMap[q].bestRank = row.rank;
-
+                // Keyword Map logic (existing)
+                const q = query.toLowerCase().trim();
+                if (!uniqueQueryMap[q]) uniqueQueryMap[q] = { rankSum: 0, count: 0, bestRank: 999, clicks: 0 };
+                uniqueQueryMap[q].rankSum += rank;
+                uniqueQueryMap[q].count += 1;
+                uniqueQueryMap[q].clicks += clicks;
+                if (rank < uniqueQueryMap[q].bestRank) uniqueQueryMap[q].bestRank = rank;
+            });
+            
+            // Sort queries per URL by clicks desc
+            Object.values(gscUrlMap).forEach(item => {
+                item.queries.sort((a,b) => b.clicks - a.clicks);
             });
 
         } catch (e) {
@@ -1181,34 +1199,30 @@ if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
 
             // IMPORTANT: If organicRows is empty, we MUST still process sa360PaidMap keys
 
-            const allPaths = new Set([...organicRows.map(o => o.cleanPath), ...Object.keys(sa360PaidMap)]);
+            const allPaths = new Set([...Object.keys(gscUrlMap), ...Object.keys(sa360PaidMap)]);
 
             
 
             allPaths.forEach(path => {
-
-                const org = organicRows.find(o => o.cleanPath === path); 
-
+                const gscData = gscUrlMap[path]; 
                 const paidStats = sa360PaidMap[path];
-
-                const organicProxy = org ? org.gscClicks : 0;
-
-                const organicRank = org ? org.rank : null;
+                
+                // DATA SOURCE: GA4 Organic Sessions (Precise)
+                const organicSessions = ga4OrganicMap[path] || 0;
+                
+                // GSC Fallback
+                const organicClicks = gscData ? gscData.totalClicks : 0;
+                const organicRank = gscData ? gscData.bestRank : null;
+                const topQuery = gscData && gscData.queries.length > 0 ? gscData.queries[0].query : '(direct/none)';
+                const topQueriesList = gscData ? gscData.queries.slice(0, 10) : [];
 
                 const paidVolume = paidStats ? paidStats.clicksOrSessions : 0;
-
                 
-
-                if (organicProxy === 0 && paidVolume === 0) return;
-
+                if (organicSessions === 0 && organicClicks === 0 && paidVolume === 0) return;
                 
-
-                const totalVolume = organicProxy + paidVolume;
-
+                const totalVolume = organicSessions + paidVolume; // Use Sessions for blended ratio
                 const paidShare = totalVolume > 0 ? (paidVolume / totalVolume) : 0;
-
                 
-
                 let action = "MAINTAIN";
 
                 if (organicRank && organicRank <= 3.0 && paidShare > 0.4) action = "CRITICAL (Overlap)";
@@ -1223,13 +1237,13 @@ if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
 
                     url: path, 
 
-                    query: org?.query || '(direct/none)', 
+                    query: topQuery, 
 
                     organicRank: organicRank, 
 
-                    organicClicks: organicProxy, 
+                    organicClicks: organicClicks, 
 
-                    organicSessions: organicProxy, 
+                    organicSessions: organicSessions, 
 
                     ppcCampaign: "SA360", 
 
@@ -1247,7 +1261,9 @@ if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
 
                     actionLabel: action, 
 
-                    dataSource: 'SA360'
+                    dataSource: 'SA360',
+                    
+                    gscTopQueries: topQueriesList
 
                 });
 
@@ -1445,33 +1461,37 @@ if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
 
             // Again, ensure we iterate even if organicRows is empty
 
-            const allPathsGA = new Set([...organicRows.map(o => o.cleanPath), ...Object.keys(ga4PaidMap)]);
+            const allPathsGA = new Set([...Object.keys(gscUrlMap), ...Object.keys(ga4PaidMap)]);
 
             
 
             allPathsGA.forEach(path => {
-
-                const org = organicRows.find(o => o.cleanPath === path);
-
+                const gscData = gscUrlMap[path];
                 const paidStats = ga4PaidMap[path];
-
-                const organicProxy = org ? org.gscClicks : 0;
+                
+                // DATA SOURCE: GA4 Organic Sessions (Precise)
+                const organicSessions = ga4OrganicMap[path] || 0;
+                
+                // GSC Fallback
+                const organicClicks = gscData ? gscData.totalClicks : 0;
+                const organicRank = gscData ? gscData.bestRank : null;
+                const topQuery = gscData && gscData.queries.length > 0 ? gscData.queries[0].query : '(direct/none)';
+                const topQueriesList = gscData ? gscData.queries.slice(0, 10) : [];
 
                 const paidVolume = paidStats ? paidStats.clicksOrSessions : 0;
-
-                if (organicProxy === 0 && paidVolume === 0) return;
-
-                const totalVolume = organicProxy + paidVolume;
-
+                
+                if (organicSessions === 0 && organicClicks === 0 && paidVolume === 0) return;
+                
+                const totalVolume = organicSessions + paidVolume; // Use Sessions for blended ratio
                 const paidShare = totalVolume > 0 ? (paidVolume / totalVolume) : 0;
-
+                
                 let action = "MAINTAIN";
 
-                if (org && org.rank <= 3.0 && paidShare > 0.4) action = "CRITICAL (Overlap)";
+                if (organicRank && organicRank <= 3.0 && paidShare > 0.4) action = "CRITICAL (Overlap)";
 
-                else if (org && org.rank <= 3.0 && paidVolume > 0) action = "REVIEW";
+                else if (organicRank && organicRank <= 3.0 && paidVolume > 0) action = "REVIEW";
 
-                else if (org && org.rank > 10.0 && paidVolume === 0) action = "INCREASE";
+                else if (organicRank && organicRank > 10.0 && paidVolume === 0) action = "INCREASE";
 
                 let campDisplay = "None";
 
@@ -1481,11 +1501,13 @@ if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
 
                 ga4Results.push({
 
-                    url: path, query: org?.query || '(direct/none)', organicRank: org?.rank || null, organicClicks: organicProxy, organicSessions: organicProxy, 
+                    url: path, query: topQuery, organicRank: organicRank, organicClicks: organicClicks, organicSessions: organicSessions, 
 
                     ppcCampaign: campDisplay, ppcCost: 0, ppcConversions: paidStats?.conversions || 0, ppcCpa: 0,
 
-                    ppcSessions: paidVolume, ppcImpressions: 0, blendedCostRatio: paidShare, actionLabel: action, dataSource: 'GA4'
+                    ppcSessions: paidVolume, ppcImpressions: 0, blendedCostRatio: paidShare, actionLabel: action, dataSource: 'GA4',
+                    
+                    gscTopQueries: topQueriesList
 
                 });
 
