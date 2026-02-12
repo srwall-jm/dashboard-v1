@@ -286,99 +286,91 @@ const App: React.FC = () => {
     }
   };
 
-  // Fetch Sub Accounts (Client Customers) for a given Manager
   const fetchSa360SubAccounts = async (token: string, managerId: string) => {
-    setIsLoadingSa360(true);
-    let allLeafAccounts: Sa360Customer[] = [];
-    
-    // Cola de IDs que tenemos que inspeccionar (empezamos por el Manager Principal)
-    let processingQueue = [managerId];
-    // Evitar bucles infinitos
-    let processedIds = new Set<string>();
+  setIsLoadingSa360(true);
+  let allLeafAccounts: Sa360Customer[] = [];
+  let processingQueue = [managerId];
+  let processedIds = new Set<string>();
 
-    try {
-      while (processingQueue.length > 0) {
-        const currentId = processingQueue.shift();
-        if (!currentId || processedIds.has(currentId)) continue;
-        processedIds.add(currentId);
+  try {
+    while (processingQueue.length > 0) {
+      const currentId = processingQueue.shift();
+      if (!currentId || processedIds.has(currentId)) continue;
+      processedIds.add(currentId);
 
-        // Query estándar para ver hijos directos
-        const query = `
-            SELECT customer_client.resource_name, customer_client.client_customer, customer_client.descriptive_name, customer_client.manager, customer_client.status, customer_client.id
-            FROM customer_client 
-            WHERE customer_client.status = 'ENABLED'
-        `;
+      const query = `
+        SELECT 
+          customer_client.resource_name, 
+          customer_client.descriptive_name, 
+          customer_client.manager, 
+          customer_client.status, 
+          customer_client.id
+        FROM customer_client 
+        WHERE customer_client.status = 'ENABLED'
+      `;
 
-        // REVERTED to direct URL to avoid 404 in non-proxy environments
-const resp = await fetch(`/api/sa360/v0/customers/${currentId}/googleAds:searchStream`, {            method: 'POST',
-            headers: { 
-                Authorization: `Bearer ${token}`, 
-                'Content-Type': 'application/json',
-                'login-customer-id': managerId 
-            },
-            body: JSON.stringify({ query })
-        });
+      const resp = await fetch(`/api/sa360/v0/customers/${currentId}/googleAds:searchStream`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`, 
+          'Content-Type': 'application/json',
+          'login-customer-id': managerId // El ID de la cuenta nivel superior
+        },
+        body: JSON.stringify({ query })
+      });
 
-        const json = await resp.json();
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        console.error(`Error en cuenta ${currentId}:`, errorText);
+        continue;
+      }
 
-        if (json && Array.isArray(json)) {
-             const foundChildren = json.flatMap((batch: any) => 
-                (batch.results || []).map((row: any) => {
-                    const client = row.customerClient;
-                    if (!client) return null;
-                    
-                    // Extraer ID limpio
-                    let id = client.id;
-                    if (!id && client.clientCustomer) {
-                        const parts = client.clientCustomer.split('/');
-                        if (parts.length > 1) id = parts[1];
-                    }
-                    if(!id) return null;
+      const json = await resp.json();
 
-                    return {
-                        resourceName: client.resourceName,
-                        id: String(id),
-                        descriptiveName: client.descriptiveName || 'Unknown Account',
-                        isManager: client.manager 
-                    };
-                })
-            ).filter(Boolean);
+      // searchStream devuelve un Array. Cada elemento tiene un campo "results"
+      if (Array.isArray(json)) {
+        for (const batch of json) {
+          if (!batch.results) continue;
 
-            // LOGICA DE CLASIFICACIÓN
-            for (const child of foundChildren) {
-                if (child.isManager) {
-                    // Si es un Sub-Manager (ej: Vueling ES Performance), lo metemos a la cola para inspeccionarlo en la siguiente vuelta
-                    if (!processedIds.has(child.id)) {
-                        processingQueue.push(child.id);
-                    }
-                } else {
-                    // Si NO es manager, es una cuenta final (ej: Vueling - ES). ¡Esta es la que queremos!
-                    allLeafAccounts.push({
-                        resourceName: child.resourceName,
-                        id: child.id,
-                        descriptiveName: child.descriptiveName
-                    });
-                }
+          for (const row of batch.results) {
+            const client = row.customerClient;
+            if (!client) continue;
+
+            const id = String(client.id);
+            const isManager = client.manager === true;
+            const name = client.descriptiveName || 'Unnamed Account';
+
+            if (isManager) {
+              if (!processedIds.has(id)) {
+                processingQueue.push(id);
+              }
+            } else {
+              // Es una cuenta final (Leaf)
+              allLeafAccounts.push({
+                resourceName: client.resourceName,
+                id: id,
+                descriptiveName: name
+              });
             }
+          }
         }
       }
-    } catch (e) {
-        console.error("Error fetching SA360 recursive sub-accounts:", e);
-        setError("Error traversing SA360 account hierarchy. Check console for CORS or network issues.");
-    } finally {
-        setIsLoadingSa360(false);
     }
-
-    // Actualizamos el estado con las cuentas REALES encontradas
+    
+    console.log("Cuentas finales encontradas:", allLeafAccounts);
     setAvailableSa360SubAccounts(allLeafAccounts);
     
-    // Auto-seleccionar la primera cuenta real si existe
     if (allLeafAccounts.length > 0) {
-        setSelectedSa360SubAccount(allLeafAccounts[0]);
-    } else {
-        setSelectedSa360SubAccount(null);
+      setSelectedSa360SubAccount(allLeafAccounts[0]);
     }
-  };
+
+  } catch (e) {
+    console.error("Error fetching SA360 recursive sub-accounts:", e);
+    setError("Error al obtener la jerarquía de cuentas.");
+  } finally {
+    setIsLoadingSa360(false);
+  }
+};
 
   // When selectedSa360Customer changes manually, fetch its sub-accounts
   const handleSa360CustomerChange = (customer: Sa360Customer | null) => {
