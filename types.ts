@@ -95,7 +95,6 @@ export interface BridgeData {
   ppcCampaign: string;
   ppcCost: number;
   ppcConversions: number;
-  ppcRevenue: number; // NEW: Value from SA360 conversions_value
   ppcCpa: number;
   ppcSessions: number; // Value depends on dataSource (GA4=Sessions, SA360=Clicks)
   ppcImpressions: number;
