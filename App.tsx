@@ -455,12 +455,12 @@ const fetchBridgeData = async () => {
     }
 
     setIsLoadingBridge(true);
-
-    // --- AÑADE ESTAS DOS LÍNEAS AQUÍ ---
+    
+    // --- NUEVO: Limpia los datos anteriores para que el gráfico se refresque ---
     setBridgeDataSA360([]); 
     setKeywordBridgeDataSA360([]);
-    // -----------------------------------
-    
+    // -------------------------------------------------------------------------
+
     const normalizeUrl = (url: string) => {
       if (!url || url === '(not set)') return '';
       try { url = decodeURIComponent(url); } catch (e) {}
@@ -949,13 +949,14 @@ const fetchGa4Data = async () => {
     }
   };
 
-  // Re-fetch Bridge data whenever selected sub-account changes
+// Re-fetch Bridge data whenever selected sub-account changes
   useEffect(() => {
     if (activeTab === DashboardTab.PPC_SEO_BRIDGE || activeTab === DashboardTab.SA360_PERFORMANCE) {
       fetchBridgeData();
     } else if (activeTab === DashboardTab.AI_TRAFFIC_MONITOR) {
       fetchAiTrafficData();
     }
+    // VITAL: Añadimos selectedSa360SubAccount?.id al final de este array
   }, [activeTab, ga4Auth?.property?.id, gscAuth?.site?.siteUrl, filters.dateRange, selectedSa360SubAccount?.id]);
 
   useEffect(() => {
