@@ -93,7 +93,7 @@ const BridgeAnalysisTable: React.FC<{
   const chartData = useMemo(() => {
     if (selectedUrls.size === 0) return [];
 
-    // Helper to normalize daily data URL to match bridge data URL (Strictly matched to App.tsx logic)
+    // 1. URL Normalizer: Robustly matches Bridge Table URLs to Daily Data URLs
     const normalize = (u: string) => {
        if (!u || u === '(not set)') return '';
        try { u = decodeURIComponent(u); } catch (e) {}
@@ -106,28 +106,32 @@ const BridgeAnalysisTable: React.FC<{
        return path;
     };
 
-    // Filter Daily Data to only include selected URLs
-    // We use a Set for O(1) lookup after normalization
-    const relevantDaily = dailyData.filter(d => selectedUrls.has(normalize(d.landingPage)));
+    // 2. Filter Daily Data for Selected URLs
+    // Using a Map for O(1) lookup speed improves performance with large datasets
+    const relevantDaily = dailyData.filter(d => {
+        if (!d || !d.landingPage) return false;
+        return selectedUrls.has(normalize(d.landingPage));
+    });
 
     if (relevantDaily.length === 0) return [];
 
-    // Group by Date and Label
-    const curRaw = relevantDaily.filter(d => d.dateRangeLabel === 'current').sort((a, b) => a.date.localeCompare(b.date));
-    const prevRaw = relevantDaily.filter(d => d.dateRangeLabel === 'previous').sort((a, b) => a.date.localeCompare(b.date));
+    // 3. Aggregate Data by Date
+    const getBucket = (dateStr: string) => dateStr || 'Unknown';
 
-    const getBucket = (dateStr: string) => dateStr; // Daily buckets
-    const curBuckets = Array.from(new Set(curRaw.map(d => getBucket(d.date)))).sort();
-    
-    // Create map for aggregation
+    // Separate current and previous periods
+    const curRaw = relevantDaily.filter(d => d.dateRangeLabel === 'current');
+    const prevRaw = relevantDaily.filter(d => d.dateRangeLabel === 'previous');
+
+    // Helper to sum up metrics
     const aggregate = (items: DailyData[]) => {
         const map: Record<string, { org: number, paid: number, date: string }> = {};
         items.forEach(d => {
             const b = getBucket(d.date);
             if (!map[b]) map[b] = { org: 0, paid: 0, date: d.date };
             
-            const isOrg = d.channel?.toLowerCase().includes('organic');
-            const isPaid = d.channel?.toLowerCase().includes('paid') || d.channel?.toLowerCase().includes('cpc');
+            const channel = d.channel?.toLowerCase() || '';
+            const isOrg = channel.includes('organic');
+            const isPaid = channel.includes('paid') || channel.includes('cpc');
 
             if (isOrg) map[b].org += d.sessions;
             if (isPaid) map[b].paid += d.sessions;
@@ -138,25 +142,36 @@ const BridgeAnalysisTable: React.FC<{
     const curMap = aggregate(curRaw);
     const prevMap = aggregate(prevRaw);
     
-    // Map previous dates to current indices for overlay
-    const prevBuckets = Array.from(new Set(prevRaw.map(d => getBucket(d.date)))).sort();
+    // Sort keys to ensure chronological order
+    const curBuckets = Object.keys(curMap).sort();
+    const prevBuckets = Object.keys(prevMap).sort();
 
+    // 4. Map to Chart Format (Safe Mapping)
     return curBuckets.map((bucket, index) => {
-        const c = curMap[bucket as string];
+        // Defensive access: Ensure objects exist before reading properties
+        const c = curMap[bucket] || { org: 0, paid: 0, date: bucket };
+        
+        // Map previous period by index (overlay strategy)
         const pBucket = prevBuckets[index];
-        const p = pBucket ? prevMap[pBucket as string] : null;
+        const p = pBucket ? prevMap[pBucket] : undefined; 
 
-        const dateObj = new Date(c.date);
-        const xLabel = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        // Safe Date Parsing
+        let xLabel = bucket;
+        try {
+            const dateObj = new Date(c.date);
+            if (!isNaN(dateObj.getTime())) {
+                xLabel = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            }
+        } catch (e) {}
 
         return {
             date: xLabel,
             fullDateCurrent: c.date,
-            fullDatePrevious: p?.date || 'N/A',
+            fullDatePrevious: p?.date || 'N/A', // Safe access
             'Organic (Cur)': c.org,
             'Paid (Cur)': c.paid,
-            'Organic (Prev)': p?.org || 0,
-            'Paid (Prev)': p?.paid || 0,
+            'Organic (Prev)': p?.org || 0, // Safe access: if p is undefined, use 0
+            'Paid (Prev)': p?.paid || 0,   // Safe access
         };
     });
 
