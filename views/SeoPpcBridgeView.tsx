@@ -1,19 +1,20 @@
-
 import React, { useMemo, useState } from 'react';
 import { 
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, BarChart, Bar, LineChart, Line, Legend, LabelList
 } from 'recharts';
 import { 
-  AlertOctagon, Zap, ShieldCheck, FileText, ExternalLink, Search, Filter, ChevronDown, ChevronRight, CornerDownRight, BarChart2, TrendingUp, DollarSign, Info, LayoutList, Key, Settings
+  AlertOctagon, Zap, ShieldCheck, FileText, ExternalLink, Search, Filter, ChevronDown, ChevronRight, CornerDownRight, BarChart2, TrendingUp, DollarSign, Info, LayoutList, Key, Settings, CheckSquare, Square
 } from 'lucide-react';
 import { BridgeData, DailyData, KeywordBridgeData, Sa360Customer } from '../types';
-import { exportToCSV } from '../utils';
+import { exportToCSV, formatDate } from '../utils';
 import { KpiCard } from '../components/KpiCard';
+import { ComparisonTooltip } from '../components/ComparisonTooltip'; // Reusing the tooltip for consistency
+import { EmptyState } from '../components/EmptyState';
 
 // Helper component for expanded rows (Shows Keyword Detail)
 const QueryDetailRow: React.FC<{ query: string, rank: number | null, clicks: number }> = ({ query, rank, clicks }) => (
   <tr className="bg-slate-50/80 border-b border-slate-100/50">
-    <td colSpan={2} className="py-2 pl-12">
+    <td colSpan={3} className="py-2 pl-16">
       <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
         <CornerDownRight size={10} className="text-slate-300 flex-shrink-0" />
         <span className="truncate max-w-[200px]" title={query}>{query}</span>
@@ -50,11 +51,15 @@ const BridgeAnalysisTable: React.FC<{
   metricLabel: string;
   dataSourceName: string;
   headerContent?: React.ReactNode;
-}> = ({ title, subTitle, data, keywordData, metricLabel, dataSourceName, headerContent }) => {
+  dailyData: DailyData[]; // Passed for charting
+}> = ({ title, subTitle, data, keywordData, metricLabel, dataSourceName, headerContent, dailyData }) => {
   const [urlFilter, setUrlFilter] = useState('');
   const [keywordFilter, setKeywordFilter] = useState('');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'url' | 'keyword'>('url');
+  
+  // Selection State
+  const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set());
 
   // Filtered Data based on URL Filter
   const filteredUrlData = useMemo(() => {
@@ -69,8 +74,94 @@ const BridgeAnalysisTable: React.FC<{
     setExpandedRows(newSet);
   };
 
+  // Selection Handlers
+  const toggleSelection = (url: string) => {
+    const newSet = new Set(selectedUrls);
+    if (newSet.has(url)) newSet.delete(url); else newSet.add(url);
+    setSelectedUrls(newSet);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedUrls.size === filteredUrlData.length) {
+      setSelectedUrls(new Set());
+    } else {
+      setSelectedUrls(new Set(filteredUrlData.map(d => d.url)));
+    }
+  };
+
+  // Chart Logic for Selected URLs
+  const chartData = useMemo(() => {
+    if (selectedUrls.size === 0) return [];
+
+    // Helper to normalize daily data URL to match bridge data URL
+    const normalize = (u: string) => {
+       try {
+         let path = u.toLowerCase().split('?')[0].split('#')[0];
+         path = path.replace(/^https?:\/\/[^\/]+/, '');
+         if (path.endsWith('/') && path.length > 1) path = path.slice(0, -1);
+         if (!path.startsWith('/')) path = '/' + path;
+         return path;
+       } catch { return u; }
+    };
+
+    // Filter Daily Data to only include selected URLs
+    const relevantDaily = dailyData.filter(d => selectedUrls.has(normalize(d.landingPage)));
+
+    if (relevantDaily.length === 0) return [];
+
+    // Group by Date and Label
+    const curRaw = relevantDaily.filter(d => d.dateRangeLabel === 'current').sort((a, b) => a.date.localeCompare(b.date));
+    const prevRaw = relevantDaily.filter(d => d.dateRangeLabel === 'previous').sort((a, b) => a.date.localeCompare(b.date));
+
+    const getBucket = (dateStr: string) => dateStr; // Daily buckets
+    const curBuckets = Array.from(new Set(curRaw.map(d => getBucket(d.date)))).sort();
+    
+    // Create map for aggregation
+    const aggregate = (items: DailyData[]) => {
+        const map: Record<string, { org: number, paid: number, date: string }> = {};
+        items.forEach(d => {
+            const b = getBucket(d.date);
+            if (!map[b]) map[b] = { org: 0, paid: 0, date: d.date };
+            
+            const isOrg = d.channel?.toLowerCase().includes('organic');
+            const isPaid = d.channel?.toLowerCase().includes('paid') || d.channel?.toLowerCase().includes('cpc');
+
+            if (isOrg) map[b].org += d.sessions;
+            if (isPaid) map[b].paid += d.sessions;
+        });
+        return map;
+    };
+
+    const curMap = aggregate(curRaw);
+    const prevMap = aggregate(prevRaw);
+    
+    // Map previous dates to current indices for overlay
+    const prevBuckets = Array.from(new Set(prevRaw.map(d => getBucket(d.date)))).sort();
+
+    return curBuckets.map((bucket, index) => {
+        const c = curMap[bucket as string];
+        const pBucket = prevBuckets[index];
+        const p = pBucket ? prevMap[pBucket as string] : null;
+
+        const dateObj = new Date(c.date);
+        const xLabel = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+        return {
+            date: xLabel,
+            fullDateCurrent: c.date,
+            fullDatePrevious: p?.date || 'N/A',
+            'Organic (Cur)': c.org,
+            'Paid (Cur)': c.paid,
+            'Organic (Prev)': p?.org || 0,
+            'Paid (Prev)': p?.paid || 0,
+        };
+    });
+
+  }, [selectedUrls, dailyData]);
+
   return (
-    <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden mb-8">
+    <div className="mb-10">
+    <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden mb-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
             <div className="flex flex-col gap-2">
               <div>
@@ -110,6 +201,11 @@ const BridgeAnalysisTable: React.FC<{
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
+                  <th className="py-3 px-4 w-10 text-center">
+                    <button onClick={toggleSelectAll} className="text-indigo-600 hover:text-indigo-800 transition-colors">
+                        {selectedUrls.size > 0 && selectedUrls.size === filteredUrlData.length ? <CheckSquare size={16} /> : <Square size={16} />}
+                    </button>
+                  </th>
                   <th className="py-3 px-4 w-8"></th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">URL / Top Query</th>
                   <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Top Org. Rank</th>
@@ -124,9 +220,16 @@ const BridgeAnalysisTable: React.FC<{
                   const actionInfo = getActionInfo(row.actionLabel);
                   return (
                   <React.Fragment key={idx}>
-                    <tr className={`border-b border-slate-50 hover:bg-slate-50/80 transition-colors cursor-pointer ${expandedRows.has(row.url) ? 'bg-slate-50' : ''}`} onClick={() => toggleRow(row.url)}>
-                      <td className="py-3 px-4 text-center">{expandedRows.has(row.url) ? <ChevronDown size={14} className="text-indigo-500" /> : <ChevronRight size={14} className="text-slate-400" />}</td>
-                      <td className="py-3 px-4 max-w-xs">
+                    <tr className={`border-b border-slate-50 hover:bg-slate-50/80 transition-colors cursor-pointer ${expandedRows.has(row.url) ? 'bg-slate-50' : ''}`}>
+                      <td className="py-3 px-4 text-center">
+                        <button onClick={(e) => { e.stopPropagation(); toggleSelection(row.url); }} className="text-indigo-600">
+                            {selectedUrls.has(row.url) ? <CheckSquare size={16} /> : <Square size={16} className="text-slate-300" />}
+                        </button>
+                      </td>
+                      <td className="py-3 px-4 text-center" onClick={() => toggleRow(row.url)}>
+                          {expandedRows.has(row.url) ? <ChevronDown size={14} className="text-indigo-500" /> : <ChevronRight size={14} className="text-slate-400" />}
+                      </td>
+                      <td className="py-3 px-4 max-w-xs" onClick={() => toggleRow(row.url)}>
                           <div className="flex flex-col">
                             <div className="flex items-center gap-2 text-[10px] font-bold text-slate-800 break-all"><ExternalLink size={10} className="text-indigo-400 flex-shrink-0" /> {row.url}</div>
                             <div className="flex items-center gap-1 text-[9px] text-slate-400 mt-1"><Key size={8} /> Top Query: {row.query}</div>
@@ -153,7 +256,7 @@ const BridgeAnalysisTable: React.FC<{
                     {expandedRows.has(row.url) && (
                       <>
                         <tr className="bg-slate-50/50">
-                            <td colSpan={7} className="px-12 py-2">
+                            <td colSpan={8} className="px-12 py-2">
                                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Top 10 GSC Queries for this URL</p>
                             </td>
                         </tr>
@@ -162,14 +265,14 @@ const BridgeAnalysisTable: React.FC<{
                                 <QueryDetailRow key={`${idx}-${qIdx}`} query={q.query} rank={q.rank} clicks={q.clicks} />
                             ))
                         ) : (
-                            <tr><td colSpan={7} className="text-center py-2 text-[10px] text-slate-400 italic">No specific query data available via GSC</td></tr>
+                            <tr><td colSpan={8} className="text-center py-2 text-[10px] text-slate-400 italic">No specific query data available via GSC</td></tr>
                         )}
-                        <tr className="bg-slate-50/50 border-b border-slate-100"><td colSpan={7} className="py-1"></td></tr>
+                        <tr className="bg-slate-50/50 border-b border-slate-100"><td colSpan={8} className="py-1"></td></tr>
                       </>
                     )}
                   </React.Fragment>
                 );
-                }) : <tr><td colSpan={7} className="py-12 text-center text-xs text-slate-400">No data found</td></tr>}
+                }) : <tr><td colSpan={8} className="py-12 text-center text-xs text-slate-400">No data found</td></tr>}
               </tbody>
             </table>
           ) : (
@@ -209,6 +312,47 @@ const BridgeAnalysisTable: React.FC<{
             </table>
           )}
         </div>
+    </div>
+
+    {/* Dynamic Chart for Selected URLs */}
+    {selectedUrls.size > 0 && viewMode === 'url' && (
+      <div className="bg-slate-900 p-6 md:p-8 rounded-[32px] border border-slate-800 shadow-2xl relative overflow-hidden animate-in fade-in slide-in-from-top-4">
+         <div className="flex justify-between items-center mb-6 z-10 relative">
+            <div>
+                <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Sessions Performance (Time Overlay)</h4>
+                <p className="text-[11px] font-bold text-white">Aggregated Performance for {selectedUrls.size} Selected URLs ({dataSourceName} Scope)</p>
+            </div>
+            <div className="p-2 bg-white/10 rounded-xl">
+                <TrendingUp className="text-emerald-400" size={18} />
+            </div>
+         </div>
+         
+         <div className="h-[300px] w-full z-10 relative">
+            {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
+                        <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
+                        <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700, fill: '#94a3b8'}} />
+                        <Tooltip content={<ComparisonTooltip />} />
+                        <Legend verticalAlign="top" align="center" iconType="circle" wrapperStyle={{ paddingTop: '10px' }} />
+                        
+                        <Line name="Organic (Cur)" type="monotone" dataKey="Organic (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                        <Line name="Paid (Cur)" type="monotone" dataKey="Paid (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                        
+                        <Line name="Organic (Prev)" type="monotone" dataKey="Organic (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
+                        <Line name="Paid (Prev)" type="monotone" dataKey="Paid (Prev)" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
+                    </LineChart>
+                </ResponsiveContainer>
+            ) : <EmptyState text="No timeline data available for selected URLs" />}
+         </div>
+         
+         {/* Decoration */}
+         <div className="absolute top-0 right-0 p-20 opacity-5 pointer-events-none">
+            <Zap size={200} className="text-white" />
+         </div>
+      </div>
+    )}
     </div>
   );
 };
@@ -363,6 +507,7 @@ export const SeoPpcBridgeView: React.FC<{
              keywordData={ga4KeywordData}
              metricLabel="Paid Sessions (GA4)"
              dataSourceName="GA4"
+             dailyData={dailyData}
           />
       )}
 
@@ -376,6 +521,7 @@ export const SeoPpcBridgeView: React.FC<{
              metricLabel="Paid Clicks (SA360)"
              dataSourceName="SA360"
              headerContent={null}
+             dailyData={dailyData}
           />
       )}
 
