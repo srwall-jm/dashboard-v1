@@ -93,18 +93,21 @@ const BridgeAnalysisTable: React.FC<{
   const chartData = useMemo(() => {
     if (selectedUrls.size === 0) return [];
 
-    // Helper to normalize daily data URL to match bridge data URL
+    // Helper to normalize daily data URL to match bridge data URL (Strictly matched to App.tsx logic)
     const normalize = (u: string) => {
-       try {
-         let path = u.toLowerCase().split('?')[0].split('#')[0];
-         path = path.replace(/^https?:\/\/[^\/]+/, '');
-         if (path.endsWith('/') && path.length > 1) path = path.slice(0, -1);
-         if (!path.startsWith('/')) path = '/' + path;
-         return path;
-       } catch { return u; }
+       if (!u || u === '(not set)') return '';
+       try { u = decodeURIComponent(u); } catch (e) {}
+       let path = u.toLowerCase().trim();
+       path = path.replace(/^https?:\/\/[^\/]+/, '');
+       path = path.split('?')[0];
+       path = path.split('#')[0];
+       if (path.endsWith('/') && path.length > 1) path = path.slice(0, -1);
+       if (!path.startsWith('/')) path = '/' + path;
+       return path;
     };
 
     // Filter Daily Data to only include selected URLs
+    // We use a Set for O(1) lookup after normalization
     const relevantDaily = dailyData.filter(d => selectedUrls.has(normalize(d.landingPage)));
 
     if (relevantDaily.length === 0) return [];
