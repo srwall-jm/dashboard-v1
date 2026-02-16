@@ -386,10 +386,14 @@ export const SeoPpcBridgeView: React.FC<{
   currencySymbol: string;
   availableSa360Customers: Sa360Customer[];
   selectedSa360Customer: Sa360Customer | null;
-  setSelectedSa360Customer: (c: Sa360Customer | null) => void;
+  onSa360CustomerChange: (c: Sa360Customer | null) => void;
+  availableSa360SubAccounts: Sa360Customer[];
+  selectedSa360SubAccount: Sa360Customer | null;
+  setSelectedSa360SubAccount: (c: Sa360Customer | null) => void;
 }> = ({ 
   ga4Data, sa360Data, ga4KeywordData, sa360KeywordData, dailyData, currencySymbol,
-  availableSa360Customers, selectedSa360Customer, setSelectedSa360Customer
+  availableSa360Customers, selectedSa360Customer, onSa360CustomerChange,
+  availableSa360SubAccounts, selectedSa360SubAccount, setSelectedSa360SubAccount
 }) => {
   const [activeDataSource, setActiveDataSource] = useState<'GA4' | 'SA360'>('GA4');
 
@@ -435,20 +439,40 @@ export const SeoPpcBridgeView: React.FC<{
               dataSourceName="SA360"
               dailyData={dailyData}
               headerContent={
-                  <div className="flex items-center gap-2 ml-4">
-                     <span className="text-[9px] font-bold text-slate-400">Account:</span>
-                     <select 
-                        className="bg-slate-50 border border-slate-200 rounded-lg text-[9px] font-bold py-1 px-2 outline-none"
-                        value={selectedSa360Customer?.resourceName || ''}
-                        onChange={(e) => {
-                           const c = availableSa360Customers.find(cx => cx.resourceName === e.target.value);
-                           setSelectedSa360Customer(c || null);
-                        }}
-                     >
-                        {availableSa360Customers.map(c => (
-                           <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName}</option>
-                        ))}
-                     </select>
+                  <div className="flex items-center gap-4 ml-4">
+                     <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-bold text-slate-400">Manager:</span>
+                        <select 
+                            className="bg-slate-50 border border-slate-200 rounded-lg text-[9px] font-bold py-1 px-2 outline-none max-w-[150px]"
+                            value={selectedSa360Customer?.resourceName || ''}
+                            onChange={(e) => {
+                            const c = availableSa360Customers.find(cx => cx.resourceName === e.target.value);
+                            onSa360CustomerChange(c || null);
+                            }}
+                        >
+                            {availableSa360Customers.map(c => (
+                            <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName}</option>
+                            ))}
+                        </select>
+                     </div>
+
+                     <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-bold text-slate-400">Client Account:</span>
+                        <select 
+                            className="bg-slate-50 border border-slate-200 rounded-lg text-[9px] font-bold py-1 px-2 outline-none max-w-[200px] border-l-4 border-l-orange-400"
+                            value={selectedSa360SubAccount?.resourceName || ''}
+                            onChange={(e) => {
+                            const c = availableSa360SubAccounts.find(cx => cx.resourceName === e.target.value);
+                            setSelectedSa360SubAccount(c || null);
+                            }}
+                            disabled={availableSa360SubAccounts.length === 0}
+                        >
+                            {availableSa360SubAccounts.length === 0 && <option value="">No accounts found</option>}
+                            {availableSa360SubAccounts.map(c => (
+                            <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName} ({c.id})</option>
+                            ))}
+                        </select>
+                     </div>
                   </div>
               }
            />

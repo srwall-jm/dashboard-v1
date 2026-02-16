@@ -1454,9 +1454,16 @@ const fetchGa4Data = async () => {
                 sa360KeywordData={keywordBridgeDataSA360}
                 dailyData={filteredDailyData} 
                 currencySymbol={currencySymbol} 
+                
+                // Manager Props
                 availableSa360Customers={availableSa360Customers}
                 selectedSa360Customer={selectedSa360Customer}
-                setSelectedSa360Customer={setSelectedSa360Customer}
+                onSa360CustomerChange={handleSa360CustomerChange}
+
+                // Sub-Account Props
+                availableSa360SubAccounts={availableSa360SubAccounts}
+                selectedSa360SubAccount={selectedSa360SubAccount}
+                setSelectedSa360SubAccount={setSelectedSa360SubAccount}
             />
           )}
           
