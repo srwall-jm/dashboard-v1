@@ -69,6 +69,21 @@ export const Sa360PerformanceView: React.FC<{
   const maxCost = Math.max(...tableData.map(d => d.ppcCost), 100);
   const maxConversions = Math.max(...tableData.map(d => d.ppcConversions), 10);
 
+  const handleExport = () => {
+    const csvData = tableData.map(r => ({
+        Landing_Page: r.url,
+        Campaign: r.ppcCampaign,
+        Cost: r.ppcCost.toFixed(2),
+        Clicks: r.ppcSessions,
+        Impressions: r.ppcImpressions,
+        CTR: (r.ppcImpressions > 0 ? (r.ppcSessions/r.ppcImpressions)*100 : 0).toFixed(2) + '%',
+        Conversions: r.ppcConversions.toFixed(2),
+        CPA: (r.ppcConversions > 0 ? r.ppcCost/r.ppcConversions : 0).toFixed(2),
+        CPC: (r.ppcSessions > 0 ? r.ppcCost/r.ppcSessions : 0).toFixed(2)
+    }));
+    exportToCSV(csvData, "SA360_Performance_Full_Export");
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
       
@@ -173,7 +188,7 @@ export const Sa360PerformanceView: React.FC<{
                   />
                </div>
                <button 
-                onClick={() => exportToCSV(tableData, "SA360_Performance_Full_Export")} 
+                onClick={handleExport} 
                 className="flex items-center gap-2 px-3 py-2 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md whitespace-nowrap"
                >
                   <FileText size={12} /> CSV

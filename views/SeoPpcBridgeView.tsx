@@ -179,6 +179,22 @@ const BridgeAnalysisTable: React.FC<{
     };
   }, [dataSourceName]);
 
+  const handleExport = () => {
+    const rawData = viewMode === 'url' ? data : keywordData;
+    const formattedData = rawData.map((row: any) => ({
+        ...row,
+        // Ensure decimal metrics are rounded for clean CSV output
+        ppcCost: row.ppcCost ? Number(row.ppcCost.toFixed(2)) : 0,
+        ppcConversions: row.ppcConversions ? Number(row.ppcConversions.toFixed(2)) : 0,
+        ppcCpa: row.ppcCpa ? Number(row.ppcCpa.toFixed(2)) : 0,
+        blendedCostRatio: row.blendedCostRatio ? Number(row.blendedCostRatio.toFixed(4)) : 0,
+        paidCvr: row.paidCvr ? Number(row.paidCvr.toFixed(2)) + '%' : '0%',
+        // Flatten top queries if exists
+        gscTopQueries: row.gscTopQueries ? row.gscTopQueries.length : 0
+    }));
+    exportToCSV(formattedData, `PPC_SEO_${viewMode.toUpperCase()}_${dataSourceName}_Export`);
+  };
+
   return (
     <div className="mb-10">
     <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden mb-6">
@@ -210,7 +226,7 @@ const BridgeAnalysisTable: React.FC<{
                     className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none focus:ring-1 ring-indigo-500 transition-all"
                   />
                </div>
-               <button onClick={() => exportToCSV(viewMode === 'url' ? data : keywordData, `PPC_SEO_${viewMode.toUpperCase()}_${dataSourceName}_Export`)} className="flex items-center gap-2 px-3 py-2 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md whitespace-nowrap">
+               <button onClick={handleExport} className="flex items-center gap-2 px-3 py-2 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md whitespace-nowrap">
                   <FileText size={12} /> CSV
                 </button>
             </div>
