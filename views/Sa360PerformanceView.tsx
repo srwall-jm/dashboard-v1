@@ -74,10 +74,10 @@ export const Sa360PerformanceView: React.FC<{
       
       {/* SECTION 1: EXECUTIVE SCORECARD */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard title="Total Spend" value={stats.totalCost.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} prefix={currencySymbol} icon={<DollarSign />} color="orange" />
-        <KpiCard title="Total Clicks" value={stats.totalClicks.toLocaleString()} icon={<MousePointerClick />} color="blue" />
-        <KpiCard title="Avg. CPC" value={stats.avgCpc.toFixed(2)} prefix={currencySymbol} icon={<Target />} color="indigo" />
-        <KpiCard title="Avg. CPA" value={stats.avgCpa.toFixed(2)} prefix={currencySymbol} icon={<Zap />} color={stats.avgCpa > 50 ? 'rose' : 'emerald'} />
+        <KpiCard title="Total Spend" value={stats.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} icon={<DollarSign />} color="orange" />
+        <KpiCard title="Total Clicks" value={stats.totalClicks.toLocaleString('en-US')} icon={<MousePointerClick />} color="blue" />
+        <KpiCard title="Avg. CPC" value={stats.avgCpc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} icon={<Target />} color="indigo" />
+        <KpiCard title="Avg. CPA" value={stats.avgCpa.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} icon={<Zap />} color={stats.avgCpa > 50 ? 'rose' : 'emerald'} />
       </div>
 
       {/* SECTION 2: VISUAL INTELLIGENCE */}
@@ -95,8 +95,8 @@ export const Sa360PerformanceView: React.FC<{
                 <ResponsiveContainer width="100%" height="100%">
                     <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis type="number" dataKey="ppcCost" name="Cost" unit={currencySymbol} tick={{fontSize: 9, fontWeight: 700}} />
-                    <YAxis type="number" dataKey="ppcConversions" name="Conversions" tick={{fontSize: 9, fontWeight: 700}} />
+                    <XAxis type="number" dataKey="ppcCost" name="Cost" unit={currencySymbol} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString('en-US')}`} />
+                    <YAxis type="number" dataKey="ppcConversions" name="Conversions" tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => val.toLocaleString('en-US')} />
                     <ZAxis type="number" dataKey="ppcSessions" range={[50, 400]} name="Clicks" />
                     <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }: any) => { 
                         if (active && payload && payload.length) { 
@@ -105,9 +105,9 @@ export const Sa360PerformanceView: React.FC<{
                             <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10">
                             <p className="text-[10px] font-black uppercase tracking-widest mb-2 border-b border-white/10 pb-2 truncate max-w-[200px]">{d.url}</p>
                             <div className="space-y-1">
-                                <p className="text-[9px] flex justify-between gap-4"><span>Cost:</span> <span className="font-bold text-rose-400">{currencySymbol}{d.ppcCost.toLocaleString()}</span></p>
-                                <p className="text-[9px] flex justify-between gap-4"><span>Conv:</span> <span className="font-bold text-emerald-400">{d.ppcConversions}</span></p>
-                                <p className="text-[9px] flex justify-between gap-4"><span>CPA:</span> <span className="font-bold">{currencySymbol}{d.cpa.toFixed(2)}</span></p>
+                                <p className="text-[9px] flex justify-between gap-4"><span>Cost:</span> <span className="font-bold text-rose-400">{currencySymbol}{d.ppcCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></p>
+                                <p className="text-[9px] flex justify-between gap-4"><span>Conv:</span> <span className="font-bold text-emerald-400">{d.ppcConversions.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></p>
+                                <p className="text-[9px] flex justify-between gap-4"><span>CPA:</span> <span className="font-bold">{currencySymbol}{d.cpa.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></p>
                             </div>
                             </div>
                         ); 
@@ -131,15 +131,15 @@ export const Sa360PerformanceView: React.FC<{
                 <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-6">Paid Funnel Health</h4>
                 <div className="space-y-6">
                     <div className="relative">
-                        <div className="flex justify-between text-[10px] font-bold mb-1"><span className="text-slate-500">Impressions</span><span className="text-slate-900">{stats.totalImpressions.toLocaleString()}</span></div>
+                        <div className="flex justify-between text-[10px] font-bold mb-1"><span className="text-slate-500">Impressions</span><span className="text-slate-900">{stats.totalImpressions.toLocaleString('en-US')}</span></div>
                         <div className="w-full h-2 bg-slate-100 rounded-full"><div className="h-full bg-slate-300 rounded-full w-full"></div></div>
                     </div>
                     <div className="relative pl-4">
-                        <div className="flex justify-between text-[10px] font-bold mb-1"><span className="text-slate-500">Clicks (CTR {stats.ctr.toFixed(2)}%)</span><span className="text-slate-900">{stats.totalClicks.toLocaleString()}</span></div>
+                        <div className="flex justify-between text-[10px] font-bold mb-1"><span className="text-slate-500">Clicks (CTR {stats.ctr.toFixed(2)}%)</span><span className="text-slate-900">{stats.totalClicks.toLocaleString('en-US')}</span></div>
                         <div className="w-full h-2 bg-slate-100 rounded-full"><div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min((stats.totalClicks / stats.totalImpressions) * 100 * 5, 100)}%` }}></div></div>
                     </div>
                     <div className="relative pl-8">
-                        <div className="flex justify-between text-[10px] font-bold mb-1"><span className="text-slate-500">Conversions</span><span className="text-slate-900">{stats.totalConversions.toLocaleString()}</span></div>
+                        <div className="flex justify-between text-[10px] font-bold mb-1"><span className="text-slate-500">Conversions</span><span className="text-slate-900">{stats.totalConversions.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
                         <div className="w-full h-2 bg-slate-100 rounded-full"><div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min((stats.totalConversions / stats.totalClicks) * 100 * 5, 100)}%` }}></div></div>
                     </div>
                 </div>
@@ -209,24 +209,24 @@ export const Sa360PerformanceView: React.FC<{
                             </td>
                             <td className="py-3 px-4 text-right">
                                 <div className="flex flex-col items-end gap-1">
-                                    <span className="text-[10px] font-black text-slate-800">{currencySymbol}{row.ppcCost.toLocaleString()}</span>
+                                    <span className="text-[10px] font-black text-slate-800">{currencySymbol}{row.ppcCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                     <div className="w-16 h-1 bg-slate-100 rounded-full overflow-hidden">
                                         <div className="h-full bg-orange-400" style={{ width: `${Math.min((row.ppcCost / maxCost) * 100, 100)}%` }} />
                                     </div>
                                 </div>
                             </td>
                             <td className="py-3 px-4 text-right">
-                                <span className="text-[10px] font-bold text-slate-600">{row.ppcSessions.toLocaleString()}</span>
+                                <span className="text-[10px] font-bold text-slate-600">{row.ppcSessions.toLocaleString('en-US')}</span>
                             </td>
                             <td className="py-3 px-4 text-right">
-                                <span className="text-[10px] font-bold text-slate-600">{row.ppcSessions > 0 ? `${currencySymbol}${(row.ppcCost / row.ppcSessions).toFixed(2)}` : '-'}</span>
+                                <span className="text-[10px] font-bold text-slate-600">{row.ppcSessions > 0 ? `${currencySymbol}${(row.ppcCost / row.ppcSessions).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</span>
                             </td>
                             <td className="py-3 px-4 text-right">
                                 <span className="text-[10px] font-bold text-slate-600">{row.ppcImpressions > 0 ? `${((row.ppcSessions / row.ppcImpressions) * 100).toFixed(2)}%` : '-'}</span>
                             </td>
                             <td className="py-3 px-4 text-right">
                                 <div className="flex flex-col items-end gap-1">
-                                    <span className={`text-[10px] font-black ${row.ppcConversions > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{row.ppcConversions}</span>
+                                    <span className={`text-[10px] font-black ${row.ppcConversions > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{row.ppcConversions.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                     {row.ppcConversions > 0 && (
                                         <div className="w-12 h-1 bg-slate-100 rounded-full overflow-hidden">
                                             <div className="h-full bg-emerald-500" style={{ width: `${Math.min((row.ppcConversions / maxConversions) * 100, 100)}%` }} />
@@ -236,7 +236,7 @@ export const Sa360PerformanceView: React.FC<{
                             </td>
                             <td className="py-3 px-4 text-right">
                                 <span className={`text-[10px] font-bold ${row.ppcConversions > 0 && (row.ppcCost / row.ppcConversions) < 20 ? 'text-emerald-600' : 'text-slate-600'}`}>
-                                    {row.ppcConversions > 0 ? `${currencySymbol}${(row.ppcCost / row.ppcConversions).toFixed(2)}` : '-'}
+                                    {row.ppcConversions > 0 ? `${currencySymbol}${(row.ppcCost / row.ppcConversions).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
                                 </span>
                             </td>
                         </tr>

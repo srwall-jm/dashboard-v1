@@ -75,7 +75,7 @@ const lastFetchParams = useRef<string>('');
   const [selectedSa360SubAccount, setSelectedSa360SubAccount] = useState<Sa360Customer | null>(null);
 
   const [availableDimensions, setAvailableDimensions] = useState<{ label: string; value: string }[]>([]);
-  const [currencySymbol, setCurrencySymbol] = useState('£');
+  const [currencySymbol, setCurrencySymbol] = useState('€');
   
   const [ga4Search, setGa4Search] = useState('');
   const [gscSearch, setGscSearch] = useState('');
