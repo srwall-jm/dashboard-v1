@@ -8,7 +8,7 @@ import {
 import { BridgeData, DailyData, KeywordBridgeData, Sa360Customer } from '../types';
 import { exportToCSV, formatDate } from '../utils';
 import { KpiCard } from '../components/KpiCard';
-import { ComparisonTooltip } from '../components/ComparisonTooltip'; // Reusing the tooltip for consistency
+import { ComparisonTooltip } from '../components/ComparisonTooltip'; 
 import { EmptyState } from '../components/EmptyState';
 
 // Helper component for expanded rows (Shows Keyword Detail)
@@ -340,11 +340,11 @@ const BridgeAnalysisTable: React.FC<{
                         <Tooltip content={<ComparisonTooltip />} />
                         <Legend verticalAlign="top" align="center" iconType="circle" wrapperStyle={{ paddingTop: '10px' }} />
                         
-                        <Line name="Organic (Cur)" type="monotone" dataKey="Organic (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
-                        <Line name="Paid (Cur)" type="monotone" dataKey="Paid (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                        <Line name="Organic (Cur)" type="monotone" dataKey="Organic (Cur)" stroke="#6366f1" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 6 }} />
+                        <Line name="Paid (Cur)" type="monotone" dataKey="Paid (Cur)" stroke="#f59e0b" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 6 }} />
                         
-                        <Line name="Organic (Prev)" type="monotone" dataKey="Organic (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
-                        <Line name="Paid (Prev)" type="monotone" dataKey="Paid (Prev)" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
+                        <Line name="Organic (Prev)" type="monotone" dataKey="Organic (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={{ r: 2 }} />
+                        <Line name="Paid (Prev)" type="monotone" dataKey="Paid (Prev)" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={{ r: 2 }} />
                     </LineChart>
                 </ResponsiveContainer>
             ) : <EmptyState text="No timeline data available for selected URLs" />}
@@ -360,181 +360,82 @@ const BridgeAnalysisTable: React.FC<{
   );
 };
 
-export const SeoPpcBridgeView: React.FC<{ 
-  ga4Data: BridgeData[]; 
+export const SeoPpcBridgeView: React.FC<{
+  ga4Data: BridgeData[];
   sa360Data: BridgeData[];
   ga4KeywordData: KeywordBridgeData[];
   sa360KeywordData: KeywordBridgeData[];
   dailyData: DailyData[];
   currencySymbol: string;
-  availableSa360Customers?: Sa360Customer[];
-  selectedSa360Customer?: Sa360Customer | null;
-  setSelectedSa360Customer?: (c: Sa360Customer | null) => void;
-}> = ({ ga4Data, sa360Data, ga4KeywordData, sa360KeywordData, dailyData, currencySymbol, availableSa360Customers, selectedSa360Customer, setSelectedSa360Customer }) => {
-  
-  // Decide which dataset to use for top-level stats (Prefer SA360 if available)
-  const primaryData = sa360Data.length > 0 ? sa360Data : ga4Data;
-  const primaryDataSource = sa360Data.length > 0 ? 'SA360' : 'GA4';
-  const metricLabel = primaryDataSource === 'SA360' ? 'Paid Clicks (SA360)' : 'Paid Sessions (GA4)';
-  const metricShort = primaryDataSource === 'SA360' ? 'Clicks' : 'Sessions';
-
-  // KPIs Logic based on Primary Data
-  const kpis = useMemo(() => {
-    const excludeCount = primaryData.filter(d => d.actionLabel.includes('CRITICAL') || d.actionLabel.includes('REVIEW')).length;
-    const increaseCount = primaryData.filter(d => d.actionLabel === 'INCREASE').length;
-    const totalOrganicVolume = primaryData.reduce((acc, curr) => acc + curr.organicSessions, 0); 
-    const totalPaidVolume = primaryData.reduce((acc, curr) => acc + curr.ppcSessions, 0);
-
-    return {
-      exclude: { count: excludeCount, volume: primaryData.reduce((acc, curr) => curr.actionLabel.includes('CRITICAL') ? acc + curr.ppcSessions : acc, 0) },
-      increase: { count: increaseCount },
-      maintain: { count: primaryData.length - excludeCount - increaseCount },
-      traffic: { organic: totalOrganicVolume, paid: totalPaidVolume }
-    };
-  }, [primaryData]);
-
-  const savingsData = useMemo(() => [
-    { name: `Total ${metricLabel}`, value: primaryData.reduce((acc, c) => acc + c.ppcSessions, 0) },
-    { name: `Cannibalized ${metricShort}`, value: kpis.exclude.volume }
-  ], [primaryData, kpis, metricLabel, metricShort]);
-
-  // Grouped Data for Scatter Plot (Primary Only)
-  const groupedForScatter = useMemo(() => {
-    // Simple grouping for scatter plot visualization
-    const groups: Record<string, BridgeData> = {};
-    primaryData.forEach(item => {
-      if (!groups[item.url]) groups[item.url] = item;
-    });
-    return Object.values(groups);
-  }, [primaryData]);
+  availableSa360Customers: Sa360Customer[];
+  selectedSa360Customer: Sa360Customer | null;
+  setSelectedSa360Customer: (c: Sa360Customer | null) => void;
+}> = ({ 
+  ga4Data, sa360Data, ga4KeywordData, sa360KeywordData, dailyData, currencySymbol,
+  availableSa360Customers, selectedSa360Customer, setSelectedSa360Customer
+}) => {
+  const [activeDataSource, setActiveDataSource] = useState<'GA4' | 'SA360'>('GA4');
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
-      
-      {/* SECTION A: TRAFFIC VISIBILITY SCORECARD */}
-      <div className="bg-slate-900 p-8 rounded-[32px] text-white shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-8 opacity-10"><TrendingUp size={120} /></div>
-        <div className="relative z-10 flex flex-col md:flex-row justify-between gap-8">
-            <div>
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Total Visibility (Analysed URLs)</h4>
-                <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-black">{kpis.traffic.organic.toLocaleString()}</span>
-                    <span className="text-sm font-bold text-emerald-400">Organic Sessions (GA4)</span>
-                </div>
-            </div>
-            <div className="md:text-right">
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Paid Investment ({primaryDataSource})</h4>
-                <div className="flex items-baseline gap-2 md:justify-end">
-                    <span className="text-3xl font-black">{kpis.traffic.paid.toLocaleString()}</span>
-                    <span className="text-sm font-bold text-indigo-400">{metricShort}</span>
-                </div>
-            </div>
-            <div className="md:text-right">
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Organic Ratio</h4>
-                <div className="flex items-baseline gap-2 md:justify-end">
-                    <span className="text-3xl font-black">{((kpis.traffic.organic / (kpis.traffic.organic + kpis.traffic.paid || 1)) * 100).toFixed(1)}%</span>
-                    <span className="text-sm font-bold text-slate-500">of Total Volume</span>
-                </div>
-            </div>
-        </div>
-      </div>
+    <div className="space-y-6">
+       {/* Header / Toggle Source */}
+       <div className="flex justify-center mb-4">
+          <div className="bg-slate-100 p-1 rounded-2xl flex items-center gap-1 shadow-inner">
+             <button 
+                onClick={() => setActiveDataSource('GA4')}
+                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeDataSource === 'GA4' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+             >
+                <img src="https://www.gstatic.com/analytics-suite/header/suite/v2/ic_analytics.svg" className="w-4 h-4" alt="GA4" />
+                GA4 Data (Sessions)
+             </button>
+             <button 
+                onClick={() => setActiveDataSource('SA360')}
+                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeDataSource === 'SA360' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+             >
+                <div className="w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-[8px]">S</div>
+                SA360 Data (Paid Search)
+             </button>
+          </div>
+       </div>
 
-      {/* SECTION B: KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <KpiCard title="Critical Overlap" value={kpis.exclude.count} icon={<AlertOctagon />} color="rose" comparison={undefined} />
-        <KpiCard title="Expansion Opps" value={kpis.increase.count} icon={<Zap />} color="blue" comparison={undefined} />
-        <KpiCard title="Safe / Maintain" value={kpis.maintain.count} icon={<ShieldCheck />} color="emerald" comparison={undefined} />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Graph 1 */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm">
-           <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Traffic Matrix ({primaryDataSource})</h4>
-           <div className="h-[250px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <ScatterChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" dataKey="organicRank" reversed domain={[1, 30]} hide />
-                <YAxis type="number" dataKey="blendedCostRatio" domain={[0, 1]} hide />
-                <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }) => {
-                  if (active && payload && payload.length) {
-                    const d = payload[0].payload;
-                    return (
-                      <div className="bg-slate-900 text-white p-3 rounded-xl border border-white/10 shadow-xl">
-                        <p className="font-bold text-xs mb-1">{d.url}</p>
-                        <p className="text-[10px] text-slate-300">Paid Share: {(d.blendedCostRatio*100).toFixed(0)}%</p>
-                        <p className="text-[10px] text-emerald-400">Org: {d.organicSessions.toLocaleString()}</p>
-                        <p className="text-[10px] text-indigo-400">Paid: {d.ppcSessions.toLocaleString()}</p>
-                      </div>
-                    );
-                  } return null;
-                }} />
-                <Scatter name="URLs" data={groupedForScatter} fill="#8884d8">
-                  {groupedForScatter.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.blendedCostRatio > 0.5 ? '#f43f5e' : '#10b981'} />
-                  ))}
-                </Scatter>
-              </ScatterChart>
-            </ResponsiveContainer>
-           </div>
-        </div>
-
-        {/* Graph 2 */}
-        <div className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm">
-           <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Wasted Volume ({metricShort})</h4>
-           <div className="h-[200px]">
-             <ResponsiveContainer width="100%" height="100%">
-               <BarChart data={savingsData} layout="vertical" margin={{left: 0}}>
-                  <XAxis type="number" hide />
-                  <YAxis dataKey="name" type="category" width={110} tick={{fontSize: 9, fontWeight: 700}} />
-                  <Tooltip cursor={{fill: 'transparent'}} />
-                  <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={24}>
-                    <Cell fill="#cbd5e1" />
-                    <Cell fill="#f43f5e" />
-                    <LabelList dataKey="value" position="right" formatter={(val: number) => val.toLocaleString()} style={{fontSize: 10, fontWeight: 900}} />
-                  </Bar>
-               </BarChart>
-             </ResponsiveContainer>
-           </div>
-        </div>
-      </div>
-
-      {/* SECTION E: DUAL TABLES */}
-      
-      {/* 1. GA4 TABLE */}
-      {ga4Data.length > 0 && (
-          <BridgeAnalysisTable 
-             title="Traffic Source Audit (GA4 Scope)" 
-             subTitle="Comparing Organic (GSC) vs Paid Sessions (GA4)"
-             data={ga4Data}
-             keywordData={ga4KeywordData}
-             metricLabel="Paid Sessions (GA4)"
-             dataSourceName="GA4"
-             dailyData={dailyData}
-          />
-      )}
-
-      {/* 2. SA360 TABLE (Only if data exists and selected from settings) */}
-      {sa360Data.length > 0 && (
-          <BridgeAnalysisTable 
-             title="Traffic Source Audit (SA360 Scope)" 
-             subTitle="Comparing Organic (GSC) vs Paid Clicks (SA360)"
-             data={sa360Data}
-             keywordData={sa360KeywordData}
-             metricLabel="Paid Clicks (SA360)"
-             dataSourceName="SA360"
-             headerContent={null}
-             dailyData={dailyData}
-          />
-      )}
-
-      {ga4Data.length === 0 && sa360Data.length === 0 && (
-         <div className="bg-white p-12 rounded-[32px] border border-slate-200 shadow-sm text-center flex flex-col items-center opacity-50">
-             <Info size={48} className="text-slate-300 mb-4" />
-             <p className="text-slate-400 font-bold">No bridge data available. Please connect GSC and (GA4 or SA360) in Settings.</p>
-         </div>
-      )}
-
+       {activeDataSource === 'GA4' ? (
+           <BridgeAnalysisTable 
+              title="GA4 Organic vs Paid Sessions" 
+              subTitle="Comparing Organic Sessions vs Paid Sessions per URL"
+              data={ga4Data}
+              keywordData={ga4KeywordData}
+              metricLabel="Paid Sessions"
+              dataSourceName="GA4"
+              dailyData={dailyData}
+           />
+       ) : (
+           <BridgeAnalysisTable 
+              title="SA360 Paid Search vs Organic" 
+              subTitle="Comparing Organic Sessions vs SA360 Clicks/Sessions"
+              data={sa360Data}
+              keywordData={sa360KeywordData}
+              metricLabel="SA360 Clicks"
+              dataSourceName="SA360"
+              dailyData={dailyData}
+              headerContent={
+                  <div className="flex items-center gap-2 ml-4">
+                     <span className="text-[9px] font-bold text-slate-400">Account:</span>
+                     <select 
+                        className="bg-slate-50 border border-slate-200 rounded-lg text-[9px] font-bold py-1 px-2 outline-none"
+                        value={selectedSa360Customer?.resourceName || ''}
+                        onChange={(e) => {
+                           const c = availableSa360Customers.find(cx => cx.resourceName === e.target.value);
+                           setSelectedSa360Customer(c || null);
+                        }}
+                     >
+                        {availableSa360Customers.map(c => (
+                           <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName}</option>
+                        ))}
+                     </select>
+                  </div>
+              }
+           />
+       )}
     </div>
   );
 };

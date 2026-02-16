@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 
 import { 
@@ -922,7 +923,8 @@ const fetchGa4Data = async () => {
             { name: 'sessionConversionRate' },
             { name: 'addToCarts' },
             { name: 'checkouts' }
-          ]
+          ],
+          limit: 100000 // Limit increased to 100k to ensure granular URL data availability
         })
       });
       
