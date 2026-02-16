@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { 
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, BarChart, Bar, LineChart, Line, Legend, LabelList
@@ -161,6 +162,22 @@ const BridgeAnalysisTable: React.FC<{
     });
 
   }, [selectedUrls, dailyData]);
+
+  // Dynamic Labeling based on Data Source
+  const chartLabels = useMemo(() => {
+    if (dataSourceName === 'SA360') {
+      return {
+        organic: "Org. Sessions (GA4)",
+        paid: "SA360 Clicks",
+        paidColor: "#ea580c" // Orange-600
+      };
+    }
+    return {
+      organic: "Org. Sessions (GA4)",
+      paid: "Paid Sessions (GA4)",
+      paidColor: "#f59e0b" // Amber-500
+    };
+  }, [dataSourceName]);
 
   return (
     <div className="mb-10">
@@ -340,11 +357,11 @@ const BridgeAnalysisTable: React.FC<{
                         <Tooltip content={<ComparisonTooltip />} />
                         <Legend verticalAlign="top" align="center" iconType="circle" wrapperStyle={{ paddingTop: '10px' }} />
                         
-                        <Line name="Organic (Cur)" type="monotone" dataKey="Organic (Cur)" stroke="#6366f1" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 6 }} />
-                        <Line name="Paid (Cur)" type="monotone" dataKey="Paid (Cur)" stroke="#f59e0b" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 6 }} />
+                        <Line name={chartLabels.organic} type="monotone" dataKey="Organic (Cur)" stroke="#6366f1" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 6 }} />
+                        <Line name={chartLabels.paid} type="monotone" dataKey="Paid (Cur)" stroke={chartLabels.paidColor} strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 6 }} />
                         
                         <Line name="Organic (Prev)" type="monotone" dataKey="Organic (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={{ r: 2 }} />
-                        <Line name="Paid (Prev)" type="monotone" dataKey="Paid (Prev)" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={{ r: 2 }} />
+                        <Line name="Paid (Prev)" type="monotone" dataKey="Paid (Prev)" stroke={chartLabels.paidColor} strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={{ r: 2 }} />
                     </LineChart>
                 </ResponsiveContainer>
             ) : <EmptyState text="No timeline data available for selected URLs" />}
