@@ -4,7 +4,7 @@ import {
   ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine
 } from 'recharts';
 import { 
-  DollarSign, TrendingUp, PiggyBank, Target, AlertTriangle, CheckCircle, Search, FileText, Info, Zap
+  DollarSign, TrendingUp, PiggyBank, Target, AlertTriangle, CheckCircle, Search, FileText, Info, Zap, ChevronUp, ChevronDown
 } from 'lucide-react';
 import { BridgeData } from '../types';
 import { KpiCard } from '../components/KpiCard';
@@ -22,6 +22,11 @@ interface EfficiencyRow extends BridgeData {
   organicValue: number; // New Metric (Organic Sessions * CPC)
 }
 
+type SortConfig = {
+  key: keyof EfficiencyRow | 'actionLabel'; // Allow sorting by specific keys
+  direction: 'asc' | 'desc';
+};
+
 export const SearchEfficiencyView: React.FC<{ 
   data: BridgeData[]; 
   brandRegexStr: string;
@@ -29,6 +34,9 @@ export const SearchEfficiencyView: React.FC<{
 }> = ({ data, brandRegexStr, currencySymbol }) => {
   const [querySegmentFilter, setQuerySegmentFilter] = useState<'All' | 'Brand' | 'Non-Brand'>('All');
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Default sort: Highest Cost first to show impact immediately
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ppcCost', direction: 'desc' });
 
   // 1. Data Processing Engine
   const processedData = useMemo(() => {
@@ -36,22 +44,14 @@ export const SearchEfficiencyView: React.FC<{
 
     return data.map(row => {
         // A. Segment Logic
-        // Check both Query and URL for brand terms to be robust
         const isBrand = regex.test(row.query || '') || regex.test(row.url || '');
         const segment = isBrand ? 'Brand' : 'Non-Brand';
 
         // B. Calculate Avg CPC & Organic Value
-        // Avg CPC = Cost / Paid Sessions (or Clicks)
-        // Guard against division by zero
         const avgCpc = row.ppcSessions > 0 ? row.ppcCost / row.ppcSessions : 0;
-        
-        // Organic Value = What this organic traffic would cost if paid
-        // Logic: Organic Sessions * Avg CPC
         const organicValue = row.organicSessions * avgCpc;
 
         // C. Brand Tax / Potential Savings
-        // Logic: If (Brand Term) AND (We Rank #1 Organically) THEN (Paid Cost is "Wasted")
-        // Relaxed Rank threshold to 1.9 to account for minor fluctuations
         let brandTax = 0;
         if (segment === 'Brand' && row.organicRank !== null && row.organicRank <= 1.9) {
             brandTax = row.ppcCost;
@@ -59,7 +59,7 @@ export const SearchEfficiencyView: React.FC<{
 
         // D. Action Tag Logic
         let actionTag = "⚪ MONITOR";
-        const paidShare = row.blendedCostRatio;
+        const paidShare = row.blendedCostRatio; // Paid Sessions / Total Sessions
 
         if (segment === 'Brand' && row.organicRank !== null && row.organicRank <= 1.9 && paidShare > 0.5) {
             actionTag = "🔴 CUT/TEST (Cannibalization)";
@@ -101,13 +101,52 @@ export const SearchEfficiencyView: React.FC<{
     });
   }, [processedData, querySegmentFilter, searchTerm]);
 
-  // 3. Scorecard Calculations
+  // 3. Sorting
+  const sortedData = useMemo(() => {
+    const sorted = [...filteredData];
+    if (sortConfig) {
+      sorted.sort((a, b) => {
+        let aValue = a[sortConfig.key];
+        let bValue = b[sortConfig.key];
+
+        // Special handling for string/text columns
+        if (sortConfig.key === 'query' || sortConfig.key === 'url' || sortConfig.key === 'actionLabel') {
+             const strA = String(aValue || '').toLowerCase();
+             const strB = String(bValue || '').toLowerCase();
+             if (strA < strB) return sortConfig.direction === 'asc' ? -1 : 1;
+             if (strA > strB) return sortConfig.direction === 'asc' ? 1 : -1;
+             return 0;
+        }
+
+        // Special handling for Ranks (null ranks should usually be at bottom)
+        if (sortConfig.key === 'organicRank') {
+            if (aValue === null) return 1; 
+            if (bValue === null) return -1;
+        }
+
+        // Numeric Sort
+        if (Number(aValue) < Number(bValue)) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (Number(aValue) > Number(bValue)) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    return sorted;
+  }, [filteredData, sortConfig]);
+
+  const handleSort = (key: keyof EfficiencyRow | 'actionLabel') => {
+    let direction: 'asc' | 'desc' = 'desc'; // Default to desc for metrics
+    if (sortConfig.key === key && sortConfig.direction === 'desc') {
+      direction = 'asc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  // 4. Scorecard Calculations
   const metrics = useMemo(() => {
     const totalCost = filteredData.reduce((sum, d) => sum + d.ppcCost, 0);
     const potentialSavings = filteredData.reduce((sum, d) => sum + d.brandTax, 0);
     const totalOrganicValue = filteredData.reduce((sum, d) => sum + d.organicValue, 0);
     
-    // Weighted Organic Rank
     let weightedRankSum = 0;
     let weightSum = 0;
     filteredData.forEach(d => {
@@ -121,7 +160,7 @@ export const SearchEfficiencyView: React.FC<{
     return { totalCost, potentialSavings, totalOrganicValue, weightedRank };
   }, [filteredData]);
 
-  // 4. Scatter Plot Data
+  // 5. Scatter Plot Data
   const scatterData = useMemo(() => {
     return filteredData
         .filter(d => d.ppcCost > 0 && d.organicRank !== null && d.organicRank <= 50)
@@ -136,7 +175,7 @@ export const SearchEfficiencyView: React.FC<{
   }, [filteredData]);
 
   const handleExport = () => {
-    const csv = filteredData.map(d => ({
+    const csv = sortedData.map(d => ({
         URL: d.url,
         Query: d.query,
         Segment: d.querySegment,
@@ -152,7 +191,6 @@ export const SearchEfficiencyView: React.FC<{
     exportToCSV(csv, "Search_Efficiency_Savings_Report");
   };
 
-  // Helper for consistent formatting
   const formatCurrency = (val: number, decimals: number = 2) => {
     return val.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   };
@@ -160,6 +198,38 @@ export const SearchEfficiencyView: React.FC<{
   const formatNumber = (val: number) => {
     return val.toLocaleString('en-US');
   };
+
+  // Helper to generate explanation tooltip text based on row data
+  const getActionExplanation = (row: EfficiencyRow) => {
+      const share = (row.blendedCostRatio * 100).toFixed(0);
+      const rank = row.organicRank ? `#${row.organicRank.toFixed(1)}` : 'N/A';
+      
+      if (row.actionTag.includes('CUT')) {
+          return `Logic: You are paying for a "${row.querySegment}" term while ranking organically ${rank}. Paid Search occupies ${share}% of total clicks, suggesting you are paying for traffic you already own.`;
+      }
+      if (row.actionTag.includes('REVIEW')) {
+          return `Logic: High Paid Share (${share}%) for a top ranking keyword (${rank}). Check if ROAS justifies the cannibalization of organic traffic.`;
+      }
+      if (row.actionTag.includes('PUSH')) {
+          return `Logic: You rank poorly organically (${rank}) and have Zero paid traffic. Good opportunity to buy visibility cheaply while SEO improves.`;
+      }
+      return `Logic: Performance is balanced. Ranking ${rank} with ${share}% paid share. Monitor for changes.`;
+  };
+
+  const SortableHeader = ({ label, sortKey, align = 'right' }: { label: string, sortKey: keyof EfficiencyRow | 'actionLabel', align?: 'left' | 'center' | 'right' }) => (
+    <th 
+        className={`py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 hover:bg-slate-50 transition-colors select-none text-${align}`}
+        onClick={() => handleSort(sortKey)}
+    >
+        <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}>
+            {label}
+            <div className="flex flex-col">
+                <ChevronUp size={8} className={`${sortConfig.key === sortKey && sortConfig.direction === 'asc' ? 'text-indigo-600' : 'text-slate-300'}`} />
+                <ChevronDown size={8} className={`${sortConfig.key === sortKey && sortConfig.direction === 'desc' ? 'text-indigo-600' : 'text-slate-300'}`} />
+            </div>
+        </div>
+    </th>
+  );
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
@@ -246,12 +316,7 @@ export const SearchEfficiencyView: React.FC<{
                             domain={[1, 50]} 
                             tick={{fontSize: 9, fontWeight: 700}} 
                             label={{ value: 'GSC Average Position (Inverted)', position: 'bottom', fontSize: 10, fill: '#94a3b8' }}
-                            reversed // Reversed: 1 (Good) is on the Right or Left? Standard Scatter: 0 is Left. 
-                            // We want 1 on the Left (Top Left Quadrant logic). So do NOT reverse if 1 is small.
-                            // Actually, standard X axis: 0 -> 50. 
-                            // If we want Rank 1 on LEFT, we need normal axis 1..50.
-                            // The previous prop `reversed` puts 50 on left and 1 on right. 
-                            // Let's keep it standard: 1 (Left) -> 50 (Right).
+                            reversed 
                         />
                         <YAxis 
                             type="number" 
@@ -322,18 +387,18 @@ export const SearchEfficiencyView: React.FC<{
             <table className="w-full text-left border-collapse">
                 <thead>
                     <tr className="border-b border-slate-100 bg-slate-50/50">
-                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Query / URL</th>
-                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">GSC Rank</th>
-                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Org. Sessions</th>
-                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Avg. CPC</th>
-                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Est. Org Value</th>
-                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Paid Cost</th>
-                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Savings</th>
-                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
+                        <SortableHeader label="Query / URL" sortKey="query" align="left" />
+                        <SortableHeader label="GSC Rank" sortKey="organicRank" align="center" />
+                        <SortableHeader label="Org. Sessions" sortKey="organicSessions" />
+                        <SortableHeader label="Avg. CPC" sortKey="avgCpc" />
+                        <SortableHeader label="Est. Org Value" sortKey="organicValue" />
+                        <SortableHeader label="Paid Cost" sortKey="ppcCost" />
+                        <SortableHeader label="Savings" sortKey="brandTax" />
+                        <SortableHeader label="Action" sortKey="actionLabel" />
                     </tr>
                 </thead>
                 <tbody>
-                    {filteredData.length > 0 ? filteredData.slice(0, 50).map((row, idx) => (
+                    {sortedData.length > 0 ? sortedData.slice(0, 50).map((row, idx) => (
                         <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                             <td className="py-3 px-4 max-w-[200px]">
                                 <div className="flex flex-col">
@@ -351,11 +416,9 @@ export const SearchEfficiencyView: React.FC<{
                             <td className="py-3 px-4 text-right">
                                 <span className="text-[10px] font-bold text-slate-600">{formatNumber(row.organicSessions)}</span>
                             </td>
-                            {/* NEW: Avg CPC */}
                             <td className="py-3 px-4 text-right">
                                 <span className="text-[10px] font-bold text-slate-600">{currencySymbol}{formatCurrency(row.avgCpc)}</span>
                             </td>
-                            {/* NEW: Organic Value */}
                             <td className="py-3 px-4 text-right">
                                 <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
                                    {currencySymbol}{formatCurrency(row.organicValue)}
@@ -371,13 +434,21 @@ export const SearchEfficiencyView: React.FC<{
                                     </span>
                                 ) : <span className="text-[10px] text-slate-300">-</span>}
                             </td>
-                            <td className="py-3 px-4 text-right">
-                                <div className="flex items-center justify-end gap-1">
+                            <td className="py-3 px-4 text-right relative">
+                                <div className="group flex items-center justify-end gap-1 cursor-help">
                                     {row.actionTag.includes('CUT') && <AlertTriangle size={12} className="text-rose-500" />}
                                     {row.actionTag.includes('PUSH') && <CheckCircle size={12} className="text-emerald-500" />}
                                     <span className={`text-[9px] font-black uppercase ${row.actionTag.includes('CUT') ? 'text-rose-600' : row.actionTag.includes('REVIEW') ? 'text-amber-600' : row.actionTag.includes('PUSH') ? 'text-emerald-600' : 'text-slate-400'}`}>
                                         {row.actionTag.split('(')[0]}
                                     </span>
+                                    
+                                    {/* Tooltip */}
+                                    <div className="invisible group-hover:visible absolute right-0 top-full mt-2 z-50 w-64 bg-slate-900 text-white text-[10px] rounded-xl p-3 shadow-xl border border-white/10 text-left pointer-events-none transition-opacity opacity-0 group-hover:opacity-100">
+                                        <p className="font-bold text-slate-200 mb-1 border-b border-white/10 pb-1">Recommendation Logic</p>
+                                        <p className="text-slate-400 leading-relaxed font-medium">
+                                            {getActionExplanation(row)}
+                                        </p>
+                                    </div>
                                 </div>
                             </td>
                         </tr>
