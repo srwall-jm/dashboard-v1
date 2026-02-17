@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Layers, Globe, Target, LogOut, ChevronRight, ChevronLeft, Activity, Cable, Bot, Settings, Megaphone } from 'lucide-react';
+import { Layers, Globe, Target, LogOut, ChevronRight, ChevronLeft, Activity, Cable, Bot, Settings, Megaphone, Zap } from 'lucide-react';
 import { DashboardTab } from '../types';
 
 const SidebarLink: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string; isCollapsed: boolean }> = ({ active, onClick, icon, label, isCollapsed }) => (
@@ -107,6 +107,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => setActiveTab(DashboardTab.SA360_PERFORMANCE)} 
             icon={<Megaphone />} 
             label="SA360 Performance" 
+          />
+           <SidebarLink 
+            isCollapsed={isCollapsed}
+            active={activeTab === DashboardTab.SEARCH_EFFICIENCY} 
+            onClick={() => setActiveTab(DashboardTab.SEARCH_EFFICIENCY)} 
+            icon={<Zap />} 
+            label="Search Efficiency & Savings" 
           />
           <SidebarLink 
             isCollapsed={isCollapsed}

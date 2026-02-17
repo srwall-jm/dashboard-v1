@@ -21,6 +21,7 @@ import { SeoDeepDiveView } from './views/SeoDeepDiveView';
 import { SeoPpcBridgeView } from './views/SeoPpcBridgeView';
 import { AiTrafficView } from './views/AiTrafficView';
 import { Sa360PerformanceView } from './views/Sa360PerformanceView';
+import { SearchEfficiencyView } from './views/SearchEfficiencyView';
 
 const CLIENT_ID = "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com"; 
 const SCOPE_GA4 = "https://www.googleapis.com/auth/analytics.readonly";
@@ -122,7 +123,8 @@ const lastFetchParams = useRef<string>('');
     [DashboardTab.KEYWORD_DEEP_DIVE]: null,
     [DashboardTab.PPC_SEO_BRIDGE]: null,
     [DashboardTab.SA360_PERFORMANCE]: null,
-    [DashboardTab.AI_TRAFFIC_MONITOR]: null
+    [DashboardTab.AI_TRAFFIC_MONITOR]: null,
+    [DashboardTab.SEARCH_EFFICIENCY]: null
   });
   const [loadingInsights, setLoadingInsights] = useState(false);
 
@@ -1075,7 +1077,7 @@ const fetchGa4Data = async () => {
 
   // ← CORRECCIÓN: Desestructurar filters.dateRange en dependencias
   useEffect(() => {
-    if (activeTab === DashboardTab.PPC_SEO_BRIDGE || activeTab === DashboardTab.SA360_PERFORMANCE) {
+    if (activeTab === DashboardTab.PPC_SEO_BRIDGE || activeTab === DashboardTab.SA360_PERFORMANCE || activeTab === DashboardTab.SEARCH_EFFICIENCY) {
       fetchBridgeData();
     } else if (activeTab === DashboardTab.AI_TRAFFIC_MONITOR) {
       fetchAiTrafficData();
@@ -1230,6 +1232,7 @@ const fetchGa4Data = async () => {
                            (activeTab === DashboardTab.SEO_BY_COUNTRY ? "SEO Performance by Country" : 
                            activeTab === DashboardTab.PPC_SEO_BRIDGE ? "PPC & SEO Bridge Intelligence" :
                            activeTab === DashboardTab.SA360_PERFORMANCE ? "SA360 Paid Search Performance" :
+                           activeTab === DashboardTab.SEARCH_EFFICIENCY ? "Search Efficiency & Cost Savings" :
                            activeTab === DashboardTab.AI_TRAFFIC_MONITOR ? "AI Traffic Tracker" :
                            "Deep URL and Keyword Analysis");
 
@@ -1274,6 +1277,16 @@ const fetchGa4Data = async () => {
           Total AI Referred Sessions: ${totalAi}.
           Top Sources identified in list.
         `;
+      } else if (activeTab === DashboardTab.SEARCH_EFFICIENCY) {
+         // Efficiency Summary
+         const primaryData = bridgeDataSA360.length > 0 ? bridgeDataSA360 : bridgeDataGA4;
+         const brandTax = primaryData.filter(d => isBranded(d.query) && d.organicRank !== null && d.organicRank <= 1.5).reduce((acc, d) => acc + d.ppcCost, 0);
+         summary = `
+           Context: Search Efficiency & Cost Savings.
+           Goal: Identify wasted spend (Cannibalization) and incremental growth opportunities.
+           Estimated Potential Brand Savings (Brand Tax): ${currencySymbol}${brandTax.toLocaleString()}.
+           The dashboard highlights where we pay for Brand terms despite ranking #1 organically.
+         `;
       }
 
       let insights: string | undefined;
@@ -1377,6 +1390,7 @@ const fetchGa4Data = async () => {
           {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && "URL & Keyword Analysis"}
           {activeTab === DashboardTab.PPC_SEO_BRIDGE && "The Bridge: SEO vs PPC Intelligence"}
           {activeTab === DashboardTab.SA360_PERFORMANCE && "SA360 & Paid Search Analysis"}
+          {activeTab === DashboardTab.SEARCH_EFFICIENCY && "Search Efficiency & Savings"}
           {activeTab === DashboardTab.AI_TRAFFIC_MONITOR && "AI Traffic Monitor"}
         </h2>
       </div>
@@ -1471,6 +1485,14 @@ const fetchGa4Data = async () => {
               <Sa360PerformanceView 
                   data={bridgeDataSA360} 
                   currencySymbol={currencySymbol} 
+              />
+          )}
+
+          {activeTab === DashboardTab.SEARCH_EFFICIENCY && (
+              <SearchEfficiencyView 
+                 data={bridgeDataSA360.length > 0 ? bridgeDataSA360 : bridgeDataGA4}
+                 brandRegexStr={brandRegexStr}
+                 currencySymbol={currencySymbol}
               />
           )}
 
