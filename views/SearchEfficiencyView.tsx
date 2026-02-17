@@ -152,6 +152,15 @@ export const SearchEfficiencyView: React.FC<{
     exportToCSV(csv, "Search_Efficiency_Savings_Report");
   };
 
+  // Helper for consistent formatting
+  const formatCurrency = (val: number, decimals: number = 2) => {
+    return val.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  };
+  
+  const formatNumber = (val: number) => {
+    return val.toLocaleString('en-US');
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
       
@@ -186,21 +195,21 @@ export const SearchEfficiencyView: React.FC<{
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
          <KpiCard 
             title="Total Paid Cost" 
-            value={metrics.totalCost.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} 
+            value={formatCurrency(metrics.totalCost, 0)} 
             prefix={currencySymbol}
             icon={<DollarSign />} 
             color="orange" 
          />
          <KpiCard 
             title="Est. Organic Value" 
-            value={metrics.totalOrganicValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} 
+            value={formatCurrency(metrics.totalOrganicValue, 0)} 
             prefix={currencySymbol}
             icon={<Zap />} 
             color="indigo" 
          />
          <KpiCard 
             title="Potential Savings" 
-            value={metrics.potentialSavings.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} 
+            value={formatCurrency(metrics.potentialSavings, 0)} 
             prefix={currencySymbol}
             icon={<PiggyBank />} 
             color="emerald" 
@@ -260,7 +269,7 @@ export const SearchEfficiencyView: React.FC<{
                                         <p className="text-[10px] font-black uppercase tracking-widest mb-2 border-b border-white/10 pb-2 truncate max-w-[200px]">{d.name}</p>
                                         <div className="space-y-1">
                                             <p className="text-[9px] flex justify-between gap-4"><span>Rank:</span> <span className="font-bold text-emerald-400">#{d.x.toFixed(1)}</span></p>
-                                            <p className="text-[9px] flex justify-between gap-4"><span>Cost:</span> <span className="font-bold text-rose-400">{currencySymbol}{d.y.toLocaleString()}</span></p>
+                                            <p className="text-[9px] flex justify-between gap-4"><span>Cost:</span> <span className="font-bold text-rose-400">{currencySymbol}{formatCurrency(d.y)}</span></p>
                                             <p className="text-[9px] flex justify-between gap-4"><span>Type:</span> <span className="font-bold text-indigo-400">{d.segment}</span></p>
                                             <p className="text-[9px] mt-2 italic text-slate-400">{d.action}</p>
                                         </div>
@@ -340,25 +349,25 @@ export const SearchEfficiencyView: React.FC<{
                                 ) : '-'}
                             </td>
                             <td className="py-3 px-4 text-right">
-                                <span className="text-[10px] font-bold text-slate-600">{row.organicSessions.toLocaleString()}</span>
+                                <span className="text-[10px] font-bold text-slate-600">{formatNumber(row.organicSessions)}</span>
                             </td>
                             {/* NEW: Avg CPC */}
                             <td className="py-3 px-4 text-right">
-                                <span className="text-[10px] font-bold text-slate-600">{currencySymbol}{row.avgCpc.toFixed(2)}</span>
+                                <span className="text-[10px] font-bold text-slate-600">{currencySymbol}{formatCurrency(row.avgCpc)}</span>
                             </td>
                             {/* NEW: Organic Value */}
                             <td className="py-3 px-4 text-right">
                                 <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
-                                   {currencySymbol}{row.organicValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                   {currencySymbol}{formatCurrency(row.organicValue)}
                                 </span>
                             </td>
                             <td className="py-3 px-4 text-right">
-                                <span className="text-[10px] font-bold text-slate-800">{currencySymbol}{row.ppcCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                <span className="text-[10px] font-bold text-slate-800">{currencySymbol}{formatCurrency(row.ppcCost)}</span>
                             </td>
                             <td className="py-3 px-4 text-right">
                                 {row.brandTax > 0 ? (
                                     <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100">
-                                        {currencySymbol}{row.brandTax.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                        {currencySymbol}{formatCurrency(row.brandTax)}
                                     </span>
                                 ) : <span className="text-[10px] text-slate-300">-</span>}
                             </td>
