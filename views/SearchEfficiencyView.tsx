@@ -180,12 +180,13 @@ export const SearchEfficiencyView: React.FC<{
         Query: d.query,
         Segment: d.querySegment,
         Organic_Rank: d.organicRank?.toFixed(1),
+        Organic_Sessions: d.organicSessions,
+        Paid_Sessions: d.ppcSessions,
         SA360_Cost: d.ppcCost.toFixed(2),
         Avg_CPC: d.avgCpc.toFixed(2),
         Est_Organic_Value: d.organicValue.toFixed(2),
         Potential_Savings: d.brandTax.toFixed(2),
         Action: d.actionTag,
-        Paid_Clicks: d.ppcSessions,
         Incremental_Clicks_Est: d.incrementalClicks.toFixed(0)
     }));
     exportToCSV(csv, "Search_Efficiency_Savings_Report");
@@ -390,6 +391,7 @@ export const SearchEfficiencyView: React.FC<{
                         <SortableHeader label="Query / URL" sortKey="query" align="left" />
                         <SortableHeader label="GSC Rank" sortKey="organicRank" align="center" />
                         <SortableHeader label="Org. Sessions" sortKey="organicSessions" />
+                        <SortableHeader label="Paid Sessions" sortKey="ppcSessions" />
                         <SortableHeader label="Avg. CPC" sortKey="avgCpc" />
                         <SortableHeader label="Est. Org Value" sortKey="organicValue" />
                         <SortableHeader label="Paid Cost" sortKey="ppcCost" />
@@ -415,6 +417,9 @@ export const SearchEfficiencyView: React.FC<{
                             </td>
                             <td className="py-3 px-4 text-right">
                                 <span className="text-[10px] font-bold text-slate-600">{formatNumber(row.organicSessions)}</span>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                                <span className="text-[10px] font-bold text-slate-600">{formatNumber(row.ppcSessions)}</span>
                             </td>
                             <td className="py-3 px-4 text-right">
                                 <span className="text-[10px] font-bold text-slate-600">{currencySymbol}{formatCurrency(row.avgCpc)}</span>
@@ -453,7 +458,7 @@ export const SearchEfficiencyView: React.FC<{
                             </td>
                         </tr>
                     )) : (
-                        <tr><td colSpan={8} className="py-12"><EmptyState text="No efficiency data found." /></td></tr>
+                        <tr><td colSpan={9} className="py-12"><EmptyState text="No efficiency data found." /></td></tr>
                     )}
                 </tbody>
             </table>
