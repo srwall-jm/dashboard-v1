@@ -4,7 +4,7 @@ import {
   ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine
 } from 'recharts';
 import { 
-  DollarSign, TrendingUp, PiggyBank, Target, AlertTriangle, CheckCircle, Search, FileText, Info 
+  DollarSign, TrendingUp, PiggyBank, Target, AlertTriangle, CheckCircle, Search, FileText, Info, Zap
 } from 'lucide-react';
 import { BridgeData } from '../types';
 import { KpiCard } from '../components/KpiCard';
@@ -18,6 +18,8 @@ interface EfficiencyRow extends BridgeData {
   actionTag: string;
   cpaGap: number;
   organicCvr: number;
+  avgCpc: number;       // New Metric
+  organicValue: number; // New Metric (Organic Sessions * CPC)
 }
 
 export const SearchEfficiencyView: React.FC<{ 
@@ -28,47 +30,46 @@ export const SearchEfficiencyView: React.FC<{
   const [querySegmentFilter, setQuerySegmentFilter] = useState<'All' | 'Brand' | 'Non-Brand'>('All');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // 1. Data Processing Engine (Based on Technical Brief)
+  // 1. Data Processing Engine
   const processedData = useMemo(() => {
     const regex = new RegExp(brandRegexStr, 'i');
 
     return data.map(row => {
         // A. Segment Logic
+        // Check both Query and URL for brand terms to be robust
         const isBrand = regex.test(row.query || '') || regex.test(row.url || '');
         const segment = isBrand ? 'Brand' : 'Non-Brand';
 
-        // B. Brand Tax / Potential Savings
-        // IF (Brand AND Rank <= 1.5) THEN Cost ELSE 0
+        // B. Calculate Avg CPC & Organic Value
+        // Avg CPC = Cost / Paid Sessions (or Clicks)
+        // Guard against division by zero
+        const avgCpc = row.ppcSessions > 0 ? row.ppcCost / row.ppcSessions : 0;
+        
+        // Organic Value = What this organic traffic would cost if paid
+        // Logic: Organic Sessions * Avg CPC
+        const organicValue = row.organicSessions * avgCpc;
+
+        // C. Brand Tax / Potential Savings
+        // Logic: If (Brand Term) AND (We Rank #1 Organically) THEN (Paid Cost is "Wasted")
+        // Relaxed Rank threshold to 1.9 to account for minor fluctuations
         let brandTax = 0;
-        if (segment === 'Brand' && row.organicRank !== null && row.organicRank <= 1.5) {
+        if (segment === 'Brand' && row.organicRank !== null && row.organicRank <= 1.9) {
             brandTax = row.ppcCost;
         }
 
-        // C. Action Tag Logic
-        // SA360 Impr Share Approximation: row.ppcImpressions vs Organic Proxy (using clicks * 10 as rough impr proxy if unavailable)
-        // Note: We use blended cost ratio as a proxy for share of voice in the absence of absolute impression share data
+        // D. Action Tag Logic
         let actionTag = "⚪ MONITOR";
-        const paidShare = row.blendedCostRatio; // Using session share as proxy for visibility share
+        const paidShare = row.blendedCostRatio;
 
-        if (segment === 'Brand' && row.organicRank !== null && row.organicRank <= 1.5 && paidShare > 0.5) {
+        if (segment === 'Brand' && row.organicRank !== null && row.organicRank <= 1.9 && paidShare > 0.5) {
             actionTag = "🔴 CUT/TEST (Cannibalization)";
         } else if (segment !== 'Brand' && row.organicRank !== null && row.organicRank <= 3 && paidShare > 0.8) {
             actionTag = "🟡 REVIEW ROI (High Paid Share)";
-        } else if (row.organicRank !== null && row.organicRank > 10) {
+        } else if (row.organicRank !== null && row.organicRank > 10 && row.ppcSessions === 0) {
             actionTag = "🟢 PUSH PAID (SEO Gap)";
         }
 
-        // D. CPA/CVR Gap
-        // (PaidCVR - OrgCVR) / OrgCVR
-        const paidCvr = row.ppcSessions > 0 ? row.ppcConversions / row.ppcSessions : 0;
-        const orgCvr = row.organicSessions > 0 ? (row.ppcConversions * 0.8 / row.organicSessions) : 0; // Using inferred org conversions or 0 if not available in BridgeData. 
-        // Note: BridgeData currently doesn't carry Organic Conversions explicitly in all mocks, assuming derived efficiency. 
-        // Refinement: We will calculate Gap based on Cost Ratio efficiency if CVR missing.
-        const cpaGap = 0; // Placeholder if organic conversion data isn't strict in BridgeData interface
-
-        // Incremental Clicks Estimate (Simple Model)
-        // If we stop paying, how many clicks do we lose?
-        // If Rank 1, we recapture ~60%. If Rank > 10, we recapture 0%.
+        // E. Incremental Clicks Estimate
         let recaptureRate = 0;
         if (row.organicRank && row.organicRank <= 1.5) recaptureRate = 0.6;
         else if (row.organicRank && row.organicRank <= 3) recaptureRate = 0.4;
@@ -82,8 +83,10 @@ export const SearchEfficiencyView: React.FC<{
             brandTax,
             actionTag,
             incrementalClicks,
-            cpaGap,
-            organicCvr: orgCvr
+            cpaGap: 0, 
+            organicCvr: 0,
+            avgCpc,
+            organicValue
         } as EfficiencyRow;
     });
   }, [data, brandRegexStr]);
@@ -93,7 +96,6 @@ export const SearchEfficiencyView: React.FC<{
     return processedData.filter(d => {
         const matchesSegment = querySegmentFilter === 'All' || d.querySegment === querySegmentFilter;
         const matchesSearch = !searchTerm || d.url.toLowerCase().includes(searchTerm.toLowerCase()) || d.query.toLowerCase().includes(searchTerm.toLowerCase());
-        // Only show relevant rows (Paid Spend > 0 OR High Organic Rank) to reduce noise
         const isRelevant = d.ppcCost > 0 || (d.organicRank !== null && d.organicRank < 20);
         return matchesSegment && matchesSearch && isRelevant;
     });
@@ -103,10 +105,9 @@ export const SearchEfficiencyView: React.FC<{
   const metrics = useMemo(() => {
     const totalCost = filteredData.reduce((sum, d) => sum + d.ppcCost, 0);
     const potentialSavings = filteredData.reduce((sum, d) => sum + d.brandTax, 0);
-    const totalIncrementalClicks = filteredData.reduce((sum, d) => sum + d.incrementalClicks, 0);
+    const totalOrganicValue = filteredData.reduce((sum, d) => sum + d.organicValue, 0);
     
-    // Weighted Organic Rank (AVG)
-    // Sum(Rank * OrganicSessions) / Sum(OrganicSessions)
+    // Weighted Organic Rank
     let weightedRankSum = 0;
     let weightSum = 0;
     filteredData.forEach(d => {
@@ -117,7 +118,7 @@ export const SearchEfficiencyView: React.FC<{
     });
     const weightedRank = weightSum > 0 ? weightedRankSum / weightSum : 0;
 
-    return { totalCost, potentialSavings, totalIncrementalClicks, weightedRank };
+    return { totalCost, potentialSavings, totalOrganicValue, weightedRank };
   }, [filteredData]);
 
   // 4. Scatter Plot Data
@@ -141,6 +142,8 @@ export const SearchEfficiencyView: React.FC<{
         Segment: d.querySegment,
         Organic_Rank: d.organicRank?.toFixed(1),
         SA360_Cost: d.ppcCost.toFixed(2),
+        Avg_CPC: d.avgCpc.toFixed(2),
+        Est_Organic_Value: d.organicValue.toFixed(2),
         Potential_Savings: d.brandTax.toFixed(2),
         Action: d.actionTag,
         Paid_Clicks: d.ppcSessions,
@@ -182,14 +185,21 @@ export const SearchEfficiencyView: React.FC<{
       {/* Section 1: Scorecards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
          <KpiCard 
-            title="Total SA360 Cost" 
+            title="Total Paid Cost" 
             value={metrics.totalCost.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} 
             prefix={currencySymbol}
             icon={<DollarSign />} 
             color="orange" 
          />
          <KpiCard 
-            title="Potential Brand Savings" 
+            title="Est. Organic Value" 
+            value={metrics.totalOrganicValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} 
+            prefix={currencySymbol}
+            icon={<Zap />} 
+            color="indigo" 
+         />
+         <KpiCard 
+            title="Potential Savings" 
             value={metrics.potentialSavings.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} 
             prefix={currencySymbol}
             icon={<PiggyBank />} 
@@ -199,12 +209,6 @@ export const SearchEfficiencyView: React.FC<{
             title="Weighted Org. Rank" 
             value={metrics.weightedRank.toFixed(1)} 
             icon={<TrendingUp />} 
-            color="indigo" 
-         />
-         <KpiCard 
-            title="Est. Incremental Clicks" 
-            value={metrics.totalIncrementalClicks.toLocaleString(undefined, { maximumFractionDigits: 0 })} 
-            icon={<Target />} 
             color="sky" 
          />
       </div>
@@ -233,11 +237,12 @@ export const SearchEfficiencyView: React.FC<{
                             domain={[1, 50]} 
                             tick={{fontSize: 9, fontWeight: 700}} 
                             label={{ value: 'GSC Average Position (Inverted)', position: 'bottom', fontSize: 10, fill: '#94a3b8' }}
-                            reversed // Invert axis so Rank 1 is on the right or left? Usually Rank 1 is "good" -> Top Right quadrant means High Cost + Good Rank? 
-                            // Let's standard: X=Rank. 1 is "Low" value numerically but "High" performance. 
-                            // Brief says: "Top Left = High Cost + Good Rank". 
-                            // Y = Cost (High is Top). X = Rank (Good is Left). 
-                            // So X should NOT be reversed if 1 is Left. 1 is Left naturally.
+                            reversed // Reversed: 1 (Good) is on the Right or Left? Standard Scatter: 0 is Left. 
+                            // We want 1 on the Left (Top Left Quadrant logic). So do NOT reverse if 1 is small.
+                            // Actually, standard X axis: 0 -> 50. 
+                            // If we want Rank 1 on LEFT, we need normal axis 1..50.
+                            // The previous prop `reversed` puts 50 on left and 1 on right. 
+                            // Let's keep it standard: 1 (Left) -> 50 (Right).
                         />
                         <YAxis 
                             type="number" 
@@ -311,16 +316,17 @@ export const SearchEfficiencyView: React.FC<{
                         <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Query / URL</th>
                         <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">GSC Rank</th>
                         <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Org. Sessions</th>
-                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">SA360 Cost</th>
-                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Paid Share</th>
-                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Potential Savings</th>
+                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Avg. CPC</th>
+                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Est. Org Value</th>
+                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Paid Cost</th>
+                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Savings</th>
                         <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     {filteredData.length > 0 ? filteredData.slice(0, 50).map((row, idx) => (
                         <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                            <td className="py-3 px-4 max-w-[250px]">
+                            <td className="py-3 px-4 max-w-[200px]">
                                 <div className="flex flex-col">
                                     <span className="text-[10px] font-bold text-slate-800 truncate" title={row.query}>{row.query || row.url}</span>
                                     <span className="text-[9px] text-slate-400 truncate mt-0.5">{row.url}</span>
@@ -336,20 +342,22 @@ export const SearchEfficiencyView: React.FC<{
                             <td className="py-3 px-4 text-right">
                                 <span className="text-[10px] font-bold text-slate-600">{row.organicSessions.toLocaleString()}</span>
                             </td>
+                            {/* NEW: Avg CPC */}
+                            <td className="py-3 px-4 text-right">
+                                <span className="text-[10px] font-bold text-slate-600">{currencySymbol}{row.avgCpc.toFixed(2)}</span>
+                            </td>
+                            {/* NEW: Organic Value */}
+                            <td className="py-3 px-4 text-right">
+                                <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+                                   {currencySymbol}{row.organicValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                </span>
+                            </td>
                             <td className="py-3 px-4 text-right">
                                 <span className="text-[10px] font-bold text-slate-800">{currencySymbol}{row.ppcCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                             </td>
                             <td className="py-3 px-4 text-right">
-                                <div className="flex items-center justify-end gap-2">
-                                    <div className="w-12 h-1 bg-slate-100 rounded-full overflow-hidden">
-                                        <div className="h-full bg-indigo-500" style={{ width: `${Math.min(row.blendedCostRatio * 100, 100)}%` }} />
-                                    </div>
-                                    <span className="text-[9px] font-bold text-slate-500">{(row.blendedCostRatio * 100).toFixed(0)}%</span>
-                                </div>
-                            </td>
-                            <td className="py-3 px-4 text-right">
                                 {row.brandTax > 0 ? (
-                                    <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg">
+                                    <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100">
                                         {currencySymbol}{row.brandTax.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                                     </span>
                                 ) : <span className="text-[10px] text-slate-300">-</span>}
@@ -365,7 +373,7 @@ export const SearchEfficiencyView: React.FC<{
                             </td>
                         </tr>
                     )) : (
-                        <tr><td colSpan={7} className="py-12"><EmptyState text="No efficiency data found." /></td></tr>
+                        <tr><td colSpan={8} className="py-12"><EmptyState text="No efficiency data found." /></td></tr>
                     )}
                 </tbody>
             </table>
@@ -374,7 +382,13 @@ export const SearchEfficiencyView: React.FC<{
         <div className="mt-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-start gap-3">
             <Info size={16} className="text-slate-400 mt-0.5" />
             <p className="text-[10px] text-slate-500 leading-relaxed">
-                <strong>Data Notice:</strong> Search Console data typically has a 48-72h latency. Recent days may show incomplete organic ranking data compared to real-time SA360 spend. Ensure both GA4 and SA360 currencies match to avoid discrepancies.
+                <strong>Calculation Logic:</strong> 
+                <br/>
+                • <strong>Avg. CPC:</strong> Total Cost / Paid Sessions (or Clicks).
+                <br/>
+                • <strong>Est. Org Value:</strong> Organic Sessions × Avg. CPC. (Represents cost avoided by ranking organically).
+                <br/>
+                • <strong>Potential Savings:</strong> Sum of Paid Cost for <strong>Brand</strong> terms where Organic Rank is <strong>≤ 1.9</strong>.
             </p>
         </div>
       </div>
