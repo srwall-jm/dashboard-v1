@@ -1,10 +1,10 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { 
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, BarChart, Bar, LineChart, Line, Legend, LabelList
 } from 'recharts';
 import { 
-  AlertOctagon, Zap, ShieldCheck, FileText, ExternalLink, Search, Filter, ChevronDown, ChevronRight, CornerDownRight, BarChart2, TrendingUp, DollarSign, Info, LayoutList, Key, Settings, CheckSquare, Square
+  AlertOctagon, Zap, ShieldCheck, FileText, ExternalLink, Search, Filter, ChevronDown, ChevronRight, ChevronUp, CornerDownRight, BarChart2, TrendingUp, DollarSign, Info, LayoutList, Key, Settings, CheckSquare, Square
 } from 'lucide-react';
 import { BridgeData, DailyData, KeywordBridgeData, Sa360Customer } from '../types';
 import { exportToCSV, formatDate } from '../utils';
@@ -43,6 +43,11 @@ const getActionInfo = (label: string) => {
     return { desc: "Healthy State", logic: "Balanced Organic & Paid visibility." };
 };
 
+type SortConfig = {
+  key: string;
+  direction: 'asc' | 'desc';
+};
+
 // Reusable Table Component
 const BridgeAnalysisTable: React.FC<{
   title: string;
@@ -59,15 +64,89 @@ const BridgeAnalysisTable: React.FC<{
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'url' | 'keyword'>('url');
   
+  // Sorting State
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'blendedCostRatio', direction: 'desc' });
+
+  // Reset sort when view mode changes
+  useEffect(() => {
+     setSortConfig({ 
+         key: viewMode === 'url' ? 'blendedCostRatio' : 'paidSessions', 
+         direction: 'desc' 
+     });
+  }, [viewMode]);
+
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'desc';
+    if (sortConfig.key === key && sortConfig.direction === 'desc') {
+      direction = 'asc';
+    }
+    setSortConfig({ key, direction });
+  };
+  
   // Selection State
   const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set());
 
-  // Filtered Data based on URL Filter
-  const filteredUrlData = useMemo(() => {
-    return data
-        .filter(item => !urlFilter || item.url.toLowerCase().includes(urlFilter.toLowerCase()))
-        .sort((a, b) => b.blendedCostRatio - a.blendedCostRatio);
-  }, [data, urlFilter]);
+  // Filtered & Sorted Data based on URL Filter
+  const sortedUrlData = useMemo(() => {
+    let sorted = data.filter(item => !urlFilter || item.url.toLowerCase().includes(urlFilter.toLowerCase()));
+    
+    if (sortConfig) {
+        sorted.sort((a: any, b: any) => {
+            let aVal = a[sortConfig.key];
+            let bVal = b[sortConfig.key];
+
+            if (typeof aVal === 'string') {
+                 aVal = aVal.toLowerCase();
+                 bVal = (bVal || '').toLowerCase();
+                 if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+                 if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+                 return 0;
+            }
+
+            // Null handling (especially for Ranks)
+            if (sortConfig.key === 'organicRank') {
+                if (aVal === null) return 1; 
+                if (bVal === null) return -1;
+            }
+
+            if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+            if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }
+    return sorted;
+  }, [data, urlFilter, sortConfig]);
+
+  // Filtered & Sorted Keyword Data
+  const sortedKeywordData = useMemo(() => {
+    let sorted = keywordData.filter(k => !keywordFilter || k.keyword.toLowerCase().includes(keywordFilter.toLowerCase()));
+
+    if (sortConfig) {
+        sorted.sort((a: any, b: any) => {
+            let aVal = a[sortConfig.key];
+            let bVal = b[sortConfig.key];
+            
+            if (typeof aVal === 'string') {
+                 aVal = aVal.toLowerCase();
+                 bVal = (bVal || '').toLowerCase();
+                 if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+                 if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+                 return 0;
+            }
+
+            if (sortConfig.key === 'organicRank') {
+                if (aVal === null) return 1; 
+                if (bVal === null) return -1;
+            }
+
+            if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+            if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }
+    return sorted;
+  }, [keywordData, keywordFilter, sortConfig]);
+
 
   const toggleRow = (url: string) => {
     const newSet = new Set(expandedRows);
@@ -83,10 +162,10 @@ const BridgeAnalysisTable: React.FC<{
   };
 
   const toggleSelectAll = () => {
-    if (selectedUrls.size === filteredUrlData.length) {
+    if (selectedUrls.size === sortedUrlData.length) {
       setSelectedUrls(new Set());
     } else {
-      setSelectedUrls(new Set(filteredUrlData.map(d => d.url)));
+      setSelectedUrls(new Set(sortedUrlData.map(d => d.url)));
     }
   };
 
@@ -195,6 +274,21 @@ const BridgeAnalysisTable: React.FC<{
     exportToCSV(formattedData, `PPC_SEO_${viewMode.toUpperCase()}_${dataSourceName}_Export`);
   };
 
+  const SortableHeader = ({ label, sortKey, align = 'right' }: { label: string, sortKey: string, align?: 'left' | 'center' | 'right' }) => (
+    <th 
+        className={`py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 hover:bg-slate-50 transition-colors select-none text-${align}`}
+        onClick={() => handleSort(sortKey)}
+    >
+        <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}>
+            {label}
+            <div className="flex flex-col">
+                <ChevronUp size={8} className={`${sortConfig.key === sortKey && sortConfig.direction === 'asc' ? 'text-indigo-600' : 'text-slate-300'}`} />
+                <ChevronDown size={8} className={`${sortConfig.key === sortKey && sortConfig.direction === 'desc' ? 'text-indigo-600' : 'text-slate-300'}`} />
+            </div>
+        </div>
+    </th>
+  );
+
   return (
     <div className="mb-10">
     <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden mb-6">
@@ -239,20 +333,20 @@ const BridgeAnalysisTable: React.FC<{
                 <tr className="border-b border-slate-100 bg-slate-50/50">
                   <th className="py-3 px-4 w-10 text-center">
                     <button onClick={toggleSelectAll} className="text-indigo-600 hover:text-indigo-800 transition-colors">
-                        {selectedUrls.size > 0 && selectedUrls.size === filteredUrlData.length ? <CheckSquare size={16} /> : <Square size={16} />}
+                        {selectedUrls.size > 0 && selectedUrls.size === sortedUrlData.length ? <CheckSquare size={16} /> : <Square size={16} />}
                     </button>
                   </th>
                   <th className="py-3 px-4 w-8"></th>
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">URL / Top Query</th>
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Top Org. Rank</th>
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Org. Sessions (GA4)</th>
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">{metricLabel}</th>
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right text-amber-600">Paid Share</th>
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
+                  <SortableHeader label="URL / Top Query" sortKey="url" align="left" />
+                  <SortableHeader label="Top Org. Rank" sortKey="organicRank" align="center" />
+                  <SortableHeader label="Org. Sessions (GA4)" sortKey="organicSessions" />
+                  <SortableHeader label={metricLabel} sortKey="ppcSessions" />
+                  <SortableHeader label="Paid Share" sortKey="blendedCostRatio" />
+                  <SortableHeader label="Action" sortKey="actionLabel" />
                 </tr>
               </thead>
               <tbody>
-                {filteredUrlData.length > 0 ? filteredUrlData.slice(0, 100).map((row, idx) => {
+                {sortedUrlData.length > 0 ? sortedUrlData.slice(0, 100).map((row, idx) => {
                   const actionInfo = getActionInfo(row.actionLabel);
                   return (
                   <React.Fragment key={idx}>
@@ -315,17 +409,16 @@ const BridgeAnalysisTable: React.FC<{
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Matched Keyword (Exact)</th>
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Top Org. Rank</th>
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Org. Clicks</th>
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">{metricLabel}</th>
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Paid CVR</th>
-                  <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
+                  <SortableHeader label="Matched Keyword (Exact)" sortKey="keyword" align="left" />
+                  <SortableHeader label="Top Org. Rank" sortKey="organicRank" align="center" />
+                  <SortableHeader label="Org. Clicks" sortKey="organicClicks" />
+                  <SortableHeader label={metricLabel} sortKey="paidSessions" />
+                  <SortableHeader label="Paid CVR" sortKey="paidCvr" />
+                  <SortableHeader label="Action" sortKey="actionLabel" />
                 </tr>
               </thead>
               <tbody>
-                {keywordData && keywordData.length > 0 ? keywordData
-                  .filter(k => !keywordFilter || k.keyword.toLowerCase().includes(keywordFilter.toLowerCase()))
+                {sortedKeywordData && sortedKeywordData.length > 0 ? sortedKeywordData
                   .map((row, idx) => {
                     const actionInfo = getActionInfo(row.actionLabel);
                     return (
