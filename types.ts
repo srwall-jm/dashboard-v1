@@ -112,7 +112,6 @@ export interface BridgeData {
 
 export interface KeywordBridgeData {
   keyword: string;
-  url: string; // Added: Granularity Level
   organicRank: number | null;
   organicClicks: number;
   paidSessions: number; // Value depends on dataSource
