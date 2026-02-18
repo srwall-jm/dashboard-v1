@@ -603,7 +603,7 @@ const App: React.FC = () => {
            WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
          `;
          
-         // Query 2: Keyword-level metrics from ad_group_criterion (valid resource, separate from ad_group_ad)
+         // Query 2: Keyword-level metrics using keyword_view (supports metrics + criterion fields)
          const sa360KwQuery = `
             SELECT 
               ad_group_criterion.keyword.text,
@@ -611,7 +611,7 @@ const App: React.FC = () => {
               metrics.cost_micros, 
               metrics.clicks, 
               metrics.conversions 
-            FROM ad_group_criterion
+            FROM keyword_view
             WHERE ad_group_criterion.type = 'KEYWORD'
               AND ad_group.status = 'ENABLED'
               AND segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
