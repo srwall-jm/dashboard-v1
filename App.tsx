@@ -8,7 +8,7 @@ import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, Gs
 import { getDashboardInsights, getOpenAiInsights } from './geminiService';
 import GoogleLogin from './GoogleLogin'; 
 import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry, extractPath, AI_SOURCE_REGEX_STRING } from './utils';
-import { generateMockBridgeData, generateMockAiTrafficData, generateMockDailyData, generateMockKeywordData } from './mockData';
+import { generateMockBridgeData, generateMockAiTrafficData, generateMockDailyData, generateMockKeywordData, generateMockKeywordBridgeData } from './mockData';
 
 // Import New Components and Views
 import { Sidebar } from './components/Sidebar';
@@ -449,7 +449,11 @@ const fetchBridgeData = async () => {
 
     if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
         if (!bridgeDataGA4.length) setBridgeDataGA4(generateMockBridgeData());
-        if (!bridgeDataSA360.length) setBridgeDataSA360(generateMockBridgeData()); 
+        if (!bridgeDataSA360.length) setBridgeDataSA360(generateMockBridgeData());
+        // MOCK DATA FOR EFFICIENCY VIEW
+        if (!keywordBridgeDataGA4.length) setKeywordBridgeDataGA4(generateMockKeywordBridgeData());
+        if (!keywordBridgeDataSA360.length) setKeywordBridgeDataSA360(generateMockKeywordBridgeData());
+        
         setIsLoadingBridge(false);
         return;
     }
@@ -743,20 +747,13 @@ const fetchBridgeData = async () => {
             });
 
             // 2. Add Paid Keywords that had NO organic traffic (Unknown URL context)
+            // CRITICAL OPTIMIZATION: Create Set for O(1) Lookup instead of O(N*M) Loop
+            const knownOrganicKeywords = new Set<string>();
+            Object.values(granularCompositeMap).forEach(v => knownOrganicKeywords.add(v.keyword));
+
             Object.keys(sa360KeywordMap).forEach(kw => {
-                // Check if this keyword was already processed via GSC map
-                // We do a rough check if any key in granularCompositeMap ends with this keyword
-                // This is O(N*M), for performance we skip exact deduping or rely on the fact that if it's not in GSC, it's net new.
-                // Simplified: If it wasn't in GSC, we add it as "Paid Only"
-                
-                // For exact deduping, we can track processed keywords:
-                // But since granular map is URL+KW, a keyword can appear multiple times.
-                // We only add a "Generic" row if the keyword had ZERO organic presence anywhere.
-                
                 // Quick check: is this keyword in granular map?
-                const existsInOrganic = Object.values(granularCompositeMap).some(g => g.keyword === kw);
-                
-                if (!existsInOrganic) {
+                if (!knownOrganicKeywords.has(kw)) {
                     const paidData = sa360KeywordMap[kw];
                     const cvr = paidData.clicksOrSessions > 0 ? (paidData.conversions / paidData.clicksOrSessions) * 100 : 0;
                     const avgCpc = paidData.clicksOrSessions > 0 ? paidData.cost / paidData.clicksOrSessions : 0;

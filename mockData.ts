@@ -1,5 +1,5 @@
 
-import { DailyData, KeywordData, ChannelType, QueryType, BridgeData, AiTrafficData } from './types';
+import { DailyData, KeywordData, ChannelType, QueryType, BridgeData, AiTrafficData, KeywordBridgeData } from './types';
 
 export const COUNTRIES = ['Spain', 'Mexico', 'United States', 'United Kingdom', 'France', 'Germany', 'Italy', 'Portugal'];
 const QUERY_TYPES: QueryType[] = ['Branded', 'Non-Branded'];
@@ -188,6 +188,46 @@ export const generateMockBridgeData = (): BridgeData[] => {
       gscTopQueries: gscTopQueries
     };
   });
+};
+
+export const generateMockKeywordBridgeData = (): KeywordBridgeData[] => {
+    const queries = [
+        'running shoes nike', 'adidas ultraboost sale', 'yoga mats non slip', 'best gym gloves', 
+        'pro sports shop discount', 'home treadmill compact', 'compression socks running', 'marathon training guide',
+        'whey protein isolate', 'crossfit grips', 'mens running shorts', 'womens gym leggings',
+        'home gym equipment', 'adjustable dumbbell set', 'kettlebell 16kg'
+    ];
+    const pages = [
+        '/shop/running/shoes', '/shop/weights', '/shop/yoga-mats', '/blog/best-workouts',
+        '/home', '/cardio/treadmills', '/accessories/socks', '/training/marathon-plans'
+    ];
+
+    return Array.from({ length: 40 }).map((_, i) => {
+        const organicRank = Math.random() > 0.3 ? (Math.random() * 40) + 1 : null;
+        const organicClicks = organicRank && organicRank < 20 ? Math.floor(Math.random() * 800) + 50 : 0;
+        
+        const hasPaid = Math.random() > 0.4;
+        const paidSessions = hasPaid ? Math.floor(Math.random() * 500) + 20 : 0;
+        const ppcCost = paidSessions * (0.5 + Math.random() * 1.5);
+        
+        let action = "MONITOR";
+        if (organicRank && organicRank <= 3 && paidSessions > 100) action = "CRITICAL (Cannibalization)";
+        else if (organicRank && organicRank > 10 && paidSessions === 0) action = "OPPORTUNITY (Growth)";
+        else if (!organicRank && paidSessions > 0) action = "PAID ONLY";
+
+        return {
+            keyword: queries[i % queries.length],
+            url: pages[i % pages.length],
+            organicRank,
+            organicClicks,
+            paidSessions,
+            paidCvr: Math.random() * 5,
+            ppcCost,
+            avgCpc: paidSessions > 0 ? ppcCost / paidSessions : 0,
+            actionLabel: action,
+            dataSource: 'GA4'
+        };
+    });
 };
 
 export const generateMockAiTrafficData = (): AiTrafficData[] => {
