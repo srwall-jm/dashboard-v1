@@ -37,7 +37,6 @@ const PRIORITY_DIMENSIONS = [
 ];
 
 const App: React.FC = () => {
-  // UseRefs must be declared at the top level
   const lastFetchParams = useRef<string>('');
   
   const tokenClientGa4 = useRef<any>(null);
@@ -249,7 +248,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Fetch Main Managers (Accessible Customers)
   const fetchSa360Customers = async (token: string) => {
     try {
         setIsLoadingSa360(true);
@@ -266,13 +264,12 @@ const App: React.FC = () => {
             return {
                 resourceName: rn,
                 id: id,
-                descriptiveName: `Account ${id}` // Default name if not fetched deeper
+                descriptiveName: `Account ${id}` 
             };
         });
         
         setAvailableSa360Customers(customers);
         
-        // Auto-select the first one if not set
         if (customers.length > 0) {
            if (!sa360Auth?.customer) {
                setSa360Auth({ token, customer: customers[0] });
@@ -280,7 +277,6 @@ const App: React.FC = () => {
            if (!selectedSa360Customer) {
                const defaultCust = customers[0];
                setSelectedSa360Customer(defaultCust);
-               // Trigger fetching sub-accounts for this default customer
                fetchSa360SubAccounts(token, defaultCust.id);
            }
         }
@@ -328,14 +324,11 @@ const App: React.FC = () => {
       });
 
       if (!resp.ok) {
-        const errorText = await resp.text();
-        console.error(`Error en cuenta ${currentId}:`, errorText);
         continue;
       }
 
       const json = await resp.json();
 
-      // searchStream devuelve un Array. Cada elemento tiene un campo "results"
       if (Array.isArray(json)) {
         for (const batch of json) {
           if (!batch.results) continue;
@@ -353,7 +346,6 @@ const App: React.FC = () => {
                 processingQueue.push(id);
               }
             } else {
-              // Es una cuenta final (Leaf)
               allLeafAccounts.push({
                 resourceName: client.resourceName,
                 id: id,
@@ -365,7 +357,6 @@ const App: React.FC = () => {
       }
     }
     
-    console.log("Cuentas finales encontradas:", allLeafAccounts);
     setAvailableSa360SubAccounts(allLeafAccounts);
     
     if (allLeafAccounts.length > 0) {
@@ -380,11 +371,10 @@ const App: React.FC = () => {
   }
 };
 
-  // When selectedSa360Customer changes manually, fetch its sub-accounts
   const handleSa360CustomerChange = (customer: Sa360Customer | null) => {
     setSelectedSa360Customer(customer);
-    setAvailableSa360SubAccounts([]); // Clear previous
-    setSelectedSa360SubAccount(null); // Clear previous selection
+    setAvailableSa360SubAccounts([]); 
+    setSelectedSa360SubAccount(null); 
     
     if (customer && sa360Auth?.token) {
         fetchSa360SubAccounts(sa360Auth.token, customer.id);
@@ -451,11 +441,9 @@ const App: React.FC = () => {
     }
   };
 
-// --- BRIDGE DATA: GA4 SESSIONS (ORGANIC vs PAID) ---
-const fetchBridgeData = async () => {
+  const fetchBridgeData = async () => {
     setIsLoadingBridge(true);
 
-    // --- MOCK FALLBACK IF NOTHING CONNECTED ---
     if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
         if (!bridgeDataGA4.length) setBridgeDataGA4(generateMockBridgeData());
         if (!bridgeDataSA360.length) setBridgeDataSA360(generateMockBridgeData()); 
@@ -475,7 +463,6 @@ const fetchBridgeData = async () => {
       return path;
     };
 
-    // 0. FETCH GA4 ORGANIC SESSIONS (Per URL)
     const ga4OrganicMap: Record<string, number> = {};
     if (ga4Auth?.property && ga4Auth.token) {
         try {
@@ -506,10 +493,7 @@ const fetchBridgeData = async () => {
         }
     }
 
-    // Maps for Bridge Data
     let gscUrlMap: Record<string, { queries: {query: string, rank: number, clicks: number}[], totalClicks: number, bestRank: number }> = {};
-    
-    // Map for Granular Keyword+URL Data (Composite Key: "URL||KEYWORD")
     let granularCompositeMap: Record<string, { 
         keyword: string, 
         url: string,
@@ -523,7 +507,6 @@ const fetchBridgeData = async () => {
 
     const getCompositeKey = (url: string, keyword: string) => `${url}||${keyword.toLowerCase().trim()}`;
 
-    // 1. TRY GSC FETCH (If Available)
     if (gscAuth?.site && gscAuth.token) {
         try {
             const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
@@ -551,7 +534,6 @@ const fetchBridgeData = async () => {
                     const rank = row.position;
                     const cleanPath = normalizeUrl(fullUrl);
 
-                    // 1. Fill URL Map (Bridge Data)
                     if (!gscUrlMap[cleanPath]) {
                         gscUrlMap[cleanPath] = { queries: [], totalClicks: 0, bestRank: 999 };
                     }
@@ -559,7 +541,6 @@ const fetchBridgeData = async () => {
                     gscUrlMap[cleanPath].totalClicks += clicks;
                     if (rank < gscUrlMap[cleanPath].bestRank) gscUrlMap[cleanPath].bestRank = rank;
 
-                    // 2. Fill Granular Composite Map (Efficiency View)
                     const key = getCompositeKey(cleanPath, query);
                     if (!granularCompositeMap[key]) {
                         granularCompositeMap[key] = { 
@@ -587,7 +568,6 @@ const fetchBridgeData = async () => {
         }
     }
 
-    // 2. TRY SA360 FETCH (If Available & Selected)
     if (sa360Auth?.token && selectedSa360SubAccount) {
          const sa360PaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
 
@@ -603,12 +583,8 @@ const fetchBridgeData = async () => {
 `;
          
          const fetchSa360 = async (query: string) => {
-            if (!selectedSa360SubAccount) {
-                throw new Error("No SA360 sub-account selected");
-            }
-            if (!sa360Auth?.token) {
-                throw new Error("SA360 token is missing");
-            }
+            if (!selectedSa360SubAccount) throw new Error("No SA360 sub-account");
+            if (!sa360Auth?.token) throw new Error("SA360 token missing");
 
             const headers: any = { 
                 Authorization: `Bearer ${sa360Auth.token}`, 
@@ -627,10 +603,7 @@ const fetchBridgeData = async () => {
                 body: JSON.stringify({ query })
             });
             
-            if (!res.ok) {
-                const text = await res.text();
-                throw new Error(`SA360 Error: ${res.status} - ${text.substring(0, 100)}`);
-            }
+            if (!res.ok) throw new Error(`SA360 Error: ${res.status}`);
 
             const json = await res.json();
             return (Array.isArray(json) ? json : []).flatMap((batch: any) => batch.results || []);
@@ -656,7 +629,6 @@ const fetchBridgeData = async () => {
                 sa360PaidMap[path].cost += (parseInt(metrics.costMicros) || 0) / 1000000;
             });
 
-            // BUILD SA360 BRIDGE DATA
             const sa360Results: BridgeData[] = [];
             const allPaths = new Set([...Object.keys(gscUrlMap), ...Object.keys(sa360PaidMap)]);
             
@@ -705,7 +677,6 @@ const fetchBridgeData = async () => {
 
          } catch (err: any) {
              console.error("Error fetching SA360 data:", err);
-             setError(err.message || "Failed to fetch SA360 data");
              setBridgeDataSA360([]);
              setKeywordBridgeDataSA360([]);
          }
@@ -714,7 +685,6 @@ const fetchBridgeData = async () => {
          setKeywordBridgeDataSA360([]);
     }
 
-    // 3. TRY GA4 FETCH (If Available)
     if (ga4Auth?.property && ga4Auth.token) {
          const ga4PaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
          
@@ -750,7 +720,6 @@ const fetchBridgeData = async () => {
                 }
             });
 
-            // GA4 Keywords + Landing Page (Granular Fetch)
             const ga4KwResp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
@@ -774,7 +743,6 @@ const fetchBridgeData = async () => {
                  const rate = parseFloat(row.metricValues[1].value) || 0;
                  const cost = parseFloat(row.metricValues[2].value) || 0;
 
-                 // Update Granular Composite Map
                  const key = getCompositeKey(cleanPath, cleanKw);
                  if (!granularCompositeMap[key]) {
                      granularCompositeMap[key] = { 
@@ -787,7 +755,6 @@ const fetchBridgeData = async () => {
                  granularCompositeMap[key].paidCost += cost;
             });
 
-            // BUILD GA4 BRIDGE DATA (URL LEVEL)
             const ga4Results: BridgeData[] = [];
             const allPathsGA = new Set([...Object.keys(gscUrlMap), ...Object.keys(ga4PaidMap)]);
             
@@ -824,7 +791,6 @@ const fetchBridgeData = async () => {
             });
             setBridgeDataGA4(ga4Results.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
 
-            // BUILD KEYWORD DATA (GRANULAR KEYWORD + URL)
             const ga4KwResults: KeywordBridgeData[] = [];
             Object.values(granularCompositeMap).forEach(item => {
                  const paidVol = item.paidSessions;
@@ -841,7 +807,7 @@ const fetchBridgeData = async () => {
 
                  ga4KwResults.push({
                     keyword: item.keyword, 
-                    url: item.url, // GRANULARITY: URL
+                    url: item.url,
                     organicRank: item.organicRank || null, 
                     organicClicks: orgVol,
                     paidSessions: paidVol, 
@@ -862,24 +828,11 @@ const fetchBridgeData = async () => {
     setIsLoadingBridge(false);
   };
 
-  // Restore SA360 Data on Load if Auth exists (Persistency Logic)
-  useEffect(() => {
-    if (sa360Auth?.token && availableSa360Customers.length === 0 && !isLoadingSa360) {
-        fetchSa360Customers(sa360Auth.token);
-    }
-  }, [sa360Auth]);
-
-  // -- IMPLEMENT FETCH GA4 DATA (Restored) --
   const fetchGa4Data = async () => {
     setIsLoadingGa4(true);
     try {
-        if (ga4Auth?.property && ga4Auth.token) {
-             setRealDailyData(generateMockDailyData());
-             setRealKeywordData(generateMockKeywordData());
-        } else {
-             setRealDailyData(generateMockDailyData());
-             setRealKeywordData(generateMockKeywordData());
-        }
+        setRealDailyData(generateMockDailyData());
+        setRealKeywordData(generateMockKeywordData());
     } catch (e) {
         console.error("Error fetching GA4 data", e);
         setRealDailyData(generateMockDailyData());
@@ -889,7 +842,6 @@ const fetchBridgeData = async () => {
     }
   };
 
-  // Init Token Clients
   useEffect(() => {
     if (window.google) {
       tokenClientGa4.current = window.google.accounts.oauth2.initTokenClient({
@@ -910,7 +862,6 @@ const fetchBridgeData = async () => {
     }
   }, []);
 
-  // Main Data Load Effect
   useEffect(() => {
     if (user) {
         fetchGa4Data();
@@ -928,20 +879,35 @@ const fetchBridgeData = async () => {
     sessionStorage.clear();
   };
 
+  const handleLoginSuccess = (credentialToken: string) => {
+    try {
+      const base64Url = credentialToken.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const decoded = JSON.parse(atob(base64));
+      const newUser = { name: decoded.name, email: decoded.email, picture: decoded.picture };
+      setUser(newUser);
+      localStorage.setItem('seo_suite_user', JSON.stringify(newUser));
+    } catch (error) { console.error("Error decoding token:", error); }
+  };
+
   const stats = useMemo(() => aggregateData(realDailyData), [realDailyData]);
 
   if (!user) {
     return (
-        <div className="flex flex-col items-center justify-center h-screen bg-slate-50">
-            <h1 className="text-2xl font-black text-slate-900 mb-2">The OneSearch Suite</h1>
-            <p className="text-sm text-slate-500 mb-8">Sign in to access your dashboard</p>
-            <GoogleLogin onLoginSuccess={(credential) => {
-                const payload = JSON.parse(atob(credential.split('.')[1]));
-                const newUser = { name: payload.name, email: payload.email, picture: payload.picture };
-                setUser(newUser);
-                localStorage.setItem('seo_suite_user', JSON.stringify(newUser));
-            }} />
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-white relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none">
+            <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-600 blur-[120px] rounded-full animate-pulse" />
+            <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-600 blur-[120px] rounded-full animate-pulse delay-1000" />
         </div>
+        <div className="w-full max-w-xl bg-white/5 backdrop-blur-xl border border-white/10 rounded-[48px] p-8 md:p-12 text-center z-10 shadow-2xl">
+          <div className="w-16 h-16 md:w-20 md:h-20 bg-indigo-600 rounded-[24px] md:rounded-[28px] flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-indigo-500/20 transform -rotate-6">
+            <Activity className="w-8 h-8 md:w-10 md:h-10 text-white" />
+          </div>
+          <h1 className="text-3xl md:text-4xl font-black mb-4 tracking-tighter">The OneSearch Engine</h1>
+          <p className="text-slate-400 font-medium mb-10 text-base md:text-lg">Sign in with Google to access your dashboard.</p>
+          <div className="flex justify-center w-full"><GoogleLogin onLoginSuccess={handleLoginSuccess} /></div>
+        </div>
+      </div>
     );
   }
 
