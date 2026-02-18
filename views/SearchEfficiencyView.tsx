@@ -4,7 +4,7 @@ import {
   ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine
 } from 'recharts';
 import { 
-  DollarSign, TrendingUp, PiggyBank, Target, AlertTriangle, CheckCircle, Search, FileText, Info, Zap, ChevronUp, ChevronDown, Key
+  DollarSign, TrendingUp, PiggyBank, Target, AlertTriangle, CheckCircle, Search, FileText, Info, Zap, ChevronUp, ChevronDown, Key, ExternalLink
 } from 'lucide-react';
 import { KeywordBridgeData } from '../types';
 import { KpiCard } from '../components/KpiCard';
@@ -95,7 +95,7 @@ export const SearchEfficiencyView: React.FC<{
   const filteredData = useMemo(() => {
     return processedData.filter(d => {
         const matchesSegment = querySegmentFilter === 'All' || d.querySegment === querySegmentFilter;
-        const matchesSearch = !searchTerm || d.keyword.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = !searchTerm || d.keyword.toLowerCase().includes(searchTerm.toLowerCase()) || d.url?.toLowerCase().includes(searchTerm.toLowerCase());
         const isRelevant = d.ppcCost > 0 || (d.organicRank !== null && d.organicRank < 20);
         return matchesSegment && matchesSearch && isRelevant;
     });
@@ -110,7 +110,7 @@ export const SearchEfficiencyView: React.FC<{
         let bValue = b[sortConfig.key];
 
         // Special handling for string/text columns
-        if (sortConfig.key === 'keyword' || sortConfig.key === 'actionLabel') {
+        if (sortConfig.key === 'keyword' || sortConfig.key === 'url' || sortConfig.key === 'actionLabel') {
              const strA = String(aValue || '').toLowerCase();
              const strB = String(bValue || '').toLowerCase();
              if (strA < strB) return sortConfig.direction === 'asc' ? -1 : 1;
@@ -169,6 +169,7 @@ export const SearchEfficiencyView: React.FC<{
             y: d.ppcCost,     // Cost
             z: d.paidSessions, // Bubble Size (Clicks)
             name: d.keyword,
+            url: d.url,
             segment: d.querySegment,
             action: d.actionTag
         }));
@@ -177,6 +178,7 @@ export const SearchEfficiencyView: React.FC<{
   const handleExport = () => {
     const csv = sortedData.map(d => ({
         Keyword: d.keyword,
+        URL: d.url, // ADDED
         Segment: d.querySegment,
         Organic_Rank: d.organicRank?.toFixed(1),
         Organic_Clicks: d.organicClicks, // Changed from Sessions
@@ -188,7 +190,7 @@ export const SearchEfficiencyView: React.FC<{
         Action: d.actionTag,
         Incremental_Clicks_Est: d.incrementalClicks.toFixed(0)
     }));
-    exportToCSV(csv, "Search_Efficiency_Savings_Report_Keywords");
+    exportToCSV(csv, "Search_Efficiency_Savings_Report_Granular");
   };
 
   const formatCurrency = (val: number, decimals: number = 2) => {
@@ -242,8 +244,8 @@ export const SearchEfficiencyView: React.FC<{
                 <Target size={20} />
             </div>
             <div>
-                <h3 className="text-sm font-black text-slate-900">Efficiency & Savings (Keyword Level)</h3>
-                <p className="text-[10px] text-slate-500 font-bold">Analysis based on Exact Match Keywords & Queries</p>
+                <h3 className="text-sm font-black text-slate-900">Efficiency & Savings (Keyword + URL Level)</h3>
+                <p className="text-[10px] text-slate-500 font-bold">Matched analysis of Queries driving traffic to specific URLs</p>
             </div>
          </div>
 
@@ -333,6 +335,7 @@ export const SearchEfficiencyView: React.FC<{
                                 return (
                                     <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10 z-50">
                                         <p className="text-[10px] font-black uppercase tracking-widest mb-2 border-b border-white/10 pb-2 truncate max-w-[200px]">{d.name}</p>
+                                        <p className="text-[9px] text-slate-400 mb-2 truncate max-w-[200px]">{d.url}</p>
                                         <div className="space-y-1">
                                             <p className="text-[9px] flex justify-between gap-4"><span>Rank:</span> <span className="font-bold text-emerald-400">#{d.x.toFixed(1)}</span></p>
                                             <p className="text-[9px] flex justify-between gap-4"><span>Cost:</span> <span className="font-bold text-rose-400">{currencySymbol}{formatCurrency(d.y)}</span></p>
@@ -369,7 +372,7 @@ export const SearchEfficiencyView: React.FC<{
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                   <input 
                     type="text" 
-                    placeholder="Search Keyword..." 
+                    placeholder="Search Keyword or URL..." 
                     value={searchTerm} 
                     onChange={e => setSearchTerm(e.target.value)} 
                     className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none focus:ring-1 ring-indigo-500 transition-all"
@@ -389,6 +392,7 @@ export const SearchEfficiencyView: React.FC<{
                 <thead>
                     <tr className="border-b border-slate-100 bg-slate-50/50">
                         <SortableHeader label="Keyword / Query" sortKey="keyword" align="left" />
+                        <SortableHeader label="Landing Page" sortKey="url" align="left" />
                         <SortableHeader label="GSC Rank" sortKey="organicRank" align="center" />
                         <SortableHeader label="Org. Clicks" sortKey="organicClicks" />
                         <SortableHeader label="Paid Sessions" sortKey="paidSessions" />
@@ -402,12 +406,18 @@ export const SearchEfficiencyView: React.FC<{
                 <tbody>
                     {sortedData.length > 0 ? sortedData.slice(0, 50).map((row, idx) => (
                         <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                            <td className="py-3 px-4 max-w-[200px]">
+                            <td className="py-3 px-4 max-w-[180px]">
                                 <div className="flex flex-col">
                                     <div className="flex items-center gap-2">
                                         <Key size={10} className="text-slate-300 flex-shrink-0" />
                                         <span className="text-[10px] font-bold text-slate-800 truncate" title={row.keyword}>{row.keyword}</span>
                                     </div>
+                                </div>
+                            </td>
+                            <td className="py-3 px-4 max-w-[200px]">
+                                <div className="flex items-center gap-2">
+                                    <ExternalLink size={10} className="text-slate-300 flex-shrink-0" />
+                                    <span className="text-[10px] font-bold text-slate-500 truncate" title={row.url}>{row.url}</span>
                                 </div>
                             </td>
                             <td className="py-3 px-4 text-center">
@@ -460,23 +470,10 @@ export const SearchEfficiencyView: React.FC<{
                             </td>
                         </tr>
                     )) : (
-                        <tr><td colSpan={9} className="py-12"><EmptyState text="No efficiency data found." /></td></tr>
+                        <tr><td colSpan={10} className="py-12"><EmptyState text="No efficiency data found." /></td></tr>
                     )}
                 </tbody>
             </table>
-        </div>
-        
-        <div className="mt-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-start gap-3">
-            <Info size={16} className="text-slate-400 mt-0.5" />
-            <p className="text-[10px] text-slate-500 leading-relaxed">
-                <strong>Calculation Logic:</strong> 
-                <br/>
-                • <strong>Organic Clicks:</strong> From Search Console (Query Exact Match). (Note: Sessions not available per query in GA4).
-                <br/>
-                • <strong>Est. Org Value:</strong> Organic Clicks × Avg. CPC (Paid). (Represents cost avoided).
-                <br/>
-                • <strong>Potential Savings:</strong> Sum of Paid Cost for <strong>Brand</strong> terms where Organic Rank is <strong>≤ 1.9</strong>.
-            </p>
         </div>
       </div>
 
