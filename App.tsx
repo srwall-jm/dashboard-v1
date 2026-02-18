@@ -37,10 +37,12 @@ const PRIORITY_DIMENSIONS = [
 ];
 
 const App: React.FC = () => {
-  // --- AQUI ES EL SITIO CORRECTO (Nivel Superior) ---
-  // Guardará la "firma" de la última petición para evitar recargas tontas
-const lastFetchParams = useRef<string>('');
-  // -------------------------------------------------
+  // UseRefs must be declared at the top level
+  const lastFetchParams = useRef<string>('');
+  
+  const tokenClientGa4 = useRef<any>(null);
+  const tokenClientGsc = useRef<any>(null);
+  const tokenClientSa360 = useRef<any>(null);
 
   const [user, setUser] = useState<{ name: string; email: string; picture: string } | null>(() => {
     const saved = localStorage.getItem('seo_suite_user');
@@ -141,10 +143,6 @@ const lastFetchParams = useRef<string>('');
   });
   
   const [searchTerm, setSearchTerm] = useState('');
-
-  const tokenClientGa4 = useRef<any>(null);
-  const tokenClientGsc = useRef<any>(null);
-  const tokenClientSa360 = useRef<any>(null);
 
   const isBranded = (text: string) => {
     if (!text || text.trim() === '') return false;
@@ -454,16 +452,13 @@ const lastFetchParams = useRef<string>('');
   };
 
 // --- BRIDGE DATA: GA4 SESSIONS (ORGANIC vs PAID) ---
-// UPDATED: Completely refactored to handle SA360 independently of GSC
 const fetchBridgeData = async () => {
     setIsLoadingBridge(true);
 
-    
     // --- MOCK FALLBACK IF NOTHING CONNECTED ---
-    // Si no hay ningún token de nada, entonces sí ponemos Mock Data
     if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
         if (!bridgeDataGA4.length) setBridgeDataGA4(generateMockBridgeData());
-        if (!bridgeDataSA360.length) setBridgeDataSA360(generateMockBridgeData()); // ← CORRECCIÓN: Mock data para SA360
+        if (!bridgeDataSA360.length) setBridgeDataSA360(generateMockBridgeData()); 
         setIsLoadingBridge(false);
         return;
     }
@@ -515,7 +510,6 @@ const fetchBridgeData = async () => {
     let gscUrlMap: Record<string, { queries: {query: string, rank: number, clicks: number}[], totalClicks: number, bestRank: number }> = {};
     
     // Map for Granular Keyword+URL Data (Composite Key: "URL||KEYWORD")
-    // This allows unique tracking of "running shoes" -> "/mens" vs "running shoes" -> "/womens"
     let granularCompositeMap: Record<string, { 
         keyword: string, 
         url: string,
@@ -524,10 +518,9 @@ const fetchBridgeData = async () => {
         paidSessions: number, 
         paidConversions: number, 
         paidCost: number,
-        bestRank: number // Helper for aggregation
+        bestRank: number 
     }> = {};
 
-    // Helper to generate key
     const getCompositeKey = (url: string, keyword: string) => `${url}||${keyword.toLowerCase().trim()}`;
 
     // 1. TRY GSC FETCH (If Available)
@@ -535,7 +528,6 @@ const fetchBridgeData = async () => {
         try {
             const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
             const batchSize = 25000;
-            // Loop to fetch more data (up to 4 batches = 100k rows) to ensure we get "long tail" queries for URLs that might have paid traffic but low organic rank
             for (let i = 0; i < 4; i++) {
                 const gscResp = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
                     method: 'POST',
@@ -552,7 +544,6 @@ const fetchBridgeData = async () => {
                 const gscDataRaw = await gscResp.json();
                 const rows = gscDataRaw.rows || [];
 
-                // Process GSC rows
                 rows.forEach((row: any) => {
                     const fullUrl = row.keys[0];
                     const query = row.keys[1];
@@ -578,34 +569,27 @@ const fetchBridgeData = async () => {
                     }
                     const item = granularCompositeMap[key];
                     item.organicClicks += clicks;
-                    // Weighted average rank could be better, but min rank is often used for "potential"
                     if (rank < item.bestRank) {
                         item.bestRank = rank;
                         item.organicRank = rank; 
                     }
                 });
                 
-                if (rows.length < batchSize) break; // Stop if less than full batch
+                if (rows.length < batchSize) break; 
             }
             
-            // Sort queries per URL by clicks desc
             Object.values(gscUrlMap).forEach(item => {
                 item.queries.sort((a,b) => b.clicks - a.clicks);
             });
 
         } catch (e) {
             console.error("GSC Data Fetch Error:", e);
-            // Continue executing to allow SA360/GA4 to load even if GSC fails
         }
     }
 
     // 2. TRY SA360 FETCH (If Available & Selected)
     if (sa360Auth?.token && selectedSa360SubAccount) {
          const sa360PaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
-         // NOTE: SA360 Granular matching is complex without landing page in `keyword_view`. 
-         // For now, we will skip granular SA360 filling in favor of GA4 which has Landing Page + Keyword dimensions combined.
-         // Or we could fetch ad_group_ad and try to map, but it's imperfect.
-         // We will stick to URL-based Bridge Data for SA360 here.
 
          const sa360UrlQuery = `
   SELECT 
@@ -618,12 +602,10 @@ const fetchBridgeData = async () => {
   WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
 `;
          
-         // ← CORRECCIÓN: Validación de null antes de usar selectedSa360SubAccount
          const fetchSa360 = async (query: string) => {
             if (!selectedSa360SubAccount) {
                 throw new Error("No SA360 sub-account selected");
             }
-            
             if (!sa360Auth?.token) {
                 throw new Error("SA360 token is missing");
             }
@@ -633,12 +615,10 @@ const fetchBridgeData = async () => {
                 'Content-Type': 'application/json' 
             };
             
-            // Limpiamos el ID del Manager (quitamos guiones)
             if (selectedSa360Customer) {
                 headers['login-customer-id'] = selectedSa360Customer.id.toString().replace(/-/g, '');
             }
 
-            // Limpiamos el ID de la Subcuenta (quitamos guiones)
             const targetId = selectedSa360SubAccount.id.toString().replace(/-/g, '');
 
             const res = await fetch(`/api/sa360/v0/customers/${targetId}/searchAds360:searchStream`, {
@@ -649,21 +629,17 @@ const fetchBridgeData = async () => {
             
             if (!res.ok) {
                 const text = await res.text();
-                console.error("SA360 API Error:", text);
                 throw new Error(`SA360 Error: ${res.status} - ${text.substring(0, 100)}`);
             }
 
             const json = await res.json();
-            // SA360 v0 searchStream returns array of batches
             return (Array.isArray(json) ? json : []).flatMap((batch: any) => batch.results || []);
          };
 
          try {
             const [urlRows] = await Promise.all([fetchSa360(sa360UrlQuery)]);
 
-            // ← CORRECCIÓN: Verificar el nombre correcto de la propiedad (finalUrls vs final_urls)
             urlRows.forEach((row: any) => {
-                // Intentar ambas variantes (camelCase y snake_case)
                 const url = row.adGroupAd?.ad?.finalUrls?.[0] || row.adGroupAd?.ad?.final_urls?.[0]; 
                 
                 if(!url) return;
@@ -682,17 +658,13 @@ const fetchBridgeData = async () => {
 
             // BUILD SA360 BRIDGE DATA
             const sa360Results: BridgeData[] = [];
-            // IMPORTANT: If organicRows is empty, we MUST still process sa360PaidMap keys
             const allPaths = new Set([...Object.keys(gscUrlMap), ...Object.keys(sa360PaidMap)]);
             
             allPaths.forEach(path => {
                 const gscData = gscUrlMap[path]; 
                 const paidStats = sa360PaidMap[path];
                 
-                // DATA SOURCE: GA4 Organic Sessions (Precise)
                 const organicSessions = ga4OrganicMap[path] || 0;
-                
-                // GSC Fallback
                 const organicClicks = gscData ? gscData.totalClicks : 0;
                 const organicRank = gscData ? gscData.bestRank : null;
                 const topQuery = gscData && gscData.queries.length > 0 ? gscData.queries[0].query : '(direct/none)';
@@ -702,7 +674,7 @@ const fetchBridgeData = async () => {
                 
                 if (organicSessions === 0 && organicClicks === 0 && paidVolume === 0) return;
                 
-                const totalVolume = organicSessions + paidVolume; // Use Sessions for blended ratio
+                const totalVolume = organicSessions + paidVolume;
                 const paidShare = totalVolume > 0 ? (paidVolume / totalVolume) : 0;
                 
                 let action = "MAINTAIN";
@@ -729,10 +701,6 @@ const fetchBridgeData = async () => {
                 });
             });
             setBridgeDataSA360(sa360Results.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
-
-            // NOTE: We do NOT populate setKeywordBridgeDataSA360 purely from SA360 here 
-            // because mapping Keyword->URL is hard without Landing Page dimension.
-            // We can rely on GA4 for Granular efficiency or try to implement it later.
             setKeywordBridgeDataSA360([]); 
 
          } catch (err: any) {
@@ -783,7 +751,6 @@ const fetchBridgeData = async () => {
             });
 
             // GA4 Keywords + Landing Page (Granular Fetch)
-            // We fetch 'landingPage' here to allow matching GSC data (Query + Page) with Paid data (Keyword + Page)
             const ga4KwResp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
@@ -822,17 +789,13 @@ const fetchBridgeData = async () => {
 
             // BUILD GA4 BRIDGE DATA (URL LEVEL)
             const ga4Results: BridgeData[] = [];
-            // Again, ensure we iterate even if organicRows is empty
             const allPathsGA = new Set([...Object.keys(gscUrlMap), ...Object.keys(ga4PaidMap)]);
             
             allPathsGA.forEach(path => {
                 const gscData = gscUrlMap[path];
                 const paidStats = ga4PaidMap[path];
                 
-                // DATA SOURCE: GA4 Organic Sessions (Precise)
                 const organicSessions = ga4OrganicMap[path] || 0;
-                
-                // GSC Fallback
                 const organicClicks = gscData ? gscData.totalClicks : 0;
                 const organicRank = gscData ? gscData.bestRank : null;
                 const topQuery = gscData && gscData.queries.length > 0 ? gscData.queries[0].query : '(direct/none)';
@@ -842,7 +805,7 @@ const fetchBridgeData = async () => {
                 
                 if (organicSessions === 0 && organicClicks === 0 && paidVolume === 0) return;
                 
-                const totalVolume = organicSessions + paidVolume; // Use Sessions for blended ratio
+                const totalVolume = organicSessions + paidVolume;
                 const paidShare = totalVolume > 0 ? (paidVolume / totalVolume) : 0;
                 
                 let action = "MAINTAIN";
@@ -863,7 +826,6 @@ const fetchBridgeData = async () => {
 
             // BUILD KEYWORD DATA (GRANULAR KEYWORD + URL)
             const ga4KwResults: KeywordBridgeData[] = [];
-            // Iterate over the Granular Composite Map which contains data from BOTH GSC and GA4 (Paid)
             Object.values(granularCompositeMap).forEach(item => {
                  const paidVol = item.paidSessions;
                  const orgVol = item.organicClicks;
@@ -912,12 +874,6 @@ const fetchBridgeData = async () => {
     setIsLoadingGa4(true);
     try {
         if (ga4Auth?.property && ga4Auth.token) {
-             // In a real scenario, we would use the runReport API here to fetch DailyData.
-             // Since specific dimensions for DailyData are complex and depend on user schema,
-             // and for the purpose of fixing the app structure, we will use mock data if real fetch isn't fully spec'd.
-             // However, checking if we can do a simple fetch:
-             // To ensure stability, let's use the mocks but gated by auth check to simulate behavior
-             // or just use mocks to ensure the UI populates correctly given the "fix" context.
              setRealDailyData(generateMockDailyData());
              setRealKeywordData(generateMockKeywordData());
         } else {
@@ -1090,9 +1046,9 @@ const fetchBridgeData = async () => {
             openaiKey={openaiKey} setOpenaiKey={setOpenaiKey}
             brandRegexStr={brandRegexStr} setBrandRegexStr={setBrandRegexStr}
             ga4Auth={ga4Auth} gscAuth={gscAuth} sa360Auth={sa360Auth}
-            handleConnectGa4={() => tokenClientGa4.current.requestAccessToken()} 
-            handleConnectGsc={() => tokenClientGsc.current.requestAccessToken()} 
-            handleConnectSa360={() => tokenClientSa360.current.requestAccessToken()} 
+            handleConnectGa4={() => tokenClientGa4.current?.requestAccessToken()} 
+            handleConnectGsc={() => tokenClientGsc.current?.requestAccessToken()} 
+            handleConnectSa360={() => tokenClientSa360.current?.requestAccessToken()} 
             ga4Search={ga4Search} setGa4Search={setGa4Search}
             gscSearch={gscSearch} setGscSearch={setGscSearch}
             sa360Search={sa360Search} setSa360Search={setSa360Search}
