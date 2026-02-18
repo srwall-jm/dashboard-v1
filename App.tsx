@@ -450,7 +450,6 @@ const fetchBridgeData = async () => {
     if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
         if (!bridgeDataGA4.length) setBridgeDataGA4(generateMockBridgeData());
         if (!bridgeDataSA360.length) setBridgeDataSA360(generateMockBridgeData());
-        // MOCK DATA FOR EFFICIENCY VIEW
         if (!keywordBridgeDataGA4.length) setKeywordBridgeDataGA4(generateMockKeywordBridgeData());
         if (!keywordBridgeDataSA360.length) setKeywordBridgeDataSA360(generateMockKeywordBridgeData());
         
@@ -503,6 +502,7 @@ const fetchBridgeData = async () => {
     let gscUrlMap: Record<string, { queries: {query: string, rank: number, clicks: number}[], totalClicks: number, bestRank: number }> = {};
     
     // GRANULAR KEY: URL||KEYWORD (Populated by GSC first)
+    // IMPORTANT: Initialize this map here so it can be used across GSC, SA360, and GA4 blocks
     let granularCompositeMap: Record<string, { 
         keyword: string, 
         url: string,
@@ -747,7 +747,7 @@ const fetchBridgeData = async () => {
             });
 
             // 2. Add Paid Keywords that had NO organic traffic (Unknown URL context)
-            // CRITICAL OPTIMIZATION: Create Set for O(1) Lookup instead of O(N*M) Loop
+            // CRITICAL OPTIMIZATION: Create Set for O(1) Lookup instead of O(N*M) Loop to avoid freezing
             const knownOrganicKeywords = new Set<string>();
             Object.values(granularCompositeMap).forEach(v => knownOrganicKeywords.add(v.keyword));
 
