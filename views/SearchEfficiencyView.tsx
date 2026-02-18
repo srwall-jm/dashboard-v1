@@ -1,10 +1,9 @@
-
 import React, { useMemo, useState } from 'react';
 import { 
   ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine
 } from 'recharts';
 import { 
-  DollarSign, TrendingUp, PiggyBank, Target, AlertTriangle, CheckCircle, Search, FileText, Info, Zap, ChevronUp, ChevronDown, Key, ExternalLink
+  DollarSign, TrendingUp, PiggyBank, Target, AlertTriangle, CheckCircle, Search, FileText, Info, Zap, ChevronUp, ChevronDown, Key, ExternalLink, Filter
 } from 'lucide-react';
 import { KeywordBridgeData } from '../types';
 import { KpiCard } from '../components/KpiCard';
@@ -47,8 +46,6 @@ export const SearchEfficiencyView: React.FC<{
         const segment = isBrand ? 'Brand' : 'Non-Brand';
 
         // B. Calculate Organic Value
-        // Since we are at Keyword Level, Organic Value = Organic Clicks (GSC) * Avg CPC (Paid)
-        // This represents "How much this organic traffic would have cost if we paid for it"
         const organicValue = row.organicClicks * row.avgCpc;
 
         // C. Brand Tax / Potential Savings
@@ -201,24 +198,6 @@ export const SearchEfficiencyView: React.FC<{
     return val.toLocaleString('en-US');
   };
 
-  // Helper to generate explanation tooltip text based on row data
-  const getActionExplanation = (row: EfficiencyRow) => {
-      const total = row.organicClicks + row.paidSessions;
-      const share = total > 0 ? ((row.paidSessions / total) * 100).toFixed(0) : 0;
-      const rank = row.organicRank ? `#${row.organicRank.toFixed(1)}` : 'N/A';
-      
-      if (row.actionTag.includes('CUT')) {
-          return `Logic: You are paying for a "${row.querySegment}" term while ranking organically ${rank}. Paid Search occupies ${share}% of total traffic for this exact keyword.`;
-      }
-      if (row.actionTag.includes('REVIEW')) {
-          return `Logic: High Paid Share (${share}%) for a top ranking keyword (${rank}). Check if ROAS justifies the cannibalization of organic traffic.`;
-      }
-      if (row.actionTag.includes('PUSH')) {
-          return `Logic: You rank poorly organically (${rank}) and have Zero paid traffic. Good opportunity to buy visibility cheaply while SEO improves.`;
-      }
-      return `Logic: Performance is balanced. Ranking ${rank} with ${share}% paid share. Monitor for changes.`;
-  };
-
   const SortableHeader = ({ label, sortKey, align = 'right' }: { label: string, sortKey: keyof EfficiencyRow | 'actionLabel', align?: 'left' | 'center' | 'right' }) => (
     <th 
         className={`py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 hover:bg-slate-50 transition-colors select-none text-${align}`}
@@ -363,8 +342,8 @@ export const SearchEfficiencyView: React.FC<{
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
             <div>
-              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Optimization Opportunities</h4>
-              <p className="text-[11px] font-bold text-slate-600">Prioritized by Cost & Inefficiency</p>
+              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Optimization Opportunities (Granular)</h4>
+              <p className="text-[11px] font-bold text-slate-600">Matched Landing Page analysis to detect Cannibalization vs. Incremental Growth</p>
             </div>
             
             <div className="flex items-center gap-3 w-full md:w-auto">
@@ -392,7 +371,8 @@ export const SearchEfficiencyView: React.FC<{
                 <thead>
                     <tr className="border-b border-slate-100 bg-slate-50/50">
                         <SortableHeader label="Keyword / Query" sortKey="keyword" align="left" />
-                        <SortableHeader label="Landing Page" sortKey="url" align="left" />
+                        <SortableHeader label="Landing Page (Exact Match)" sortKey="url" align="left" />
+                        <SortableHeader label="Match Type" sortKey="dataSource" align="center" />
                         <SortableHeader label="GSC Rank" sortKey="organicRank" align="center" />
                         <SortableHeader label="Org. Clicks" sortKey="organicClicks" />
                         <SortableHeader label="Paid Sessions" sortKey="paidSessions" />
@@ -419,6 +399,11 @@ export const SearchEfficiencyView: React.FC<{
                                     <ExternalLink size={10} className="text-slate-300 flex-shrink-0" />
                                     <span className="text-[10px] font-bold text-slate-500 truncate" title={row.url}>{row.url}</span>
                                 </div>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${row.url && row.url !== '(not provided)' ? 'bg-indigo-50 text-indigo-500' : 'bg-slate-100 text-slate-400'}`}>
+                                    {row.dataSource === 'GA4' ? 'Exact (GA4)' : row.url && row.url !== '(paid only / no organic rank)' ? 'Matched (GSC)' : 'Aggregated'}
+                                </span>
                             </td>
                             <td className="py-3 px-4 text-center">
                                 {row.organicRank ? (
@@ -458,19 +443,11 @@ export const SearchEfficiencyView: React.FC<{
                                     <span className={`text-[9px] font-black uppercase ${row.actionTag.includes('CUT') ? 'text-rose-600' : row.actionTag.includes('REVIEW') ? 'text-amber-600' : row.actionTag.includes('PUSH') ? 'text-emerald-600' : 'text-slate-400'}`}>
                                         {row.actionTag.split('(')[0]}
                                     </span>
-                                    
-                                    {/* Tooltip */}
-                                    <div className="invisible group-hover:visible absolute right-0 top-full mt-2 z-50 w-64 bg-slate-900 text-white text-[10px] rounded-xl p-3 shadow-xl border border-white/10 text-left pointer-events-none transition-opacity opacity-0 group-hover:opacity-100">
-                                        <p className="font-bold text-slate-200 mb-1 border-b border-white/10 pb-1">Recommendation Logic</p>
-                                        <p className="text-slate-400 leading-relaxed font-medium">
-                                            {getActionExplanation(row)}
-                                        </p>
-                                    </div>
                                 </div>
                             </td>
                         </tr>
                     )) : (
-                        <tr><td colSpan={10} className="py-12"><EmptyState text="No efficiency data found." /></td></tr>
+                        <tr><td colSpan={11} className="py-12"><EmptyState text="No efficiency data found." /></td></tr>
                     )}
                 </tbody>
             </table>
