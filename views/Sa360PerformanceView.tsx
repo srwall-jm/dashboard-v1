@@ -4,18 +4,24 @@ import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, BarChart, Bar, ZAxis
 } from 'recharts';
 import { 
-  DollarSign, MousePointerClick, Percent, Search, FileText, Target, ExternalLink, Zap
+  DollarSign, MousePointerClick, Percent, Search, FileText, Target, ExternalLink, Zap, ChevronUp, ChevronDown
 } from 'lucide-react';
 import { BridgeData } from '../types';
 import { exportToCSV } from '../utils';
 import { KpiCard } from '../components/KpiCard';
 import { EmptyState } from '../components/EmptyState';
 
+type SortConfig = {
+  key: string;
+  direction: 'asc' | 'desc';
+};
+
 export const Sa360PerformanceView: React.FC<{ 
   data: BridgeData[]; 
   currencySymbol: string; 
 }> = ({ data, currencySymbol }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ppcCost', direction: 'desc' });
 
   // 1. Aggregation Logic
   const stats = useMemo(() => {
@@ -34,7 +40,7 @@ export const Sa360PerformanceView: React.FC<{
     return { totalCost, totalClicks, totalConversions, totalImpressions, avgCpc, avgCpa, ctr, items: paidItems };
   }, [data]);
 
-  // 2. Table Data (Grouped by URL)
+  // 2. Table Data (Grouped by URL & Sorted)
   const tableData = useMemo(() => {
     const map: Record<string, BridgeData> = {};
     stats.items.forEach(item => {
@@ -53,10 +59,44 @@ export const Sa360PerformanceView: React.FC<{
         }
     });
 
-    return Object.values(map)
-        .filter(d => d.url.toLowerCase().includes(searchTerm.toLowerCase()))
-        .sort((a, b) => b.ppcCost - a.ppcCost);
-  }, [stats.items, searchTerm]);
+    let rows = Object.values(map).filter(d => d.url.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    // Sorting Logic
+    if (sortConfig) {
+        rows.sort((a, b) => {
+            let aVal: any = a[sortConfig.key as keyof BridgeData];
+            let bVal: any = b[sortConfig.key as keyof BridgeData];
+
+            // Handle Calculated Metrics for Sorting
+            if (sortConfig.key === 'cpc') {
+                aVal = a.ppcSessions > 0 ? a.ppcCost / a.ppcSessions : 0;
+                bVal = b.ppcSessions > 0 ? b.ppcCost / b.ppcSessions : 0;
+            } else if (sortConfig.key === 'ctr') {
+                aVal = a.ppcImpressions > 0 ? a.ppcSessions / a.ppcImpressions : 0;
+                bVal = b.ppcImpressions > 0 ? b.ppcSessions / b.ppcImpressions : 0;
+            } else if (sortConfig.key === 'cpa') {
+                aVal = a.ppcConversions > 0 ? a.ppcCost / a.ppcConversions : 0;
+                bVal = b.ppcConversions > 0 ? b.ppcCost / b.ppcConversions : 0;
+            }
+
+            // String Sort
+            if (typeof aVal === 'string') {
+                 aVal = aVal.toLowerCase();
+                 bVal = (bVal || '').toLowerCase();
+                 if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+                 if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+                 return 0;
+            }
+
+            // Numeric Sort
+            if (Number(aVal) < Number(bVal)) return sortConfig.direction === 'asc' ? -1 : 1;
+            if (Number(aVal) > Number(bVal)) return sortConfig.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }
+
+    return rows;
+  }, [stats.items, searchTerm, sortConfig]);
 
   // 3. Efficiency Chart Data (Scatter: Cost vs Conversions)
   const scatterData = useMemo(() => {
@@ -84,12 +124,42 @@ export const Sa360PerformanceView: React.FC<{
     exportToCSV(csvData, "SA360_Performance_Full_Export");
   };
 
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'desc';
+    if (sortConfig.key === key && sortConfig.direction === 'desc') {
+      direction = 'asc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const SortableHeader = ({ label, sortKey, align = 'right', width }: { label: string, sortKey: string, align?: 'left' | 'center' | 'right', width?: string }) => (
+    <th 
+        className={`py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 hover:bg-slate-50 transition-colors select-none text-${align}`}
+        style={{ width }}
+        onClick={() => handleSort(sortKey)}
+    >
+        <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}>
+            {label}
+            <div className="flex flex-col">
+                <ChevronUp size={8} className={`${sortConfig.key === sortKey && sortConfig.direction === 'asc' ? 'text-indigo-600' : 'text-slate-300'}`} />
+                <ChevronDown size={8} className={`${sortConfig.key === sortKey && sortConfig.direction === 'desc' ? 'text-indigo-600' : 'text-slate-300'}`} />
+            </div>
+        </div>
+    </th>
+  );
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
       
       {/* SECTION 1: EXECUTIVE SCORECARD */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard title="Total Spend" value={stats.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} icon={<DollarSign />} color="orange" />
+        {/* Updated formatting: symbol together with number */}
+        <KpiCard 
+            title="Total Spend" 
+            value={`${currencySymbol}${stats.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
+            icon={<DollarSign />} 
+            color="orange" 
+        />
         <KpiCard title="Total Clicks" value={stats.totalClicks.toLocaleString('en-US')} icon={<MousePointerClick />} color="blue" />
         <KpiCard title="Avg. CPC" value={stats.avgCpc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} icon={<Target />} color="indigo" />
         <KpiCard title="Avg. CPA" value={stats.avgCpa.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} icon={<Zap />} color={stats.avgCpa > 50 ? 'rose' : 'emerald'} />
@@ -200,14 +270,14 @@ export const Sa360PerformanceView: React.FC<{
             <table className="w-full text-left border-collapse">
                 <thead>
                     <tr className="border-b border-slate-100 bg-slate-50/50">
-                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest w-[300px]">Landing Page</th>
-                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Campaign</th>
-                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right w-[120px]">Cost</th>
-                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Clicks</th>
-                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">CPC</th>
-                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">CTR</th>
-                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right w-[100px]">Conversions</th>
-                        <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">CPA</th>
+                        <SortableHeader label="Landing Page" sortKey="url" align="left" width="300px" />
+                        <SortableHeader label="Campaign" sortKey="ppcCampaign" align="left" />
+                        <SortableHeader label="Cost" sortKey="ppcCost" width="120px" />
+                        <SortableHeader label="Clicks" sortKey="ppcSessions" />
+                        <SortableHeader label="CPC" sortKey="cpc" />
+                        <SortableHeader label="CTR" sortKey="ctr" />
+                        <SortableHeader label="Conversions" sortKey="ppcConversions" width="100px" />
+                        <SortableHeader label="CPA" sortKey="cpa" />
                     </tr>
                 </thead>
                 <tbody>
