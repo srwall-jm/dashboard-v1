@@ -586,7 +586,9 @@ const App: React.FC = () => {
     // 2. TRY SA360 FETCH (If Available & Selected)
     if (sa360Auth?.token && selectedSa360SubAccount) {
          const sa360PaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
-         const sa360KeywordMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number }> = {};
+         
+         // NUEVA: Mapa granular con clave URL||KEYWORD para coste específico por URL
+         const sa360KeywordUrlMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number }> = {};
          
          const sa360UrlQuery = `
            SELECT 
@@ -599,15 +601,18 @@ const App: React.FC = () => {
            WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
          `;
          
-         const sa360KwQuery = `
+         // NUEVA QUERY: Incluye tanto keyword como URL para mapeo granular
+         const sa360KwUrlQuery = `
             SELECT 
-              ad_group_criterion.keyword.text, 
+              ad_group_criterion.keyword.text,
+              ad_group_ad.ad.final_urls,
               metrics.cost_micros, 
               metrics.clicks, 
-              metrics.impressions, 
               metrics.conversions 
-            FROM keyword_view 
-            WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
+            FROM ad_group_ad
+            WHERE ad_group_criterion.type = 'KEYWORD'
+              AND ad_group.status = 'ENABLED'
+              AND segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
          `;
          
          const fetchSa360 = async (query: string) => {
@@ -646,8 +651,9 @@ const App: React.FC = () => {
          };
          
          try {
-            const [urlRows, kwRows] = await Promise.all([fetchSa360(sa360UrlQuery), fetchSa360(sa360KwQuery)]);
+            const [urlRows, kwUrlRows] = await Promise.all([fetchSa360(sa360UrlQuery), fetchSa360(sa360KwUrlQuery)]);
             
+            // Procesar URLs para Bridge Data (agregado por URL)
             urlRows.forEach((row: any) => {
                 const url = row.adGroupAd?.ad?.finalUrls?.[0] || row.adGroupAd?.ad?.final_urls?.[0]; 
                 
@@ -665,17 +671,27 @@ const App: React.FC = () => {
                 sa360PaidMap[path].cost += (parseInt(metrics.costMicros) || 0) / 1000000;
             });
             
-            kwRows.forEach((row: any) => {
+            // NUEVA: Procesar Keywords con URL para mapeo granular
+            kwUrlRows.forEach((row: any) => {
                 const kw = row.adGroupCriterion?.keyword?.text;
-                if(!kw) return;
-                const cleanKw = kw.toLowerCase().trim();
+                const url = row.adGroupAd?.ad?.finalUrls?.[0] || row.adGroupAd?.ad?.final_urls?.[0];
                 
-                if (!sa360KeywordMap[cleanKw]) sa360KeywordMap[cleanKw] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
+                if(!kw || !url) return;
+                
+                const cleanKw = kw.toLowerCase().trim();
+                const cleanPath = normalizeUrl(url);
+                
+                // Usar clave compuesta URL||KEYWORD
+                const compositeKey = getCompositeKey(cleanPath, cleanKw);
+                
+                if (!sa360KeywordUrlMap[compositeKey]) {
+                    sa360KeywordUrlMap[compositeKey] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
+                }
                 
                 const metrics = row.metrics;
-                sa360KeywordMap[cleanKw].clicksOrSessions += parseInt(metrics.clicks) || 0;
-                sa360KeywordMap[cleanKw].conversions += parseFloat(metrics.conversions) || 0;
-                sa360KeywordMap[cleanKw].cost += (parseInt(metrics.costMicros) || 0) / 1000000;
+                sa360KeywordUrlMap[compositeKey].clicksOrSessions += parseInt(metrics.clicks) || 0;
+                sa360KeywordUrlMap[compositeKey].conversions += parseFloat(metrics.conversions) || 0;
+                sa360KeywordUrlMap[compositeKey].cost += (parseInt(metrics.costMicros) || 0) / 1000000;
             });
             
             // BUILD SA360 BRIDGE DATA
@@ -727,18 +743,19 @@ const App: React.FC = () => {
             // BUILD SA360 KEYWORD DATA (GRANULAR: URL + KW MATCH)
             const sa360KwResults: KeywordBridgeData[] = [];
             
-            // 1. Process known URL+KW combinations from GSC (Granular Logic)
+            // 1. NUEVA LÓGICA: Process granularCompositeMap usando datos específicos de URL+KW
             Object.values(granularCompositeMap).forEach(item => {
-                const kw = item.keyword;
-                const paidData = sa360KeywordMap[kw];
+                const compositeKey = getCompositeKey(item.url, item.keyword);
+                const paidData = sa360KeywordUrlMap[compositeKey]; // ✅ Ahora usa datos específicos por URL+KW
                 
                 if (!paidData && item.organicClicks === 0) return;
                 
                 const paidVol = paidData ? paidData.clicksOrSessions : 0; 
                 const paidCost = paidData ? paidData.cost : 0;
+                const paidConv = paidData ? paidData.conversions : 0;
                 const orgVol = item.organicClicks;
                 
-                const cvr = paidVol > 0 ? (paidData!.conversions / paidVol) * 100 : 0;
+                const cvr = paidVol > 0 ? (paidConv / paidVol) * 100 : 0;
                 const avgCpc = paidVol > 0 ? paidCost / paidVol : 0;
                 
                 let action = "MAINTAIN";
@@ -746,8 +763,8 @@ const App: React.FC = () => {
                 else if (item.organicRank !== null && item.organicRank > 10 && paidVol === 0) action = "OPPORTUNITY (Growth)";
                 
                 sa360KwResults.push({
-                    keyword: kw, 
-                    url: item.url, // NUEVA: URL exacta
+                    keyword: item.keyword, 
+                    url: item.url,
                     organicRank: item.organicRank || null, 
                     organicClicks: orgVol,
                     paidSessions: paidVol,
@@ -759,20 +776,22 @@ const App: React.FC = () => {
                 });
             });
             
-            // 2. NUEVA: Add Paid Keywords that had NO organic traffic
-            // CRITICAL OPTIMIZATION: Create Set for O(1) Lookup
-            const knownOrganicKeywords = new Set<string>();
-            Object.values(granularCompositeMap).forEach(v => knownOrganicKeywords.add(v.keyword));
+            // 2. NUEVA: Agregar combinaciones URL+KW que solo tienen datos pagados (sin orgánico)
+            const knownCompositeKeys = new Set<string>();
+            Object.values(granularCompositeMap).forEach(v => knownCompositeKeys.add(getCompositeKey(v.url, v.keyword)));
             
-            Object.keys(sa360KeywordMap).forEach(kw => {
-                if (!knownOrganicKeywords.has(kw)) {
-                    const paidData = sa360KeywordMap[kw];
+            Object.keys(sa360KeywordUrlMap).forEach(compositeKey => {
+                if (!knownCompositeKeys.has(compositeKey)) {
+                    // Extraer URL y Keyword de la clave compuesta
+                    const [url, keyword] = compositeKey.split('||');
+                    const paidData = sa360KeywordUrlMap[compositeKey];
+                    
                     const cvr = paidData.clicksOrSessions > 0 ? (paidData.conversions / paidData.clicksOrSessions) * 100 : 0;
                     const avgCpc = paidData.clicksOrSessions > 0 ? paidData.cost / paidData.clicksOrSessions : 0;
                     
                     sa360KwResults.push({
-                        keyword: kw,
-                        url: '(paid only / no organic rank)',
+                        keyword: keyword,
+                        url: url,
                         organicRank: null,
                         organicClicks: 0,
                         paidSessions: paidData.clicksOrSessions,
