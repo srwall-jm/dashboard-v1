@@ -1,15 +1,12 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-
 import { 
   RefreshCw, Filter, Globe, Tag, AlertCircle, Sparkles, Cpu, Activity, Menu, X
 } from 'lucide-react';
-
 import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, Sa360Customer, QueryType, BridgeData, AiTrafficData, KeywordBridgeData } from './types';
 import { getDashboardInsights, getOpenAiInsights } from './geminiService';
 import GoogleLogin from './GoogleLogin'; 
 import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry, extractPath, AI_SOURCE_REGEX_STRING } from './utils';
-import { generateMockBridgeData, generateMockAiTrafficData, generateMockDailyData, generateMockKeywordData, generateMockKeywordBridgeData } from './mockData';
-
+import { generateMockBridgeData, generateMockAiTrafficData } from './mockData';
 // Import New Components and Views
 import { Sidebar } from './components/Sidebar';
 import { SettingsModal } from './components/SettingsModal';
@@ -39,17 +36,11 @@ const PRIORITY_DIMENSIONS = [
 const App: React.FC = () => {
   const lastFetchParams = useRef<string>('');
   
-  const tokenClientGa4 = useRef<any>(null);
-  const tokenClientGsc = useRef<any>(null);
-  const tokenClientSa360 = useRef<any>(null);
-
   const [user, setUser] = useState<{ name: string; email: string; picture: string } | null>(() => {
-    try {
-      const saved = localStorage.getItem('seo_suite_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch(e) { return null; }
+    const saved = localStorage.getItem('seo_suite_user');
+    return saved ? JSON.parse(saved) : null;
   });
-
+  
   const [ga4Auth, setGa4Auth] = useState<{ token: string; property: Ga4Property | null } | null>(() => {
     const saved = sessionStorage.getItem('ga4_auth');
     return saved ? JSON.parse(saved) : null;
@@ -59,12 +50,12 @@ const App: React.FC = () => {
     const saved = sessionStorage.getItem('gsc_auth');
     return saved ? JSON.parse(saved) : null;
   });
-
+  
   const [sa360Auth, setSa360Auth] = useState<{ token: string; customer: Sa360Customer | null } | null>(() => {
     const saved = sessionStorage.getItem('sa360_auth');
     return saved ? JSON.parse(saved) : null;
   });
-
+  
   const [availableProperties, setAvailableProperties] = useState<Ga4Property[]>([]);
   const [availableSites, setAvailableSites] = useState<GscSite[]>([]);
   
@@ -75,7 +66,7 @@ const App: React.FC = () => {
   // Track selected Manager and selected Sub-account
   const [selectedSa360Customer, setSelectedSa360Customer] = useState<Sa360Customer | null>(null);
   const [selectedSa360SubAccount, setSelectedSa360SubAccount] = useState<Sa360Customer | null>(null);
-
+  
   const [availableDimensions, setAvailableDimensions] = useState<{ label: string; value: string }[]>([]);
   const [currencySymbol, setCurrencySymbol] = useState('€');
   
@@ -92,7 +83,6 @@ const App: React.FC = () => {
   const [keywordBridgeDataSA360, setKeywordBridgeDataSA360] = useState<KeywordBridgeData[]>([]);
   
   const [aiTrafficData, setAiTrafficData] = useState<AiTrafficData[]>([]); 
-
   const [gscDailyTotals, setGscDailyTotals] = useState<any[]>([]);
   const [gscTotals, setGscTotals] = useState<{current: any, previous: any} | null>(null);
   
@@ -101,21 +91,21 @@ const App: React.FC = () => {
   const [isLoadingBridge, setIsLoadingBridge] = useState(false);
   const [isLoadingAi, setIsLoadingAi] = useState(false);
   const [isLoadingSa360, setIsLoadingSa360] = useState(false);
-
   const [error, setError] = useState<string | null>(null);
+  
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-
+  
   const [brandRegexStr, setBrandRegexStr] = useState('shop|brand|pro|sports');
   const [grouping, setGrouping] = useState<'daily' | 'weekly' | 'monthly'>('daily');
-
+  
   const [aiProvider, setAiProvider] = useState<'gemini' | 'openai'>(() => {
     const saved = localStorage.getItem('ai_provider');
     return (saved as 'gemini' | 'openai') || 'gemini';
   });
   const [openaiKey, setOpenaiKey] = useState(() => localStorage.getItem('openai_api_key') || '');
-
+  
   const [activeTab, setActiveTab] = useState<DashboardTab>(DashboardTab.ORGANIC_VS_PAID);
   
   const [tabInsights, setTabInsights] = useState<Record<string, string | null>>({
@@ -127,8 +117,9 @@ const App: React.FC = () => {
     [DashboardTab.AI_TRAFFIC_MONITOR]: null,
     [DashboardTab.SEARCH_EFFICIENCY]: null
   });
+  
   const [loadingInsights, setLoadingInsights] = useState(false);
-
+  
   const [filters, setFilters] = useState<DashboardFilters>({
     dateRange: { 
       start: formatDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)), 
@@ -144,7 +135,11 @@ const App: React.FC = () => {
   });
   
   const [searchTerm, setSearchTerm] = useState('');
-
+  
+  const tokenClientGa4 = useRef<any>(null);
+  const tokenClientGsc = useRef<any>(null);
+  const tokenClientSa360 = useRef<any>(null);
+  
   const isBranded = (text: string) => {
     if (!text || text.trim() === '') return false;
     try {
@@ -152,12 +147,12 @@ const App: React.FC = () => {
       return regex.test(text.trim().toLowerCase());
     } catch (e) { return false; }
   };
-
+  
   const getComparisonDates = () => {
     const start = new Date(filters.dateRange.start);
     const end = new Date(filters.dateRange.end);
     const diff = end.getTime() - start.getTime();
-
+    
     if (filters.comparison.type === 'previous_period') {
       const compStart = new Date(start.getTime() - diff - 86400000);
       const compEnd = new Date(start.getTime() - 86400000);
@@ -170,7 +165,7 @@ const App: React.FC = () => {
       return { start: formatDate(compStart), end: formatDate(compEnd) };
     }
   };
-
+  
   const fetchGa4Properties = async (token: string) => {
     try {
       const resp = await fetch('https://analyticsadmin.googleapis.com/v1beta/accountSummaries', {
@@ -193,7 +188,7 @@ const App: React.FC = () => {
       setError("Error connecting to GA4 Admin API.");
     }
   };
-
+  
   const fetchGa4PropertyDetails = async (token: string, propertyId: string) => {
     try {
       const resp = await fetch(`https://analyticsadmin.googleapis.com/v1beta/${propertyId}`, {
@@ -208,7 +203,7 @@ const App: React.FC = () => {
       console.error("Error fetching property details:", e);
     }
   };
-
+  
   const fetchGa4Metadata = async (token: string, propertyId: string) => {
     try {
       const resp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${propertyId}/metadata`, {
@@ -229,9 +224,11 @@ const App: React.FC = () => {
         return a.label.localeCompare(b.label);
       });
       if (sorted.length > 0) setAvailableDimensions(sorted);
-    } catch (e) { console.error("Error fetching metadata:", e); }
+    } catch (e) { 
+      console.error("Error fetching metadata:", e); 
+    }
   };
-
+  
   const fetchGscSites = async (token: string) => {
     try {
       const resp = await fetch('https://www.googleapis.com/webmasters/v3/sites', {
@@ -249,7 +246,7 @@ const App: React.FC = () => {
       setError("Error connecting to Search Console API.");
     }
   };
-
+  
   const fetchSa360Customers = async (token: string) => {
     try {
         setIsLoadingSa360(true);
@@ -266,7 +263,7 @@ const App: React.FC = () => {
             return {
                 resourceName: rn,
                 id: id,
-                descriptiveName: `Account ${id}` 
+                descriptiveName: `Account ${id}`
             };
         });
         
@@ -289,106 +286,106 @@ const App: React.FC = () => {
         setIsLoadingSa360(false);
     }
   };
-
+  
   const fetchSa360SubAccounts = async (token: string, managerId: string) => {
-  setIsLoadingSa360(true);
-  let allLeafAccounts: Sa360Customer[] = [];
-  let processingQueue = [managerId];
-  let processedIds = new Set<string>();
-
-  try {
-    while (processingQueue.length > 0) {
-      const currentId = processingQueue.shift();
-      if (!currentId || processedIds.has(currentId)) continue;
-      processedIds.add(currentId);
-
-      const query = `
-        SELECT 
-          customer_client.resource_name, 
-          customer_client.descriptive_name, 
-          customer_client.manager, 
-          customer_client.status, 
-          customer_client.id
-        FROM customer_client 
-        WHERE customer_client.status = 'ENABLED'
-      `.trim();
-
-      const targetUrl = `/api/sa360/v0/customers/${currentId}/searchAds360:searchStream`;
-
-      const resp = await fetch(targetUrl, {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`, 
-          'Content-Type': 'application/json',
-          'login-customer-id': managerId 
-        },
-        body: JSON.stringify({ query })
-      });
-
-      if (!resp.ok) {
-        continue;
-      }
-
-      const json = await resp.json();
-
-      if (Array.isArray(json)) {
-        for (const batch of json) {
-          if (!batch.results) continue;
-
-          for (const row of batch.results) {
-            const client = row.customerClient;
-            if (!client) continue;
-
-            const id = String(client.id);
-            const isManager = client.manager === true;
-            const name = client.descriptiveName || 'Unnamed Account';
-
-            if (isManager) {
-              if (!processedIds.has(id)) {
-                processingQueue.push(id);
+    setIsLoadingSa360(true);
+    let allLeafAccounts: Sa360Customer[] = [];
+    let processingQueue = [managerId];
+    let processedIds = new Set<string>();
+    
+    try {
+      while (processingQueue.length > 0) {
+        const currentId = processingQueue.shift();
+        if (!currentId || processedIds.has(currentId)) continue;
+        processedIds.add(currentId);
+        
+        const query = `
+          SELECT 
+            customer_client.resource_name, 
+            customer_client.descriptive_name, 
+            customer_client.manager, 
+            customer_client.status, 
+            customer_client.id
+          FROM customer_client 
+          WHERE customer_client.status = 'ENABLED'
+        `.trim();
+        
+        const targetUrl = `/api/sa360/v0/customers/${currentId}/searchAds360:searchStream`;
+        const resp = await fetch(targetUrl, {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${token}`, 
+            'Content-Type': 'application/json',
+            'login-customer-id': managerId 
+          },
+          body: JSON.stringify({ query })
+        });
+        
+        if (!resp.ok) {
+          const errorText = await resp.text();
+          console.error(`Error en cuenta ${currentId}:`, errorText);
+          continue;
+        }
+        
+        const json = await resp.json();
+        
+        if (Array.isArray(json)) {
+          for (const batch of json) {
+            if (!batch.results) continue;
+            for (const row of batch.results) {
+              const client = row.customerClient;
+              if (!client) continue;
+              
+              const id = String(client.id);
+              const isManager = client.manager === true;
+              const name = client.descriptiveName || 'Unnamed Account';
+              
+              if (isManager) {
+                if (!processedIds.has(id)) {
+                  processingQueue.push(id);
+                }
+              } else {
+                allLeafAccounts.push({
+                  resourceName: client.resourceName,
+                  id: id,
+                  descriptiveName: name
+                });
               }
-            } else {
-              allLeafAccounts.push({
-                resourceName: client.resourceName,
-                id: id,
-                descriptiveName: name
-              });
             }
           }
         }
       }
+      
+      console.log("Cuentas finales encontradas:", allLeafAccounts);
+      setAvailableSa360SubAccounts(allLeafAccounts);
+      
+      if (allLeafAccounts.length > 0) {
+        setSelectedSa360SubAccount(allLeafAccounts[0]);
+      }
+    } catch (e) {
+      console.error("Error fetching SA360 recursive sub-accounts:", e);
+      setError("Error al obtener la jerarquía de cuentas.");
+    } finally {
+      setIsLoadingSa360(false);
     }
-    
-    setAvailableSa360SubAccounts(allLeafAccounts);
-    
-    if (allLeafAccounts.length > 0) {
-      setSelectedSa360SubAccount(allLeafAccounts[0]);
-    }
-
-  } catch (e) {
-    console.error("Error fetching SA360 recursive sub-accounts:", e);
-    setError("Error al obtener la jerarquía de cuentas.");
-  } finally {
-    setIsLoadingSa360(false);
-  }
-};
-
+  };
+  
   const handleSa360CustomerChange = (customer: Sa360Customer | null) => {
     setSelectedSa360Customer(customer);
-    setAvailableSa360SubAccounts([]); 
-    setSelectedSa360SubAccount(null); 
+    setAvailableSa360SubAccounts([]);
+    setSelectedSa360SubAccount(null);
     
     if (customer && sa360Auth?.token) {
         fetchSa360SubAccounts(sa360Auth.token, customer.id);
     }
   };
-
+  
   const fetchAiTrafficData = async () => {
     if (!ga4Auth?.property || !ga4Auth.token) {
         if (!aiTrafficData.length) setAiTrafficData(generateMockAiTrafficData());
         return;
     }
-
+    
     setIsLoadingAi(true);
     try {
         const resp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
@@ -419,9 +416,10 @@ const App: React.FC = () => {
                 }
             })
         });
+        
         const data = await resp.json();
         if (data.error) throw new Error(data.error.message);
-
+        
         const processed: AiTrafficData[] = (data.rows || []).map((row: any) => {
             const dateStr = row.dimensionValues[0].value;
             return {
@@ -434,6 +432,7 @@ const App: React.FC = () => {
                 revenue: parseFloat(row.metricValues[3].value)
             };
         });
+        
         setAiTrafficData(processed);
     } catch (e: any) {
         console.error("AI Traffic API Error", e);
@@ -443,20 +442,19 @@ const App: React.FC = () => {
     }
   };
 
-// --- BRIDGE DATA: GA4 SESSIONS (ORGANIC vs PAID) ---
-const fetchBridgeData = async () => {
+  // --- BRIDGE DATA: GA4 SESSIONS (ORGANIC vs PAID) ---
+  // UPDATED: Nueva lógica granular con URL+Keyword
+  const fetchBridgeData = async () => {
     setIsLoadingBridge(true);
-
+    
+    // --- MOCK FALLBACK IF NOTHING CONNECTED ---
     if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
         if (!bridgeDataGA4.length) setBridgeDataGA4(generateMockBridgeData());
         if (!bridgeDataSA360.length) setBridgeDataSA360(generateMockBridgeData());
-        if (!keywordBridgeDataGA4.length) setKeywordBridgeDataGA4(generateMockKeywordBridgeData());
-        if (!keywordBridgeDataSA360.length) setKeywordBridgeDataSA360(generateMockKeywordBridgeData());
-        
         setIsLoadingBridge(false);
         return;
     }
-
+    
     const normalizeUrl = (url: string) => {
       if (!url || url === '(not set)') return '';
       try { url = decodeURIComponent(url); } catch (e) {}
@@ -468,7 +466,8 @@ const fetchBridgeData = async () => {
       if (!path.startsWith('/')) { path = '/' + path; }
       return path;
     };
-
+    
+    // 0. FETCH GA4 ORGANIC SESSIONS (Per URL)
     const ga4OrganicMap: Record<string, number> = {};
     if (ga4Auth?.property && ga4Auth.token) {
         try {
@@ -498,11 +497,10 @@ const fetchBridgeData = async () => {
             console.error("Error fetching GA4 Organic Data:", e);
         }
     }
-
+    
     let gscUrlMap: Record<string, { queries: {query: string, rank: number, clicks: number}[], totalClicks: number, bestRank: number }> = {};
     
-    // GRANULAR KEY: URL||KEYWORD (Populated by GSC first)
-    // IMPORTANT: Initialize this map here so it can be used across GSC, SA360, and GA4 blocks
+    // NUEVA FUNCIONALIDAD: GRANULAR KEY: URL||KEYWORD
     let granularCompositeMap: Record<string, { 
         keyword: string, 
         url: string,
@@ -513,14 +511,15 @@ const fetchBridgeData = async () => {
         paidCost: number,
         bestRank: number 
     }> = {};
-
+    
     const getCompositeKey = (url: string, keyword: string) => `${url}||${keyword.toLowerCase().trim()}`;
-
+    
     // 1. TRY GSC FETCH (If Available)
     if (gscAuth?.site && gscAuth.token) {
         try {
             const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
             const batchSize = 25000;
+            
             for (let i = 0; i < 4; i++) {
                 const gscResp = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
                     method: 'POST',
@@ -533,17 +532,16 @@ const fetchBridgeData = async () => {
                         startRow: i * batchSize
                     })
                 });
-
                 const gscDataRaw = await gscResp.json();
                 const rows = gscDataRaw.rows || [];
-
+                
                 rows.forEach((row: any) => {
                     const fullUrl = row.keys[0];
                     const query = row.keys[1];
                     const clicks = row.clicks;
                     const rank = row.position;
                     const cleanPath = normalizeUrl(fullUrl);
-
+                    
                     // 1. Fill URL Map (Bridge Data)
                     if (!gscUrlMap[cleanPath]) {
                         gscUrlMap[cleanPath] = { queries: [], totalClicks: 0, bestRank: 999 };
@@ -551,13 +549,19 @@ const fetchBridgeData = async () => {
                     gscUrlMap[cleanPath].queries.push({ query, rank, clicks });
                     gscUrlMap[cleanPath].totalClicks += clicks;
                     if (rank < gscUrlMap[cleanPath].bestRank) gscUrlMap[cleanPath].bestRank = rank;
-
-                    // 2. Fill Granular Composite Map (Efficiency View) - KEY IS URL+KW
+                    
+                    // 2. NUEVA: Fill Granular Composite Map (Efficiency View) - KEY IS URL+KW
                     const key = getCompositeKey(cleanPath, query);
                     if (!granularCompositeMap[key]) {
                         granularCompositeMap[key] = { 
-                            keyword: query, url: cleanPath, organicRank: 0, organicClicks: 0, 
-                            paidSessions: 0, paidConversions: 0, paidCost: 0, bestRank: 999 
+                            keyword: query, 
+                            url: cleanPath, 
+                            organicRank: 0, 
+                            organicClicks: 0, 
+                            paidSessions: 0, 
+                            paidConversions: 0, 
+                            paidCost: 0, 
+                            bestRank: 999 
                         };
                     }
                     const item = granularCompositeMap[key];
@@ -568,33 +572,33 @@ const fetchBridgeData = async () => {
                     }
                 });
                 
-                if (rows.length < batchSize) break; 
+                if (rows.length < batchSize) break;
             }
             
             Object.values(gscUrlMap).forEach(item => {
                 item.queries.sort((a,b) => b.clicks - a.clicks);
             });
-
         } catch (e) {
             console.error("GSC Data Fetch Error:", e);
         }
     }
-
+    
     // 2. TRY SA360 FETCH (If Available & Selected)
     if (sa360Auth?.token && selectedSa360SubAccount) {
          const sa360PaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
          const sa360KeywordMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number }> = {};
-
+         
          const sa360UrlQuery = `
-  SELECT 
-    ad_group_ad.ad.final_urls, 
-    metrics.cost_micros, 
-    metrics.clicks, 
-    metrics.impressions, 
-    metrics.conversions 
-  FROM ad_group_ad 
-  WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
-`;
+           SELECT 
+             ad_group_ad.ad.final_urls, 
+             metrics.cost_micros, 
+             metrics.clicks, 
+             metrics.impressions, 
+             metrics.conversions 
+           FROM ad_group_ad 
+           WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
+         `;
+         
          const sa360KwQuery = `
             SELECT 
               ad_group_criterion.keyword.text, 
@@ -607,9 +611,14 @@ const fetchBridgeData = async () => {
          `;
          
          const fetchSa360 = async (query: string) => {
-            if (!selectedSa360SubAccount) throw new Error("No SA360 sub-account");
-            if (!sa360Auth?.token) throw new Error("SA360 token missing");
-
+            if (!selectedSa360SubAccount) {
+                throw new Error("No SA360 sub-account selected");
+            }
+            
+            if (!sa360Auth?.token) {
+                throw new Error("SA360 token is missing");
+            }
+            
             const headers: any = { 
                 Authorization: `Bearer ${sa360Auth.token}`, 
                 'Content-Type': 'application/json' 
@@ -618,24 +627,27 @@ const fetchBridgeData = async () => {
             if (selectedSa360Customer) {
                 headers['login-customer-id'] = selectedSa360Customer.id.toString().replace(/-/g, '');
             }
-
+            
             const targetId = selectedSa360SubAccount.id.toString().replace(/-/g, '');
-
             const res = await fetch(`/api/sa360/v0/customers/${targetId}/searchAds360:searchStream`, {
                 method: 'POST',
                 headers: headers,
                 body: JSON.stringify({ query })
             });
             
-            if (!res.ok) throw new Error(`SA360 Error: ${res.status}`);
-
+            if (!res.ok) {
+                const text = await res.text();
+                console.error("SA360 API Error:", text);
+                throw new Error(`SA360 Error: ${res.status} - ${text.substring(0, 100)}`);
+            }
+            
             const json = await res.json();
             return (Array.isArray(json) ? json : []).flatMap((batch: any) => batch.results || []);
          };
-
+         
          try {
             const [urlRows, kwRows] = await Promise.all([fetchSa360(sa360UrlQuery), fetchSa360(sa360KwQuery)]);
-
+            
             urlRows.forEach((row: any) => {
                 const url = row.adGroupAd?.ad?.finalUrls?.[0] || row.adGroupAd?.ad?.final_urls?.[0]; 
                 
@@ -652,19 +664,21 @@ const fetchBridgeData = async () => {
                 sa360PaidMap[path].impressions += parseInt(metrics.impressions) || 0;
                 sa360PaidMap[path].cost += (parseInt(metrics.costMicros) || 0) / 1000000;
             });
-
+            
             kwRows.forEach((row: any) => {
                 const kw = row.adGroupCriterion?.keyword?.text;
                 if(!kw) return;
                 const cleanKw = kw.toLowerCase().trim();
+                
                 if (!sa360KeywordMap[cleanKw]) sa360KeywordMap[cleanKw] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
+                
                 const metrics = row.metrics;
                 sa360KeywordMap[cleanKw].clicksOrSessions += parseInt(metrics.clicks) || 0;
                 sa360KeywordMap[cleanKw].conversions += parseFloat(metrics.conversions) || 0;
                 sa360KeywordMap[cleanKw].cost += (parseInt(metrics.costMicros) || 0) / 1000000;
             });
-
-            // SA360 BRIDGE DATA (URL Level)
+            
+            // BUILD SA360 BRIDGE DATA
             const sa360Results: BridgeData[] = [];
             const allPaths = new Set([...Object.keys(gscUrlMap), ...Object.keys(sa360PaidMap)]);
             
@@ -677,7 +691,6 @@ const fetchBridgeData = async () => {
                 const organicRank = gscData ? gscData.bestRank : null;
                 const topQuery = gscData && gscData.queries.length > 0 ? gscData.queries[0].query : '(direct/none)';
                 const topQueriesList = gscData ? gscData.queries.slice(0, 10) : [];
-
                 const paidVolume = paidStats ? paidStats.clicksOrSessions : 0;
                 
                 if (organicSessions === 0 && organicClicks === 0 && paidVolume === 0) return;
@@ -689,7 +702,7 @@ const fetchBridgeData = async () => {
                 if (organicRank && organicRank <= 3.0 && paidShare > 0.4) action = "CRITICAL (Overlap)";
                 else if (organicRank && organicRank <= 3.0 && paidVolume > 0) action = "REVIEW";
                 else if (organicRank && organicRank > 10.0 && paidVolume === 0) action = "INCREASE";
-
+                
                 sa360Results.push({
                     url: path, 
                     query: topQuery, 
@@ -708,36 +721,36 @@ const fetchBridgeData = async () => {
                     gscTopQueries: topQueriesList
                 });
             });
+            
             setBridgeDataSA360(sa360Results.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
-
-            // SA360 KEYWORD DATA (GRANULAR: URL + KW MATCH)
+            
+            // BUILD SA360 KEYWORD DATA (GRANULAR: URL + KW MATCH)
             const sa360KwResults: KeywordBridgeData[] = [];
             
             // 1. Process known URL+KW combinations from GSC (Granular Logic)
             Object.values(granularCompositeMap).forEach(item => {
                 const kw = item.keyword;
-                const paidData = sa360KeywordMap[kw]; // Map keyword stats to this specific URL row
+                const paidData = sa360KeywordMap[kw];
                 
                 if (!paidData && item.organicClicks === 0) return;
-
+                
                 const paidVol = paidData ? paidData.clicksOrSessions : 0; 
                 const paidCost = paidData ? paidData.cost : 0;
                 const orgVol = item.organicClicks;
                 
                 const cvr = paidVol > 0 ? (paidData!.conversions / paidVol) * 100 : 0;
                 const avgCpc = paidVol > 0 ? paidCost / paidVol : 0;
-
+                
                 let action = "MAINTAIN";
-                // Only flag cannibalization if the URL is ranking highly
                 if (item.organicRank !== null && item.organicRank <= 3 && paidVol > 50) action = "CRITICAL (Cannibalization)";
                 else if (item.organicRank !== null && item.organicRank > 10 && paidVol === 0) action = "OPPORTUNITY (Growth)";
-
+                
                 sa360KwResults.push({
                     keyword: kw, 
-                    url: item.url, // Exact URL from GSC
+                    url: item.url, // NUEVA: URL exacta
                     organicRank: item.organicRank || null, 
                     organicClicks: orgVol,
-                    paidSessions: paidVol, // Note: This is keyword-level volume mapped to this URL row
+                    paidSessions: paidVol,
                     paidCvr: cvr, 
                     ppcCost: paidCost, 
                     avgCpc: avgCpc,
@@ -745,14 +758,13 @@ const fetchBridgeData = async () => {
                     dataSource: 'SA360'
                 });
             });
-
-            // 2. Add Paid Keywords that had NO organic traffic (Unknown URL context)
-            // CRITICAL OPTIMIZATION: Create Set for O(1) Lookup instead of O(N*M) Loop to avoid freezing
+            
+            // 2. NUEVA: Add Paid Keywords that had NO organic traffic
+            // CRITICAL OPTIMIZATION: Create Set for O(1) Lookup
             const knownOrganicKeywords = new Set<string>();
             Object.values(granularCompositeMap).forEach(v => knownOrganicKeywords.add(v.keyword));
-
+            
             Object.keys(sa360KeywordMap).forEach(kw => {
-                // Quick check: is this keyword in granular map?
                 if (!knownOrganicKeywords.has(kw)) {
                     const paidData = sa360KeywordMap[kw];
                     const cvr = paidData.clicksOrSessions > 0 ? (paidData.conversions / paidData.clicksOrSessions) * 100 : 0;
@@ -772,11 +784,11 @@ const fetchBridgeData = async () => {
                     });
                 }
             });
-
+            
             setKeywordBridgeDataSA360(sa360KwResults.sort((a,b) => b.paidSessions - a.paidSessions));
-
          } catch (err: any) {
              console.error("Error fetching SA360 data:", err);
+             setError(err.message || "Failed to fetch SA360 data");
              setBridgeDataSA360([]);
              setKeywordBridgeDataSA360([]);
          }
@@ -784,7 +796,8 @@ const fetchBridgeData = async () => {
          setBridgeDataSA360([]);
          setKeywordBridgeDataSA360([]);
     }
-
+    
+    // 3. TRY GA4 FETCH (If Available)
     if (ga4Auth?.property && ga4Auth.token) {
          const ga4PaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
          
@@ -799,6 +812,7 @@ const fetchBridgeData = async () => {
                     limit: 100000 
                 })
             });
+            
             const ga4Data = await ga4Resp.json();
             (ga4Data.rows || []).forEach((row: any) => {
                 const rawUrl = row.dimensionValues[0].value;
@@ -806,10 +820,11 @@ const fetchBridgeData = async () => {
                 const campaignName = row.dimensionValues[2].value;
                 const sessions = parseInt(row.metricValues[0].value) || 0;
                 const path = normalizeUrl(rawUrl);
-
+                
                 if ((channelGroup.includes('paid') || channelGroup.includes('cpc') || channelGroup.includes('ppc'))) {
                     if (!ga4PaidMap[path]) ga4PaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set() };
                     ga4PaidMap[path].clicksOrSessions += sessions;
+                    
                     let campType = "Other Paid";
                     const n = campaignName.toLowerCase();
                     if (n.includes('pmax')) campType = "⚡ PMax";
@@ -819,7 +834,8 @@ const fetchBridgeData = async () => {
                     ga4PaidMap[path].campaigns.add(campType);
                 }
             });
-
+            
+            // GA4 Keywords
             const ga4KwResp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
@@ -830,6 +846,7 @@ const fetchBridgeData = async () => {
                     limit: 25000
                 })
             });
+            
             const ga4KwData = await ga4KwResp.json();
             (ga4KwData.rows || []).forEach((row: any) => {
                  const kw = row.dimensionValues[0].value;
@@ -842,20 +859,27 @@ const fetchBridgeData = async () => {
                  const sessions = parseInt(row.metricValues[0].value) || 0;
                  const rate = parseFloat(row.metricValues[1].value) || 0;
                  const cost = parseFloat(row.metricValues[2].value) || 0;
-
-                 // FILL GRANULAR MAP (URL + KW) FROM GA4 SIDE
+                 
+                 // NUEVA: FILL GRANULAR MAP (URL + KW) FROM GA4 SIDE
                  const key = getCompositeKey(cleanPath, cleanKw);
                  if (!granularCompositeMap[key]) {
                      granularCompositeMap[key] = { 
-                         keyword: cleanKw, url: cleanPath, organicRank: null, organicClicks: 0, 
-                         paidSessions: 0, paidConversions: 0, paidCost: 0, bestRank: 999
+                         keyword: cleanKw, 
+                         url: cleanPath, 
+                         organicRank: null, 
+                         organicClicks: 0, 
+                         paidSessions: 0, 
+                         paidConversions: 0, 
+                         paidCost: 0, 
+                         bestRank: 999
                      };
                  }
                  granularCompositeMap[key].paidSessions += sessions;
                  granularCompositeMap[key].paidConversions += (sessions * rate);
                  granularCompositeMap[key].paidCost += cost;
             });
-
+            
+            // BUILD GA4 BRIDGE DATA
             const ga4Results: BridgeData[] = [];
             const allPathsGA = new Set([...Object.keys(gscUrlMap), ...Object.keys(ga4PaidMap)]);
             
@@ -868,7 +892,6 @@ const fetchBridgeData = async () => {
                 const organicRank = gscData ? gscData.bestRank : null;
                 const topQuery = gscData && gscData.queries.length > 0 ? gscData.queries[0].query : '(direct/none)';
                 const topQueriesList = gscData ? gscData.queries.slice(0, 10) : [];
-
                 const paidVolume = paidStats ? paidStats.clicksOrSessions : 0;
                 
                 if (organicSessions === 0 && organicClicks === 0 && paidVolume === 0) return;
@@ -880,19 +903,32 @@ const fetchBridgeData = async () => {
                 if (organicRank && organicRank <= 3.0 && paidShare > 0.4) action = "CRITICAL (Overlap)";
                 else if (organicRank && organicRank <= 3.0 && paidVolume > 0) action = "REVIEW";
                 else if (organicRank && organicRank > 10.0 && paidVolume === 0) action = "INCREASE";
+                
                 let campDisplay = "None";
                 if (paidStats && paidStats.campaigns.size > 0) campDisplay = Array.from(paidStats.campaigns).join(' + ');
-
+                
                 ga4Results.push({
-                    url: path, query: topQuery, organicRank: organicRank, organicClicks: organicClicks, organicSessions: organicSessions, 
-                    ppcCampaign: campDisplay, ppcCost: 0, ppcConversions: paidStats?.conversions || 0, ppcCpa: 0,
-                    ppcSessions: paidVolume, ppcImpressions: 0, blendedCostRatio: paidShare, actionLabel: action, dataSource: 'GA4',
+                    url: path, 
+                    query: topQuery, 
+                    organicRank: organicRank, 
+                    organicClicks: organicClicks, 
+                    organicSessions: organicSessions, 
+                    ppcCampaign: campDisplay, 
+                    ppcCost: 0, 
+                    ppcConversions: paidStats?.conversions || 0, 
+                    ppcCpa: 0,
+                    ppcSessions: paidVolume, 
+                    ppcImpressions: 0, 
+                    blendedCostRatio: paidShare, 
+                    actionLabel: action, 
+                    dataSource: 'GA4',
                     gscTopQueries: topQueriesList
                 });
             });
+            
             setBridgeDataGA4(ga4Results.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
-
-            // GA4 KEYWORD DATA (GRANULAR from Composite Map)
+            
+            // BUILD GA4 KEYWORD DATA (GRANULAR from Composite Map)
             const ga4KwResults: KeywordBridgeData[] = [];
             Object.values(granularCompositeMap).forEach(item => {
                  const paidVol = item.paidSessions;
@@ -902,14 +938,14 @@ const fetchBridgeData = async () => {
                  
                  const cvr = paidVol > 0 ? (item.paidConversions / paidVol) * 100 : 0;
                  const avgCpc = paidVol > 0 ? item.paidCost / paidVol : 0;
-
+                 
                  let action = "MAINTAIN";
                  if (item.organicRank !== null && item.organicRank <= 3 && paidVol > 50) action = "CRITICAL (Cannibalization)";
                  else if (item.organicRank !== null && item.organicRank > 10 && paidVol === 0) action = "OPPORTUNITY (Growth)";
-
+                 
                  ga4KwResults.push({
                     keyword: item.keyword, 
-                    url: item.url, // Granular
+                    url: item.url, // NUEVA: Granular URL
                     organicRank: item.organicRank || null, 
                     organicClicks: orgVol,
                     paidSessions: paidVol, 
@@ -920,67 +956,278 @@ const fetchBridgeData = async () => {
                     dataSource: 'GA4'
                  });
             });
+            
             setKeywordBridgeDataGA4(ga4KwResults.sort((a,b) => b.paidSessions - a.paidSessions));
-
          } catch (e) {
             console.error("GA4 Data Fetch Error:", e);
          }
     }
-
+    
     setIsLoadingBridge(false);
   };
+  
+  // Restore SA360 Data on Load if Auth exists (Persistency Logic)
+  useEffect(() => {
+    if (sa360Auth?.token && availableSa360Customers.length === 0 && !isLoadingSa360) {
+        fetchSa360Customers(sa360Auth.token);
+    }
+  }, [sa360Auth]);
 
   const fetchGa4Data = async () => {
+    if (!ga4Auth?.property || !ga4Auth.token) return;
+    
     setIsLoadingGa4(true);
+    
     try {
-        setRealDailyData(generateMockDailyData());
-        setRealKeywordData(generateMockKeywordData());
-    } catch (e) {
-        console.error("Error fetching GA4 data", e);
-        setRealDailyData(generateMockDailyData());
-        setRealKeywordData(generateMockKeywordData());
+      const dateRanges = [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }];
+      
+      if (filters.comparison.enabled) {
+        const comp = getComparisonDates();
+        dateRanges.push({ startDate: comp.start, endDate: comp.end });
+      }
+      
+      const ga4ReportResp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dateRanges,
+          dimensions: [
+            { name: 'date' }, 
+            { name: filters.ga4Dimension }, 
+            { name: 'country' }, 
+            { name: 'landingPage' }
+          ],
+          metrics: [
+            { name: 'sessions' }, 
+            { name: 'totalRevenue' }, 
+            { name: 'transactions' }, 
+            { name: 'sessionConversionRate' },
+            { name: 'addToCarts' },
+            { name: 'checkouts' }
+          ],
+          limit: 100000
+        })
+      });
+      
+      const ga4Data = await ga4ReportResp.json();
+      if (ga4Data.error) throw new Error(ga4Data.error.message);
+      
+      const currentStart = parseInt(filters.dateRange.start.replace(/-/g, ''), 10);
+      const currentEnd = parseInt(filters.dateRange.end.replace(/-/g, ''), 10);
+      
+      const dailyMapped: DailyData[] = (ga4Data.rows || []).map((row: any) => {
+        const rowDateStr = row.dimensionValues[0].value;
+        const rowDateNum = parseInt(rowDateStr, 10);
+        
+        let label: 'current' | 'previous' = 'current';
+        if (filters.comparison.enabled) {
+          if (rowDateNum >= currentStart && rowDateNum <= currentEnd) {
+            label = 'current';
+          } else {
+            label = 'previous';
+          }
+        }
+        
+        return {
+          date: `${rowDateStr.slice(0,4)}-${rowDateStr.slice(4,6)}-${rowDateStr.slice(6,8)}`,
+          channel: row.dimensionValues[1].value,
+          country: normalizeCountry(row.dimensionValues[2].value),
+          queryType: 'Non-Branded' as QueryType,
+          landingPage: row.dimensionValues[3].value,
+          dateRangeLabel: label,
+          sessions: parseInt(row.metricValues[0].value) || 0,
+          revenue: parseFloat(row.metricValues[1].value) || 0,
+          sales: parseInt(row.metricValues[2].value) || 0,
+          conversionRate: (parseFloat(row.metricValues[3].value) || 0) * 100,
+          addToCarts: parseInt(row.metricValues[4].value) || 0,
+          checkouts: parseInt(row.metricValues[5].value) || 0,
+          clicks: 0, impressions: 0, ctr: 0
+        };
+      });
+      
+      setRealDailyData(dailyMapped);
+      
+    } catch (err: any) {
+      console.error("Error fetching GA4:", err);
+      setError(`GA4 Error: ${err.message}`);
     } finally {
-        setIsLoadingGa4(false);
+      setIsLoadingGa4(false);
     }
   };
-
-  useEffect(() => {
-    if (window.google) {
-      tokenClientGa4.current = window.google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPE_GA4,
-        callback: (response: any) => { if (response.access_token) fetchGa4Properties(response.access_token); }
-      });
-      tokenClientGsc.current = window.google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPE_GSC,
-        callback: (response: any) => { if (response.access_token) fetchGscSites(response.access_token); }
-      });
-      tokenClientSa360.current = window.google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPE_SA360,
-        callback: (response: any) => { if (response.access_token) fetchSa360Customers(response.access_token); }
-      });
+  
+  const fetchGscData = async () => {
+    if (!gscAuth?.site || !gscAuth.token) return;
+    
+    setIsLoadingGsc(true);
+    try {
+      const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
+      
+      const fetchOneRange = async (start: string, end: string, label: 'current' | 'previous') => {
+        const respTotals = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            startDate: start,
+            endDate: end,
+            dimensions: ['date', 'country'],
+          })
+        });
+        const dataTotals = await respTotals.json();
+        
+        const totalAggregated = (dataTotals.rows || []).reduce((acc: any, row: any) => ({
+          clicks: acc.clicks + row.clicks,
+          impressions: acc.impressions + row.impressions,
+        }), { clicks: 0, impressions: 0 });
+        
+        const dailyTotals = (dataTotals.rows || []).map((row: any) => ({
+          date: row.keys[0],
+          country: normalizeCountry(row.keys[1]),
+          clicks: row.clicks,
+          impressions: row.impressions,
+          label
+        }));
+        
+        const rowLimit = 25000;
+        let allGranularRows: any[] = [];
+        
+        for (let page = 0; page < 2; page++) {
+          const respGranular = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              startDate: start,
+              endDate: end,
+              dimensions: ['query', 'page', 'date', 'country'],
+              rowLimit: rowLimit,
+              startRow: page * rowLimit
+            })
+          });
+          const dataGranular = await respGranular.json();
+          if (dataGranular.error) throw new Error(dataGranular.error.message);
+          
+          if (dataGranular.rows) {
+            allGranularRows = [...allGranularRows, ...dataGranular.rows];
+          }
+          if (!dataGranular.rows || dataGranular.rows.length < rowLimit) break;
+        }
+        
+        const mapped = allGranularRows.map((row: any) => ({
+            keyword: row.keys[0] || '',
+            landingPage: row.keys[1] || '',
+            date: row.keys[2] || '',
+            country: normalizeCountry(row.keys[3]),
+            dateRangeLabel: label,
+            clicks: row.clicks || 0,
+            impressions: row.impressions || 0,
+            ctr: (row.ctr || 0) * 100,
+            position: row.position || 0,
+            sessions: 0, 
+            conversionRate: 0, 
+            revenue: 0, 
+            sales: 0, 
+            addToCarts: 0, 
+            checkouts: 0, 
+            queryType: 'Non-Branded' as QueryType
+        }));
+        
+        return { mapped, totals: totalAggregated, dailyTotals };
+      };
+      
+      let combinedKeywords: KeywordData[] = [];
+      let combinedDailyTotals: any[] = [];
+      let currentTotals = { clicks: 0, impressions: 0 };
+      let previousTotals = { clicks: 0, impressions: 0 };
+      
+      const curData = await fetchOneRange(filters.dateRange.start, filters.dateRange.end, 'current');
+      combinedKeywords = curData.mapped;
+      combinedDailyTotals = curData.dailyTotals;
+      currentTotals = curData.totals;
+      
+      if (filters.comparison.enabled) {
+        const comp = getComparisonDates();
+        const prevData = await fetchOneRange(comp.start, comp.end, 'previous');
+        combinedKeywords = [...combinedKeywords, ...prevData.mapped];
+        combinedDailyTotals = [...combinedDailyTotals, ...prevData.dailyTotals];
+        previousTotals = prevData.totals;
+      }
+      
+      setRealKeywordData(combinedKeywords);
+      setGscDailyTotals(combinedDailyTotals);
+      setGscTotals({ current: currentTotals, previous: previousTotals });
+    } catch (err: any) {
+      console.error(err);
+      setError(`GSC Error: ${err.message}`);
+    } finally {
+      setIsLoadingGsc(false);
     }
+  };
+  
+  useEffect(() => {
+    if (activeTab === DashboardTab.PPC_SEO_BRIDGE || activeTab === DashboardTab.SA360_PERFORMANCE || activeTab === DashboardTab.SEARCH_EFFICIENCY) {
+      fetchBridgeData();
+    } else if (activeTab === DashboardTab.AI_TRAFFIC_MONITOR) {
+      fetchAiTrafficData();
+    }
+  }, [
+    activeTab, 
+    ga4Auth?.property?.id, 
+    gscAuth?.site?.siteUrl, 
+    filters.dateRange.start,
+    filters.dateRange.end,
+    selectedSa360SubAccount?.id
+  ]);
+  
+  useEffect(() => {
+    const initializeOAuth = () => {
+      if (typeof window !== 'undefined' && (window as any).google && (window as any).google.accounts) {
+        tokenClientGa4.current = (window as any).google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: SCOPE_GA4,
+          prompt: '',
+          callback: (resp: any) => {
+            if (resp.access_token) {
+              const newAuth = { token: resp.access_token, property: ga4Auth?.property || null };
+              setGa4Auth(newAuth);
+              sessionStorage.setItem('ga4_auth', JSON.stringify(newAuth));
+              fetchGa4Properties(resp.access_token);
+            }
+          },
+        });
+        
+        tokenClientGsc.current = (window as any).google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: SCOPE_GSC,
+          prompt: '',
+          callback: (resp: any) => {
+            if (resp.access_token) {
+              const newAuth = { token: resp.access_token, site: gscAuth?.site || null };
+              setGscAuth(newAuth);
+              sessionStorage.setItem('gsc_auth', JSON.stringify(newAuth));
+              fetchGscSites(resp.access_token);
+            }
+          },
+        });
+        
+        tokenClientSa360.current = (window as any).google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: SCOPE_SA360,
+            prompt: '',
+            callback: (resp: any) => {
+              if (resp.access_token) {
+                const newAuth = { token: resp.access_token, customer: sa360Auth?.customer || null };
+                setSa360Auth(newAuth);
+                sessionStorage.setItem('sa360_auth', JSON.stringify(newAuth));
+                fetchSa360Customers(resp.access_token);
+              }
+            },
+        });
+      } else { 
+        setTimeout(initializeOAuth, 500); 
+      }
+    };
+    initializeOAuth();
   }, []);
-
-  useEffect(() => {
-    if (user) {
-        fetchGa4Data();
-        fetchBridgeData();
-        fetchAiTrafficData();
-    }
-  }, [user, filters, ga4Auth?.property?.id, gscAuth?.site?.siteUrl, sa360Auth?.token, selectedSa360SubAccount]);
-
-  const handleLogout = () => {
-    setUser(null);
-    setGa4Auth(null);
-    setGscAuth(null);
-    setSa360Auth(null);
-    localStorage.removeItem('seo_suite_user');
-    sessionStorage.clear();
-  };
-
+  
   const handleLoginSuccess = (credentialToken: string) => {
     try {
       const base64Url = credentialToken.split('.')[1];
@@ -989,11 +1236,189 @@ const fetchBridgeData = async () => {
       const newUser = { name: decoded.name, email: decoded.email, picture: decoded.picture };
       setUser(newUser);
       localStorage.setItem('seo_suite_user', JSON.stringify(newUser));
-    } catch (error) { console.error("Error decoding token:", error); }
+    } catch (error) { 
+      console.error("Error decoding token:", error); 
+    }
   };
-
-  const stats = useMemo(() => aggregateData(realDailyData), [realDailyData]);
-
+  
+  const handleLogout = () => {
+    setUser(null); 
+    setGa4Auth(null); 
+    setGscAuth(null); 
+    setSa360Auth(null);
+    localStorage.removeItem('seo_suite_user');
+    sessionStorage.removeItem('ga4_auth');
+    sessionStorage.removeItem('gsc_auth');
+    sessionStorage.removeItem('sa360_auth');
+  };
+  
+  const handleConnectGa4 = () => { 
+    if (tokenClientGa4.current) tokenClientGa4.current.requestAccessToken(); 
+  };
+  
+  const handleConnectGsc = () => { 
+    if (tokenClientGsc.current) tokenClientGsc.current.requestAccessToken(); 
+  };
+  
+  const handleConnectSa360 = () => { 
+    if (tokenClientSa360.current) tokenClientSa360.current.requestAccessToken(); 
+  };
+  
+  useEffect(() => { 
+    if (ga4Auth?.token && ga4Auth.property) {
+      fetchGa4Data();
+      fetchGa4Metadata(ga4Auth.token, ga4Auth.property.id);
+      fetchGa4PropertyDetails(ga4Auth.token, ga4Auth.property.id);
+    } 
+  }, [ga4Auth?.property?.id, filters.dateRange.start, filters.dateRange.end, filters.ga4Dimension, filters.comparison.enabled, filters.comparison.type]);
+  
+  useEffect(() => { 
+    if (gscAuth?.token && gscAuth.site) fetchGscData(); 
+  }, [gscAuth?.site?.siteUrl, filters.dateRange.start, filters.dateRange.end, filters.comparison.enabled, filters.comparison.type]);
+  
+  const filteredDailyData = useMemo((): DailyData[] => {
+    return realDailyData.filter(d => {
+      const countryMatch = filters.country === 'All' || d.country === filters.country;
+      return countryMatch;
+    });
+  }, [realDailyData, filters]);
+  
+  const filteredKeywordData = useMemo((): KeywordData[] => {
+    return realKeywordData.filter(k => {
+      const isActuallyBranded = isBranded(k.keyword);
+      const queryTypeActual = isActuallyBranded ? 'Branded' : 'Non-Branded';
+      const countryMatch = filters.country === 'All' || k.country === filters.country;
+      const queryMatch = filters.queryType === 'All' || queryTypeActual === filters.queryType;
+      return countryMatch && queryMatch;
+    }).map(k => ({ ...k, queryType: (isBranded(k.keyword) ? 'Branded' : 'Non-Branded') as QueryType }));
+  }, [realKeywordData, filters, brandRegexStr]);
+  
+  const filteredProperties = useMemo(() => availableProperties.filter(p => p.name.toLowerCase().includes(ga4Search.toLowerCase())), [availableProperties, ga4Search]);
+  const filteredSites = useMemo(() => availableSites.filter(s => s.siteUrl.toLowerCase().includes(gscSearch.toLowerCase())), [availableSites, gscSearch]);
+  const filteredSa360Customers = useMemo(() => availableSa360Customers.filter(c => c.descriptiveName?.toLowerCase().includes(sa360Search.toLowerCase()) || c.id.includes(sa360Search)), [availableSa360Customers, sa360Search]);
+  
+  const uniqueCountries = useMemo(() => {
+    const set = new Set([...realDailyData.map(d => d.country), ...realKeywordData.map(k => k.country)]);
+    return Array.from(set).filter(c => c && c !== 'Other' && c !== 'Unknown').sort();
+  }, [realDailyData, realKeywordData]);
+  
+  const channelStats = useMemo(() => {
+    const total = aggregateData(filteredDailyData);
+    const organic = aggregateData(filteredDailyData.filter(d => d.channel.toLowerCase().includes('organic')));
+    const paid = aggregateData(filteredDailyData.filter(d => d.channel.toLowerCase().includes('paid') || d.channel.toLowerCase().includes('cpc')));
+    
+    const searchWeightSessions = total.current.sessions > 0 ? ((organic.current.sessions + paid.current.sessions) / total.current.sessions) * 100 : 0;
+    const prevSearchWeightSessions = total.previous.sessions > 0 ? ((organic.previous.sessions + paid.previous.sessions) / total.previous.sessions) * 100 : 0;
+    const changeSearchWeightSessions = prevSearchWeightSessions === 0 ? 0 : ((searchWeightSessions - prevSearchWeightSessions) / prevSearchWeightSessions) * 100;
+    
+    const searchWeightRev = total.current.revenue > 0 ? ((organic.current.revenue + paid.current.revenue) / total.current.revenue) * 100 : 0;
+    const prevSearchWeightRev = total.previous.revenue > 0 ? ((organic.previous.revenue + paid.previous.revenue) / total.previous.revenue) * 100 : 0;
+    const changeSearchWeightRev = prevSearchWeightRev === 0 ? 0 : ((searchWeightRev - prevSearchWeightRev) / prevSearchWeightRev) * 100;
+    
+    return { 
+      total, 
+      organic, 
+      paid, 
+      shares: {
+        sessions: { current: searchWeightSessions, change: changeSearchWeightSessions },
+        revenue: { current: searchWeightRev, change: changeSearchWeightRev }
+      } 
+    };
+  }, [filteredDailyData]);
+  
+  const handleGenerateInsights = async () => {
+    setLoadingInsights(true);
+    setError(null);
+    
+    try {
+      let summary = "";
+      const dashboardName = activeTab === DashboardTab.ORGANIC_VS_PAID ? "Organic vs Paid Performance" : 
+                           (activeTab === DashboardTab.SEO_BY_COUNTRY ? "SEO Performance by Country" : 
+                           activeTab === DashboardTab.PPC_SEO_BRIDGE ? "PPC & SEO Bridge Intelligence" :
+                           activeTab === DashboardTab.SA360_PERFORMANCE ? "SA360 Paid Search Performance" :
+                           activeTab === DashboardTab.SEARCH_EFFICIENCY ? "Search Efficiency & Cost Savings" :
+                           activeTab === DashboardTab.AI_TRAFFIC_MONITOR ? "AI Traffic Tracker" :
+                           "Deep URL and Keyword Analysis");
+      
+      if (activeTab === DashboardTab.ORGANIC_VS_PAID) {
+        summary = `
+          Context: Analysis of Organic vs Paid Search funnels.
+          Organic Stats: ${channelStats.organic.current.sessions} sessions, ${currencySymbol}${channelStats.organic.current.revenue.toLocaleString()} revenue, ${channelStats.organic.current.cr.toFixed(2)}% CR.
+          Paid Stats: ${channelStats.paid.current.sessions} sessions, ${currencySymbol}${channelStats.paid.current.revenue.toLocaleString()} revenue, ${channelStats.paid.current.cr.toFixed(2)}% CR.
+          Search Weight: ${channelStats.shares.sessions.current.toFixed(1)}% share.
+        `;
+      } else if (activeTab === DashboardTab.SEO_BY_COUNTRY) {
+        summary = `
+          Context: Market-level SEO efficiency.
+          Organic GA4 Rev: ${currencySymbol}${channelStats.organic.current.revenue.toLocaleString()}.
+        `;
+      } else if (activeTab === DashboardTab.PPC_SEO_BRIDGE) {
+        const primaryBridgeData = bridgeDataSA360.length > 0 ? bridgeDataSA360 : bridgeDataGA4;
+        const riskCount = primaryBridgeData.filter(b => b.organicRank !== null && b.organicRank <= 3 && b.ppcSessions > 0).length;
+        const opportunityCount = primaryBridgeData.filter(b => b.organicRank !== null && b.organicRank > 5 && b.organicRank <= 20).length;
+        summary = `
+          Context: Integrated SEO and PPC Intelligence using Session Comparison.
+          Cannibalization Risks detected: ${riskCount} keywords where we rank Top 3 organically but still pay for Sessions.
+          Growth Opportunities detected: ${opportunityCount} keywords where we rank 5-20 and could increase ad spend.
+        `;
+      } else if (activeTab === DashboardTab.SA360_PERFORMANCE) {
+          const primaryData = bridgeDataSA360.length > 0 ? bridgeDataSA360 : bridgeDataGA4;
+          const totalCost = primaryData.reduce((acc, c) => acc + c.ppcCost, 0);
+          const totalConv = primaryData.reduce((acc, c) => acc + c.ppcConversions, 0);
+          const avgCpa = totalConv > 0 ? totalCost / totalConv : 0;
+          summary = `
+            Context: SA360 / Paid Search Performance Analysis by URL.
+            Total Spend: ${currencySymbol}${totalCost.toLocaleString()}.
+            Total Conversions: ${totalConv}.
+            Average CPA: ${currencySymbol}${avgCpa.toFixed(2)}.
+            Look for high CPA URLs and efficient high-volume URLs in the data provided.
+          `;
+      } else if (activeTab === DashboardTab.AI_TRAFFIC_MONITOR) {
+        const totalAi = aiTrafficData.reduce((acc, curr) => acc + curr.sessions, 0);
+        summary = `
+          Context: AI/LLM Traffic Analysis (ChatGPT, Perplexity, Gemini, etc.).
+          Total AI Referred Sessions: ${totalAi}.
+          Top Sources identified in list.
+        `;
+      } else if (activeTab === DashboardTab.SEARCH_EFFICIENCY) {
+         const primaryData = bridgeDataSA360.length > 0 ? bridgeDataSA360 : bridgeDataGA4;
+         const brandTax = primaryData.filter(d => isBranded(d.query) && d.organicRank !== null && d.organicRank <= 1.5).reduce((acc, d) => acc + d.ppcCost, 0);
+         summary = `
+           Context: Search Efficiency & Cost Savings.
+           Goal: Identify wasted spend (Cannibalization) and incremental growth opportunities.
+           Estimated Potential Brand Savings (Brand Tax): ${currencySymbol}${brandTax.toLocaleString()}.
+           The dashboard highlights where we pay for Brand terms despite ranking #1 organically.
+         `;
+      }
+      
+      let insights: string | undefined;
+      
+      if (aiProvider === 'openai') {
+        if (!openaiKey) throw new Error("Please enter your OpenAI API Key in the sidebar.");
+        insights = await getOpenAiInsights(openaiKey, summary, dashboardName);
+      } else {
+        insights = await getDashboardInsights(summary, dashboardName);
+      }
+      
+      setTabInsights((prev) => ({ ...prev, [activeTab as string]: insights || null }));
+    } catch (err: any) { 
+      console.error(err); 
+      setError(err.message || "Failed to generate insights.");
+    } finally { 
+      setLoadingInsights(false); 
+    }
+  };
+  
+  const isAnythingLoading = isLoadingGa4 || isLoadingGsc || isLoadingBridge || isLoadingAi || isLoadingSa360;
+  
+  useEffect(() => { 
+    localStorage.setItem('ai_provider', aiProvider); 
+  }, [aiProvider]);
+  
+  useEffect(() => { 
+    localStorage.setItem('openai_api_key', openaiKey); 
+  }, [openaiKey]);
+  
   if (!user) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-white relative overflow-hidden">
@@ -1012,123 +1437,276 @@ const fetchBridgeData = async () => {
       </div>
     );
   }
-
+  
   return (
-    <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
-        <Sidebar 
-            isOpen={isSidebarOpen} 
-            setIsOpen={setIsSidebarOpen}
-            isCollapsed={isCollapsed}
-            setIsCollapsed={setIsCollapsed}
-            activeTab={activeTab} 
-            setActiveTab={setActiveTab} 
-            user={user} 
-            handleLogout={handleLogout}
-            setIsSettingsOpen={setIsSettingsOpen}
-        />
-        
-        <main className={`flex-1 flex flex-col transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-80'} h-full relative`}>
-             <header className="px-8 py-6 flex flex-col md:flex-row justify-between items-start md:items-center bg-white/80 backdrop-blur-md border-b border-slate-200 z-10 sticky top-0">
-               <div className="flex items-center gap-4">
-                 <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="xl:hidden p-2 -ml-2 text-slate-500 hover:text-slate-900"><Menu size={24} /></button>
-                 <div>
-                    <h2 className="text-xl font-black text-slate-900 tracking-tight">{activeTab.replace(/_/g, ' ')}</h2>
-                    <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{filters.dateRange.start} — {filters.dateRange.end}</span>
-                        {filters.country !== 'All' && <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[9px] font-black uppercase">{filters.country}</span>}
-                    </div>
-                 </div>
-               </div>
-               <div className="mt-4 md:mt-0">
-                  <DateRangeSelector filters={filters} setFilters={setFilters} />
-               </div>
-            </header>
-
-            <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
-                {activeTab === DashboardTab.ORGANIC_VS_PAID && (
-                    <OrganicVsPaidView 
-                        stats={stats} 
-                        data={realDailyData} 
-                        comparisonEnabled={filters.comparison.enabled} 
-                        grouping={grouping} 
-                        setGrouping={setGrouping} 
-                        currencySymbol={currencySymbol} 
-                    />
-                )}
-                {activeTab === DashboardTab.SEO_BY_COUNTRY && (
-                    <SeoMarketplaceView 
-                        data={realDailyData} 
-                        keywordData={realKeywordData} 
-                        gscDailyTotals={gscDailyTotals} 
-                        gscTotals={gscTotals}
-                        aggregate={aggregateData} 
-                        comparisonEnabled={filters.comparison.enabled} 
-                        currencySymbol={currencySymbol}
-                        grouping={grouping}
-                        isBranded={isBranded}
-                        queryTypeFilter={filters.queryType}
-                        countryFilter={filters.country}
-                    />
-                )}
-                {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && (
-                    <SeoDeepDiveView 
-                        keywords={realKeywordData} 
-                        searchTerm={searchTerm} 
-                        setSearchTerm={setSearchTerm} 
-                        isLoading={isLoadingGa4}
-                        comparisonEnabled={filters.comparison.enabled}
-                    />
-                )}
-                {activeTab === DashboardTab.PPC_SEO_BRIDGE && (
-                     <SeoPpcBridgeView 
-                        ga4Data={bridgeDataGA4} 
-                        sa360Data={bridgeDataSA360}
-                        ga4KeywordData={keywordBridgeDataGA4}
-                        sa360KeywordData={keywordBridgeDataSA360}
-                        dailyData={realDailyData} 
-                        currencySymbol={currencySymbol}
-                        availableSa360Customers={availableSa360Customers}
-                        selectedSa360Customer={selectedSa360Customer}
-                        onSa360CustomerChange={handleSa360CustomerChange}
-                        availableSa360SubAccounts={availableSa360SubAccounts}
-                        selectedSa360SubAccount={selectedSa360SubAccount}
-                        setSelectedSa360SubAccount={setSelectedSa360SubAccount}
-                     />
-                )}
-                {activeTab === DashboardTab.AI_TRAFFIC_MONITOR && (
-                    <AiTrafficView data={aiTrafficData} currencySymbol={currencySymbol} />
-                )}
-                {activeTab === DashboardTab.SA360_PERFORMANCE && (
-                    <Sa360PerformanceView data={bridgeDataSA360} currencySymbol={currencySymbol} />
-                )}
-                {activeTab === DashboardTab.SEARCH_EFFICIENCY && (
-                    <SearchEfficiencyView data={keywordBridgeDataGA4.concat(keywordBridgeDataSA360)} brandRegexStr={brandRegexStr} currencySymbol={currencySymbol} />
-                )}
+    <div className="min-h-screen bg-[#f8fafc] flex flex-col md:flex-row">
+      <button 
+        onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
+        className="xl:hidden fixed bottom-6 right-6 z-50 p-4 bg-slate-950 text-white rounded-full shadow-2xl active:scale-95 transition-transform"
+      >
+        {isSidebarOpen ? <X /> : <Menu />}
+      </button>
+      
+      {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 xl:hidden" onClick={() => setIsSidebarOpen(false)} />}
+      
+      <Sidebar 
+        isOpen={isSidebarOpen} 
+        setIsOpen={setIsSidebarOpen}
+        isCollapsed={isCollapsed} 
+        setIsCollapsed={setIsCollapsed}
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab}
+        user={user} 
+        handleLogout={handleLogout}
+        setIsSettingsOpen={setIsSettingsOpen}
+      />
+      
+      <SettingsModal 
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        aiProvider={aiProvider} 
+        setAiProvider={setAiProvider}
+        openaiKey={openaiKey} 
+        setOpenaiKey={setOpenaiKey}
+        brandRegexStr={brandRegexStr} 
+        setBrandRegexStr={setBrandRegexStr}
+        ga4Auth={ga4Auth} 
+        gscAuth={gscAuth} 
+        sa360Auth={sa360Auth}
+        handleConnectGa4={handleConnectGa4} 
+        handleConnectGsc={handleConnectGsc} 
+        handleConnectSa360={handleConnectSa360}
+        ga4Search={ga4Search} 
+        setGa4Search={setGa4Search}
+        gscSearch={gscSearch} 
+        setGscSearch={setGscSearch}
+        sa360Search={sa360Search} 
+        setSa360Search={setSa360Search}
+        availableProperties={availableProperties} 
+        availableSites={availableSites} 
+        availableSa360Customers={availableSa360Customers}
+        availableSa360SubAccounts={availableSa360SubAccounts}
+        selectedSa360Customer={selectedSa360Customer}
+        selectedSa360SubAccount={selectedSa360SubAccount}
+        onSa360CustomerChange={handleSa360CustomerChange}
+        onSa360SubAccountChange={setSelectedSa360SubAccount}
+        setGa4Auth={setGa4Auth} 
+        setGscAuth={setGscAuth} 
+        setSa360Auth={setSa360Auth}
+        filteredProperties={filteredProperties} 
+        filteredSites={filteredSites} 
+        filteredSa360Customers={filteredSa360Customers}
+      />
+      
+      <main className={`flex-1 transition-all duration-300 ease-in-out p-5 md:p-8 xl:p-12 overflow-x-hidden ${isSidebarOpen ? (isCollapsed ? 'xl:ml-20' : 'xl:ml-80') : 'ml-0'}`}>
+        <header className="flex flex-col gap-6 mb-10">
+          <div className="flex items-center gap-4">
+            {!isSidebarOpen && (
+              <button 
+                onClick={() => setIsSidebarOpen(true)} 
+                className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-indigo-300 transition-all shadow-sm text-slate-600 hover:text-indigo-600 group" 
+                title="Abrir menú"
+              >
+                <Menu size={20} className="group-hover:scale-110 transition-transform" />
+              </button>
+            )}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`w-2 h-2 rounded-full ${isAnythingLoading ? 'bg-amber-500 animate-ping' : 'bg-emerald-500'}`} />
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                  {isLoadingGa4 ? 'Syncing GA4...' : isLoadingGsc ? 'Syncing GSC...' : isLoadingSa360 ? 'Syncing SA360...' : isLoadingBridge ? 'Joining Data...' : isLoadingAi ? 'Scanning AI...' : 'Dashboard Active'}
+                </span>
+              </div>
+              <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">
+                {activeTab === DashboardTab.ORGANIC_VS_PAID && "Organic vs Paid Performance"}
+                {activeTab === DashboardTab.SEO_BY_COUNTRY && "SEO Performance by Country"}
+                {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && "URL & Keyword Analysis"}
+                {activeTab === DashboardTab.PPC_SEO_BRIDGE && "The Bridge: SEO vs PPC Intelligence"}
+                {activeTab === DashboardTab.SA360_PERFORMANCE && "SA360 & Paid Search Analysis"}
+                {activeTab === DashboardTab.SEARCH_EFFICIENCY && "Search Efficiency & Savings"}
+                {activeTab === DashboardTab.AI_TRAFFIC_MONITOR && "AI Traffic Monitor"}
+              </h2>
             </div>
-        </main>
-
-        <SettingsModal 
-            isOpen={isSettingsOpen} 
-            onClose={() => setIsSettingsOpen(false)}
-            aiProvider={aiProvider} setAiProvider={setAiProvider}
-            openaiKey={openaiKey} setOpenaiKey={setOpenaiKey}
-            brandRegexStr={brandRegexStr} setBrandRegexStr={setBrandRegexStr}
-            ga4Auth={ga4Auth} gscAuth={gscAuth} sa360Auth={sa360Auth}
-            handleConnectGa4={() => tokenClientGa4.current?.requestAccessToken()} 
-            handleConnectGsc={() => tokenClientGsc.current?.requestAccessToken()} 
-            handleConnectSa360={() => tokenClientSa360.current?.requestAccessToken()} 
-            ga4Search={ga4Search} setGa4Search={setGa4Search}
-            gscSearch={gscSearch} setGscSearch={setGscSearch}
-            sa360Search={sa360Search} setSa360Search={setSa360Search}
-            availableProperties={availableProperties} availableSites={availableSites}
-            availableSa360Customers={availableSa360Customers} availableSa360SubAccounts={availableSa360SubAccounts}
-            selectedSa360Customer={selectedSa360Customer} selectedSa360SubAccount={selectedSa360SubAccount}
-            onSa360CustomerChange={handleSa360CustomerChange} onSa360SubAccountChange={setSelectedSa360SubAccount}
-            setGa4Auth={setGa4Auth} setGscAuth={setGscAuth} setSa360Auth={setSa360Auth}
-            filteredProperties={availableProperties.filter(p => p.name.toLowerCase().includes(ga4Search.toLowerCase()))}
-            filteredSites={availableSites.filter(s => s.siteUrl.toLowerCase().includes(gscSearch.toLowerCase()))}
-            filteredSa360Customers={availableSa360Customers.filter(c => c.descriptiveName?.toLowerCase().includes(sa360Search.toLowerCase()))}
-        />
+          </div>
+          
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-4 w-full">
+            <DateRangeSelector filters={filters} setFilters={setFilters} />
+            
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white p-1.5 rounded-3xl border border-slate-200 shadow-sm">
+              <div className="flex items-center gap-2 px-3 py-1.5 sm:border-r border-slate-100">
+                 <Filter className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                 <select 
+                   className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" 
+                   value={filters.ga4Dimension} 
+                   onChange={e => setFilters({...filters, ga4Dimension: e.target.value})}
+                 >
+                    {availableDimensions.map(d => (<option key={d.value} value={d.value}>{d.label}</option>))}
+                    {availableDimensions.length === 0 && <option value="sessionDefaultChannelGroup">Channel Grouping</option>}
+                 </select>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-1.5 sm:border-r border-slate-100">
+                 <Globe className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                 <select 
+                   className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" 
+                   value={filters.country} 
+                   onChange={e => setFilters({...filters, country: e.target.value})}
+                 >
+                    <option value="All">All Countries</option>
+                    {uniqueCountries.map(c => <option key={c} value={c}>{c}</option>)}
+                 </select>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-1.5">
+                 <Tag className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                 <select 
+                   className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" 
+                   value={filters.queryType} 
+                   onChange={e => setFilters({...filters, queryType: e.target.value as any})}
+                 >
+                    <option value="All">Query Type</option>
+                    <option value="Branded">Branded</option>
+                    <option value="Non-Branded">Non-Branded</option>
+                 </select>
+              </div>
+            </div>
+          </div>
+        </header>
+        
+        {error && (
+          <div className="mb-8 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-3 text-rose-700 shadow-sm animate-in fade-in slide-in-from-top-4">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+              <p className="font-bold text-xs">{error}</p>
+            </div>
+            <button onClick={() => setError(null)} className="p-1.5 hover:bg-rose-100 rounded-full transition-colors">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+        
+        {tabInsights[activeTab as string] && (
+          <div className="mb-10 bg-slate-900 rounded-[32px] p-8 md:p-10 text-white shadow-2xl relative animate-in fade-in zoom-in-95 duration-500 overflow-hidden">
+            <div className="absolute top-0 right-0 p-12 opacity-10 pointer-events-none">
+              {aiProvider === 'openai' ? <Cpu className="w-48 h-48 text-emerald-500" /> : <Sparkles className="w-48 h-48 text-indigo-500" />}
+            </div>
+            <div className="flex justify-between items-start mb-6 z-10 relative">
+              <div className="flex items-center gap-3">
+                {aiProvider === 'openai' ? <Cpu className="w-5 h-5 text-emerald-400" /> : <Sparkles className="w-5 h-5 text-indigo-400" />}
+                <div className="flex flex-col">
+                  <h3 className="text-xl font-black">
+                    Strategic Report: {activeTab === DashboardTab.ORGANIC_VS_PAID ? "Channels" : activeTab === DashboardTab.SEO_BY_COUNTRY ? "Markets" : activeTab === DashboardTab.PPC_SEO_BRIDGE ? "The Bridge" : activeTab === DashboardTab.SA360_PERFORMANCE ? "Paid Search" : activeTab === DashboardTab.AI_TRAFFIC_MONITOR ? "AI Intelligence" : "Deep Dive"}
+                  </h3>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+                    Generated by {aiProvider === 'openai' ? 'OpenAI GPT-4o-mini' : 'Google Gemini 3 Pro'}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setTabInsights({...tabInsights, [activeTab as string]: null})} 
+                className="p-2 hover:bg-white/10 rounded-full transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div 
+              className="prose prose-invert max-w-none font-medium text-sm md:text-base leading-relaxed z-10 relative" 
+              dangerouslySetInnerHTML={{ __html: (tabInsights[activeTab as string] || '').replace(/\n/g, '<br/>') }} 
+            />
+          </div>
+        )}
+        
+        <div className="w-full">
+          {activeTab === DashboardTab.ORGANIC_VS_PAID && (
+            <OrganicVsPaidView 
+              stats={channelStats} 
+              data={filteredDailyData} 
+              comparisonEnabled={filters.comparison.enabled} 
+              grouping={grouping} 
+              setGrouping={setGrouping} 
+              currencySymbol={currencySymbol} 
+            />
+          )}
+          
+          {activeTab === DashboardTab.SEO_BY_COUNTRY && (
+            <SeoMarketplaceView 
+              data={filteredDailyData} 
+              keywordData={filteredKeywordData} 
+              gscDailyTotals={gscDailyTotals} 
+              gscTotals={gscTotals} 
+              aggregate={aggregateData} 
+              comparisonEnabled={filters.comparison.enabled} 
+              currencySymbol={currencySymbol} 
+              grouping={grouping} 
+              isBranded={isBranded} 
+              queryTypeFilter={filters.queryType} 
+              countryFilter={filters.country} 
+            />
+          )}
+          
+          {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && (
+            <SeoDeepDiveView 
+              keywords={filteredKeywordData} 
+              searchTerm={searchTerm} 
+              setSearchTerm={setSearchTerm} 
+              isLoading={isAnythingLoading} 
+              comparisonEnabled={filters.comparison.enabled} 
+            />
+          )}
+          
+          {activeTab === DashboardTab.PPC_SEO_BRIDGE && (
+            <SeoPpcBridgeView 
+                ga4Data={bridgeDataGA4} 
+                sa360Data={bridgeDataSA360}
+                ga4KeywordData={keywordBridgeDataGA4}
+                sa360KeywordData={keywordBridgeDataSA360}
+                dailyData={filteredDailyData} 
+                currencySymbol={currencySymbol} 
+                availableSa360Customers={availableSa360Customers}
+                selectedSa360Customer={selectedSa360Customer}
+                onSa360CustomerChange={handleSa360CustomerChange}
+                availableSa360SubAccounts={availableSa360SubAccounts}
+                selectedSa360SubAccount={selectedSa360SubAccount}
+                setSelectedSa360SubAccount={setSelectedSa360SubAccount}
+            />
+          )}
+          
+          {activeTab === DashboardTab.SA360_PERFORMANCE && (
+              <Sa360PerformanceView 
+                  data={bridgeDataSA360} 
+                  currencySymbol={currencySymbol} 
+              />
+          )}
+          
+          {activeTab === DashboardTab.SEARCH_EFFICIENCY && (
+              <SearchEfficiencyView 
+                 data={keywordBridgeDataSA360.length > 0 ? keywordBridgeDataSA360 : keywordBridgeDataGA4}
+                 brandRegexStr={brandRegexStr}
+                 currencySymbol={currencySymbol}
+              />
+          )}
+          
+          {activeTab === DashboardTab.AI_TRAFFIC_MONITOR && (
+            <AiTrafficView 
+              data={aiTrafficData} 
+              currencySymbol={currencySymbol} 
+            />
+          )}
+        </div>
+        
+        <div className="mt-12 flex justify-center pb-12">
+          <button 
+            onClick={handleGenerateInsights} 
+            disabled={loadingInsights || isAnythingLoading || (realDailyData.length === 0 && realKeywordData.length === 0)} 
+            className={`flex items-center gap-3 px-10 py-4 ${aiProvider === 'openai' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20' : 'bg-slate-950 hover:bg-slate-800 shadow-slate-900/20'} text-white rounded-3xl text-xs font-black shadow-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50`}
+          >
+            {loadingInsights ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              aiProvider === 'openai' ? <Cpu className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />
+            )} 
+            Generate {activeTab === DashboardTab.ORGANIC_VS_PAID ? 'Channel' : activeTab === DashboardTab.SEO_BY_COUNTRY ? 'Market' : activeTab === DashboardTab.PPC_SEO_BRIDGE ? 'Bridge' : activeTab === DashboardTab.SA360_PERFORMANCE ? 'Paid' : activeTab === DashboardTab.AI_TRAFFIC_MONITOR ? 'AI' : 'SEO'} Insights
+          </button>
+        </div>
+      </main>
     </div>
   );
 };
