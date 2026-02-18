@@ -4,22 +4,21 @@ import {
   ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine
 } from 'recharts';
 import { 
-  DollarSign, TrendingUp, PiggyBank, Target, AlertTriangle, CheckCircle, Search, FileText, Info, Zap, ChevronUp, ChevronDown
+  DollarSign, TrendingUp, PiggyBank, Target, AlertTriangle, CheckCircle, Search, FileText, Info, Zap, ChevronUp, ChevronDown, Key
 } from 'lucide-react';
-import { BridgeData } from '../types';
+import { KeywordBridgeData } from '../types';
 import { KpiCard } from '../components/KpiCard';
 import { EmptyState } from '../components/EmptyState';
 import { exportToCSV } from '../utils';
 
-interface EfficiencyRow extends BridgeData {
+interface EfficiencyRow extends KeywordBridgeData {
   querySegment: 'Brand' | 'Non-Brand';
   brandTax: number;
   incrementalClicks: number;
   actionTag: string;
   cpaGap: number;
   organicCvr: number;
-  avgCpc: number;       // New Metric
-  organicValue: number; // New Metric (Organic Sessions * CPC)
+  organicValue: number; // New Metric (Organic Clicks * Avg CPC)
 }
 
 type SortConfig = {
@@ -28,7 +27,7 @@ type SortConfig = {
 };
 
 export const SearchEfficiencyView: React.FC<{ 
-  data: BridgeData[]; 
+  data: KeywordBridgeData[]; 
   brandRegexStr: string;
   currencySymbol: string; 
 }> = ({ data, brandRegexStr, currencySymbol }) => {
@@ -44,12 +43,13 @@ export const SearchEfficiencyView: React.FC<{
 
     return data.map(row => {
         // A. Segment Logic
-        const isBrand = regex.test(row.query || '') || regex.test(row.url || '');
+        const isBrand = regex.test(row.keyword || '');
         const segment = isBrand ? 'Brand' : 'Non-Brand';
 
-        // B. Calculate Avg CPC & Organic Value
-        const avgCpc = row.ppcSessions > 0 ? row.ppcCost / row.ppcSessions : 0;
-        const organicValue = row.organicSessions * avgCpc;
+        // B. Calculate Organic Value
+        // Since we are at Keyword Level, Organic Value = Organic Clicks (GSC) * Avg CPC (Paid)
+        // This represents "How much this organic traffic would have cost if we paid for it"
+        const organicValue = row.organicClicks * row.avgCpc;
 
         // C. Brand Tax / Potential Savings
         let brandTax = 0;
@@ -59,13 +59,14 @@ export const SearchEfficiencyView: React.FC<{
 
         // D. Action Tag Logic
         let actionTag = "⚪ MONITOR";
-        const paidShare = row.blendedCostRatio; // Paid Sessions / Total Sessions
+        const totalVolume = row.organicClicks + row.paidSessions;
+        const paidShare = totalVolume > 0 ? row.paidSessions / totalVolume : 0;
 
         if (segment === 'Brand' && row.organicRank !== null && row.organicRank <= 1.9 && paidShare > 0.5) {
             actionTag = "🔴 CUT/TEST (Cannibalization)";
         } else if (segment !== 'Brand' && row.organicRank !== null && row.organicRank <= 3 && paidShare > 0.8) {
             actionTag = "🟡 REVIEW ROI (High Paid Share)";
-        } else if (row.organicRank !== null && row.organicRank > 10 && row.ppcSessions === 0) {
+        } else if (row.organicRank !== null && row.organicRank > 10 && row.paidSessions === 0) {
             actionTag = "🟢 PUSH PAID (SEO Gap)";
         }
 
@@ -75,7 +76,7 @@ export const SearchEfficiencyView: React.FC<{
         else if (row.organicRank && row.organicRank <= 3) recaptureRate = 0.4;
         else if (row.organicRank && row.organicRank <= 5) recaptureRate = 0.2;
         
-        const incrementalClicks = row.ppcSessions * (1 - recaptureRate);
+        const incrementalClicks = row.paidSessions * (1 - recaptureRate);
 
         return {
             ...row,
@@ -85,7 +86,6 @@ export const SearchEfficiencyView: React.FC<{
             incrementalClicks,
             cpaGap: 0, 
             organicCvr: 0,
-            avgCpc,
             organicValue
         } as EfficiencyRow;
     });
@@ -95,7 +95,7 @@ export const SearchEfficiencyView: React.FC<{
   const filteredData = useMemo(() => {
     return processedData.filter(d => {
         const matchesSegment = querySegmentFilter === 'All' || d.querySegment === querySegmentFilter;
-        const matchesSearch = !searchTerm || d.url.toLowerCase().includes(searchTerm.toLowerCase()) || d.query.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = !searchTerm || d.keyword.toLowerCase().includes(searchTerm.toLowerCase());
         const isRelevant = d.ppcCost > 0 || (d.organicRank !== null && d.organicRank < 20);
         return matchesSegment && matchesSearch && isRelevant;
     });
@@ -110,7 +110,7 @@ export const SearchEfficiencyView: React.FC<{
         let bValue = b[sortConfig.key];
 
         // Special handling for string/text columns
-        if (sortConfig.key === 'query' || sortConfig.key === 'url' || sortConfig.key === 'actionLabel') {
+        if (sortConfig.key === 'keyword' || sortConfig.key === 'actionLabel') {
              const strA = String(aValue || '').toLowerCase();
              const strB = String(bValue || '').toLowerCase();
              if (strA < strB) return sortConfig.direction === 'asc' ? -1 : 1;
@@ -151,8 +151,8 @@ export const SearchEfficiencyView: React.FC<{
     let weightSum = 0;
     filteredData.forEach(d => {
         if (d.organicRank !== null) {
-            weightedRankSum += d.organicRank * d.organicSessions;
-            weightSum += d.organicSessions;
+            weightedRankSum += d.organicRank * d.organicClicks;
+            weightSum += d.organicClicks;
         }
     });
     const weightedRank = weightSum > 0 ? weightedRankSum / weightSum : 0;
@@ -167,8 +167,8 @@ export const SearchEfficiencyView: React.FC<{
         .map(d => ({
             x: d.organicRank, // Rank
             y: d.ppcCost,     // Cost
-            z: d.ppcSessions, // Bubble Size (Clicks)
-            name: d.query || d.url,
+            z: d.paidSessions, // Bubble Size (Clicks)
+            name: d.keyword,
             segment: d.querySegment,
             action: d.actionTag
         }));
@@ -176,20 +176,19 @@ export const SearchEfficiencyView: React.FC<{
 
   const handleExport = () => {
     const csv = sortedData.map(d => ({
-        URL: d.url,
-        Query: d.query,
+        Keyword: d.keyword,
         Segment: d.querySegment,
         Organic_Rank: d.organicRank?.toFixed(1),
-        Organic_Sessions: d.organicSessions,
-        Paid_Sessions: d.ppcSessions,
-        SA360_Cost: d.ppcCost.toFixed(2),
+        Organic_Clicks: d.organicClicks, // Changed from Sessions
+        Paid_Sessions: d.paidSessions,
+        Paid_Cost: d.ppcCost.toFixed(2),
         Avg_CPC: d.avgCpc.toFixed(2),
         Est_Organic_Value: d.organicValue.toFixed(2),
         Potential_Savings: d.brandTax.toFixed(2),
         Action: d.actionTag,
         Incremental_Clicks_Est: d.incrementalClicks.toFixed(0)
     }));
-    exportToCSV(csv, "Search_Efficiency_Savings_Report");
+    exportToCSV(csv, "Search_Efficiency_Savings_Report_Keywords");
   };
 
   const formatCurrency = (val: number, decimals: number = 2) => {
@@ -202,11 +201,12 @@ export const SearchEfficiencyView: React.FC<{
 
   // Helper to generate explanation tooltip text based on row data
   const getActionExplanation = (row: EfficiencyRow) => {
-      const share = (row.blendedCostRatio * 100).toFixed(0);
+      const total = row.organicClicks + row.paidSessions;
+      const share = total > 0 ? ((row.paidSessions / total) * 100).toFixed(0) : 0;
       const rank = row.organicRank ? `#${row.organicRank.toFixed(1)}` : 'N/A';
       
       if (row.actionTag.includes('CUT')) {
-          return `Logic: You are paying for a "${row.querySegment}" term while ranking organically ${rank}. Paid Search occupies ${share}% of total clicks, suggesting you are paying for traffic you already own.`;
+          return `Logic: You are paying for a "${row.querySegment}" term while ranking organically ${rank}. Paid Search occupies ${share}% of total traffic for this exact keyword.`;
       }
       if (row.actionTag.includes('REVIEW')) {
           return `Logic: High Paid Share (${share}%) for a top ranking keyword (${rank}). Check if ROAS justifies the cannibalization of organic traffic.`;
@@ -242,8 +242,8 @@ export const SearchEfficiencyView: React.FC<{
                 <Target size={20} />
             </div>
             <div>
-                <h3 className="text-sm font-black text-slate-900">Efficiency & Savings</h3>
-                <p className="text-[10px] text-slate-500 font-bold">Cross-Channel Optimization</p>
+                <h3 className="text-sm font-black text-slate-900">Efficiency & Savings (Keyword Level)</h3>
+                <p className="text-[10px] text-slate-500 font-bold">Analysis based on Exact Match Keywords & Queries</p>
             </div>
          </div>
 
@@ -369,7 +369,7 @@ export const SearchEfficiencyView: React.FC<{
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                   <input 
                     type="text" 
-                    placeholder="Search Query / URL..." 
+                    placeholder="Search Keyword..." 
                     value={searchTerm} 
                     onChange={e => setSearchTerm(e.target.value)} 
                     className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none focus:ring-1 ring-indigo-500 transition-all"
@@ -388,10 +388,10 @@ export const SearchEfficiencyView: React.FC<{
             <table className="w-full text-left border-collapse">
                 <thead>
                     <tr className="border-b border-slate-100 bg-slate-50/50">
-                        <SortableHeader label="Query / URL" sortKey="query" align="left" />
+                        <SortableHeader label="Keyword / Query" sortKey="keyword" align="left" />
                         <SortableHeader label="GSC Rank" sortKey="organicRank" align="center" />
-                        <SortableHeader label="Org. Sessions" sortKey="organicSessions" />
-                        <SortableHeader label="Paid Sessions" sortKey="ppcSessions" />
+                        <SortableHeader label="Org. Clicks" sortKey="organicClicks" />
+                        <SortableHeader label="Paid Sessions" sortKey="paidSessions" />
                         <SortableHeader label="Avg. CPC" sortKey="avgCpc" />
                         <SortableHeader label="Est. Org Value" sortKey="organicValue" />
                         <SortableHeader label="Paid Cost" sortKey="ppcCost" />
@@ -404,8 +404,10 @@ export const SearchEfficiencyView: React.FC<{
                         <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                             <td className="py-3 px-4 max-w-[200px]">
                                 <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-slate-800 truncate" title={row.query}>{row.query || row.url}</span>
-                                    <span className="text-[9px] text-slate-400 truncate mt-0.5">{row.url}</span>
+                                    <div className="flex items-center gap-2">
+                                        <Key size={10} className="text-slate-300 flex-shrink-0" />
+                                        <span className="text-[10px] font-bold text-slate-800 truncate" title={row.keyword}>{row.keyword}</span>
+                                    </div>
                                 </div>
                             </td>
                             <td className="py-3 px-4 text-center">
@@ -416,10 +418,10 @@ export const SearchEfficiencyView: React.FC<{
                                 ) : '-'}
                             </td>
                             <td className="py-3 px-4 text-right">
-                                <span className="text-[10px] font-bold text-slate-600">{formatNumber(row.organicSessions)}</span>
+                                <span className="text-[10px] font-bold text-slate-600">{formatNumber(row.organicClicks)}</span>
                             </td>
                             <td className="py-3 px-4 text-right">
-                                <span className="text-[10px] font-bold text-slate-600">{formatNumber(row.ppcSessions)}</span>
+                                <span className="text-[10px] font-bold text-slate-600">{formatNumber(row.paidSessions)}</span>
                             </td>
                             <td className="py-3 px-4 text-right">
                                 <span className="text-[10px] font-bold text-slate-600">{currencySymbol}{formatCurrency(row.avgCpc)}</span>
@@ -469,9 +471,9 @@ export const SearchEfficiencyView: React.FC<{
             <p className="text-[10px] text-slate-500 leading-relaxed">
                 <strong>Calculation Logic:</strong> 
                 <br/>
-                • <strong>Avg. CPC:</strong> Total Cost / Paid Sessions (or Clicks).
+                • <strong>Organic Clicks:</strong> From Search Console (Query Exact Match). (Note: Sessions not available per query in GA4).
                 <br/>
-                • <strong>Est. Org Value:</strong> Organic Sessions × Avg. CPC. (Represents cost avoided by ranking organically).
+                • <strong>Est. Org Value:</strong> Organic Clicks × Avg. CPC (Paid). (Represents cost avoided).
                 <br/>
                 • <strong>Potential Savings:</strong> Sum of Paid Cost for <strong>Brand</strong> terms where Organic Rank is <strong>≤ 1.9</strong>.
             </p>

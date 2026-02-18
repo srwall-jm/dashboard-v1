@@ -729,19 +729,24 @@ const fetchBridgeData = async () => {
             const sa360KwResults: KeywordBridgeData[] = [];
             const allKeysSA = new Set([...Object.keys(sa360KeywordMap), ...Object.keys(uniqueQueryMap)]);
             allKeysSA.forEach(key => {
-                const paidData = sa360KeywordMap[key] || { clicksOrSessions: 0, conversions: 0 };
+                const paidData = sa360KeywordMap[key] || { clicksOrSessions: 0, conversions: 0, cost: 0 };
                 const gscData = uniqueQueryMap[key];
                 const paidVol = paidData.clicksOrSessions;
                 const orgVol = gscData ? gscData.clicks : 0;
+                const paidCost = paidData.cost;
+                
                 if (paidVol === 0 && orgVol === 0) return;
                 const cvr = paidVol > 0 ? (paidData.conversions / paidVol) * 100 : 0;
+                const avgCpc = paidVol > 0 ? paidCost / paidVol : 0;
+
                 let action = "MAINTAIN";
                 if (gscData?.bestRank && gscData.bestRank <= 3 && paidVol > 50) action = "CRITICAL (Cannibalization)";
                 else if (gscData?.bestRank && gscData.bestRank > 10 && paidVol === 0) action = "OPPORTUNITY (Growth)";
 
                 sa360KwResults.push({
                     keyword: key, organicRank: gscData?.bestRank || null, organicClicks: orgVol,
-                    paidSessions: paidVol, paidCvr: cvr, actionLabel: action, dataSource: 'SA360'
+                    paidSessions: paidVol, paidCvr: cvr, ppcCost: paidCost, avgCpc: avgCpc,
+                    actionLabel: action, dataSource: 'SA360'
                 });
             });
             setKeywordBridgeDataSA360(sa360KwResults.sort((a,b) => b.paidSessions - a.paidSessions));
@@ -801,7 +806,7 @@ const fetchBridgeData = async () => {
                 body: JSON.stringify({
                     dateRanges: [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }],
                     dimensions: [{ name: 'sessionGoogleAdsKeywordText' }],
-                    metrics: [{ name: 'sessions' }, { name: 'sessionConversionRate' }],
+                    metrics: [{ name: 'sessions' }, { name: 'sessionConversionRate' }, { name: 'googleAdsCost' }],
                     limit: 25000
                 })
             });
@@ -812,9 +817,12 @@ const fetchBridgeData = async () => {
                  const cleanKw = kw.toLowerCase().trim();
                  const sessions = parseInt(row.metricValues[0].value) || 0;
                  const rate = parseFloat(row.metricValues[1].value) || 0;
+                 const cost = parseFloat(row.metricValues[2].value) || 0;
+
                  if (!ga4KeywordMap[cleanKw]) ga4KeywordMap[cleanKw] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
                  ga4KeywordMap[cleanKw].clicksOrSessions += sessions;
                  ga4KeywordMap[cleanKw].conversions += (sessions * rate);
+                 ga4KeywordMap[cleanKw].cost += cost;
             });
 
             // BUILD GA4 BRIDGE DATA
@@ -862,19 +870,24 @@ const fetchBridgeData = async () => {
             const ga4KwResults: KeywordBridgeData[] = [];
             const allKeysGA = new Set([...Object.keys(ga4KeywordMap), ...Object.keys(uniqueQueryMap)]);
             allKeysGA.forEach(key => {
-                 const paidData = ga4KeywordMap[key] || { clicksOrSessions: 0, conversions: 0 };
+                 const paidData = ga4KeywordMap[key] || { clicksOrSessions: 0, conversions: 0, cost: 0 };
                  const gscData = uniqueQueryMap[key];
                  const paidVol = paidData.clicksOrSessions;
                  const orgVol = gscData ? gscData.clicks : 0;
+                 const paidCost = paidData.cost;
+
                  if (paidVol === 0 && orgVol === 0) return;
                  const cvr = paidVol > 0 ? (paidData.conversions / paidVol) * 100 : 0;
+                 const avgCpc = paidVol > 0 ? paidCost / paidVol : 0;
+
                  let action = "MAINTAIN";
                  if (gscData?.bestRank && gscData.bestRank <= 3 && paidVol > 50) action = "CRITICAL (Cannibalization)";
                  else if (gscData?.bestRank && gscData.bestRank > 10 && paidVol === 0) action = "OPPORTUNITY (Growth)";
 
                  ga4KwResults.push({
                     keyword: key, organicRank: gscData?.bestRank || null, organicClicks: orgVol,
-                    paidSessions: paidVol, paidCvr: cvr, actionLabel: action, dataSource: 'GA4'
+                    paidSessions: paidVol, paidCvr: cvr, ppcCost: paidCost, avgCpc: avgCpc,
+                    actionLabel: action, dataSource: 'GA4'
                  });
             });
             setKeywordBridgeDataGA4(ga4KwResults.sort((a,b) => b.paidSessions - a.paidSessions));
@@ -1490,7 +1503,7 @@ const fetchGa4Data = async () => {
 
           {activeTab === DashboardTab.SEARCH_EFFICIENCY && (
               <SearchEfficiencyView 
-                 data={bridgeDataSA360.length > 0 ? bridgeDataSA360 : bridgeDataGA4}
+                 data={keywordBridgeDataSA360.length > 0 ? keywordBridgeDataSA360 : keywordBridgeDataGA4}
                  brandRegexStr={brandRegexStr}
                  currencySymbol={currencySymbol}
               />

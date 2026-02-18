@@ -116,8 +116,10 @@ export interface KeywordBridgeData {
   organicClicks: number;
   paidSessions: number; // Value depends on dataSource
   paidCvr: number;
+  ppcCost: number; // Added for Efficiency View
+  avgCpc: number;  // Added for Efficiency View
   actionLabel: string;
-  dataSource: 'GA4' | 'SA360'; // NEW: Track source
+  dataSource: 'GA4' | 'SA360'; 
 }
 
 export interface AiTrafficData {
