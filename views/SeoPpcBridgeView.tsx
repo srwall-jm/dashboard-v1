@@ -339,7 +339,7 @@ const BridgeAnalysisTable: React.FC<{
                   </th>
                   <th className="py-3 px-4 w-8"></th>
                   <SortableHeader label="URL / Top Query" sortKey="url" align="left" />
-                  <SortableHeader label="Top Org. Rank" sortKey="organicRank" align="center" />
+                  <SortableHeader label="Avg. Org. Rank" sortKey="organicRank" align="center" />
                   <SortableHeader label="Org. Sessions (GA4)" sortKey="organicSessions" />
                   <SortableHeader label={metricLabel} sortKey="ppcSessions" />
                   <SortableHeader label="Paid Share" sortKey="blendedCostRatio" />
@@ -411,7 +411,7 @@ const BridgeAnalysisTable: React.FC<{
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
                   <SortableHeader label="Matched Keyword (Exact)" sortKey="keyword" align="left" />
-                  <SortableHeader label="Top Org. Rank" sortKey="organicRank" align="center" />
+                  <SortableHeader label="Avg. Org. Rank" sortKey="organicRank" align="center" />
                   <SortableHeader label="Org. Clicks" sortKey="organicClicks" />
                   <SortableHeader label={metricLabel} sortKey="paidSessions" />
                   <SortableHeader label="Paid CVR" sortKey="paidCvr" />

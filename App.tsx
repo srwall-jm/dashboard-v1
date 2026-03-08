@@ -515,7 +515,7 @@ const App: React.FC = () => {
         }
     }
     
-    let gscUrlMap: Record<string, { queries: {query: string, rank: number, clicks: number}[], totalClicks: number, bestRank: number }> = {};
+    let gscUrlMap: Record<string, { queries: {query: string, rank: number, clicks: number}[], totalClicks: number, bestRank: number, totalImpressions: number, weightedRankSum: number }> = {};
     
     // NUEVA FUNCIONALIDAD: GRANULAR KEY: URL||KEYWORD
     let granularCompositeMap: Record<string, { 
@@ -526,7 +526,9 @@ const App: React.FC = () => {
         paidSessions: number, 
         paidConversions: number, 
         paidCost: number,
-        bestRank: number 
+        bestRank: number,
+        totalImpressions: number,
+        weightedRankSum: number
     }> = {};
     
     const getCompositeKey = (url: string, keyword: string) => `${url}||${keyword.toLowerCase().trim()}`;
@@ -556,15 +558,19 @@ const App: React.FC = () => {
                     const fullUrl = row.keys[0];
                     const query = row.keys[1];
                     const clicks = row.clicks;
+                    const impressions = row.impressions;
                     const rank = row.position;
                     const cleanPath = normalizeUrl(fullUrl);
                     
                     // 1. Fill URL Map (Bridge Data)
                     if (!gscUrlMap[cleanPath]) {
-                        gscUrlMap[cleanPath] = { queries: [], totalClicks: 0, bestRank: 999 };
+                        gscUrlMap[cleanPath] = { queries: [], totalClicks: 0, bestRank: 999, totalImpressions: 0, weightedRankSum: 0 };
                     }
                     gscUrlMap[cleanPath].queries.push({ query, rank, clicks });
                     gscUrlMap[cleanPath].totalClicks += clicks;
+                    gscUrlMap[cleanPath].totalImpressions += impressions;
+                    gscUrlMap[cleanPath].weightedRankSum += (rank * impressions);
+                    
                     if (rank < gscUrlMap[cleanPath].bestRank) gscUrlMap[cleanPath].bestRank = rank;
                     
                     // 2. NUEVA: Fill Granular Composite Map (Efficiency View) - KEY IS URL+KW
@@ -578,15 +584,21 @@ const App: React.FC = () => {
                             paidSessions: 0, 
                             paidConversions: 0, 
                             paidCost: 0, 
-                            bestRank: 999 
+                            bestRank: 999,
+                            totalImpressions: 0,
+                            weightedRankSum: 0
                         };
                     }
                     const item = granularCompositeMap[key];
                     item.organicClicks += clicks;
+                    item.totalImpressions += impressions;
+                    item.weightedRankSum += (rank * impressions);
+                    
                     if (rank < item.bestRank) {
                         item.bestRank = rank;
-                        item.organicRank = rank; 
                     }
+                    // Calculate Avg Rank on the fly or later. Here we can just store it.
+                    // We will calculate final rank when building the array.
                 });
                 
                 if (rows.length < batchSize) break;
@@ -819,7 +831,11 @@ const App: React.FC = () => {
                 
                 const organicSessions = ga4OrganicMap[path] || 0;
                 const organicClicks = gscData ? gscData.totalClicks : 0;
-                const organicRank = gscData ? gscData.bestRank : null;
+                // User Request: Use Avg Rank instead of Best Rank
+                const organicRank = gscData && gscData.totalImpressions > 0 
+                    ? gscData.weightedRankSum / gscData.totalImpressions 
+                    : (gscData ? gscData.bestRank : null);
+                
                 const topQuery = gscData && gscData.queries.length > 0 ? gscData.queries[0].query : '(direct/none)';
                 const topQueriesList = gscData ? gscData.queries.slice(0, 10) : [];
                 const paidVolume = paidStats ? paidStats.clicksOrSessions : 0;
@@ -879,13 +895,17 @@ const App: React.FC = () => {
                 }
                 
                 let action = "MAINTAIN";
-                if (item.organicRank !== null && item.organicRank <= 3 && paidVol > 50) action = "CRITICAL (Cannibalization)";
-                else if (item.organicRank !== null && item.organicRank > 10 && paidVol === 0) action = "OPPORTUNITY (Growth)";
+                const avgRank = item.totalImpressions > 0 
+                    ? item.weightedRankSum / item.totalImpressions 
+                    : (item.bestRank < 999 ? item.bestRank : null);
+
+                if (avgRank !== null && avgRank <= 3 && paidVol > 50) action = "CRITICAL (Cannibalization)";
+                else if (avgRank !== null && avgRank > 10 && paidVol === 0) action = "OPPORTUNITY (Growth)";
                 
                 sa360KwResults.push({
                     keyword: item.keyword, 
                     url: item.url,
-                    organicRank: item.organicRank || null, 
+                    organicRank: avgRank, 
                     organicClicks: orgVol,
                     paidSessions: paidVol,
                     paidCvr: cvr, 
@@ -1044,7 +1064,11 @@ const App: React.FC = () => {
                 
                 const organicSessions = ga4OrganicMap[path] || 0;
                 const organicClicks = gscData ? gscData.totalClicks : 0;
-                const organicRank = gscData ? gscData.bestRank : null;
+                // User Request: Use Avg Rank instead of Best Rank
+                const organicRank = gscData && gscData.totalImpressions > 0 
+                    ? gscData.weightedRankSum / gscData.totalImpressions 
+                    : (gscData ? gscData.bestRank : null);
+                
                 const topQuery = gscData && gscData.queries.length > 0 ? gscData.queries[0].query : '(direct/none)';
                 const topQueriesList = gscData ? gscData.queries.slice(0, 10) : [];
                 const paidVolume = paidStats ? paidStats.clicksOrSessions : 0;
@@ -1095,13 +1119,17 @@ const App: React.FC = () => {
                  const avgCpc = paidVol > 0 ? item.paidCost / paidVol : 0;
                  
                  let action = "MAINTAIN";
-                 if (item.organicRank !== null && item.organicRank <= 3 && paidVol > 50) action = "CRITICAL (Cannibalization)";
-                 else if (item.organicRank !== null && item.organicRank > 10 && paidVol === 0) action = "OPPORTUNITY (Growth)";
+                 const avgRank = item.totalImpressions > 0 
+                    ? item.weightedRankSum / item.totalImpressions 
+                    : (item.bestRank < 999 ? item.bestRank : null);
+
+                 if (avgRank !== null && avgRank <= 3 && paidVol > 50) action = "CRITICAL (Cannibalization)";
+                 else if (avgRank !== null && avgRank > 10 && paidVol === 0) action = "OPPORTUNITY (Growth)";
                  
                  ga4KwResults.push({
                     keyword: item.keyword, 
                     url: item.url, // NUEVA: Granular URL
-                    organicRank: item.organicRank || null, 
+                    organicRank: avgRank, 
                     organicClicks: orgVol,
                     paidSessions: paidVol, 
                     paidCvr: cvr, 
