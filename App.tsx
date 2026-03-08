@@ -601,6 +601,8 @@ const App: React.FC = () => {
          // NUEVA: Mapa granular con clave URL||KEYWORD para coste específico por URL
          const sa360KeywordUrlMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number }> = {};
          
+         const isAllAccounts = selectedSa360SubAccount.id === 'all';
+
          // Query 1: URL-level metrics from ad_group_ad (valid resource)
          const sa360UrlQuery = `
            SELECT 
@@ -625,6 +627,19 @@ const App: React.FC = () => {
             FROM keyword_view
             WHERE ad_group_criterion.type = 'KEYWORD'
               AND ad_group.status = 'ENABLED'
+              AND segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
+         `;
+
+         // Query 3: Campaign-level metrics (Lightweight for "All Accounts")
+         const sa360CampaignQuery = `
+            SELECT 
+              campaign.name,
+              metrics.cost_micros, 
+              metrics.clicks, 
+              metrics.impressions, 
+              metrics.conversions 
+            FROM campaign
+            WHERE campaign.status = 'ENABLED'
               AND segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
          `;
          
@@ -662,87 +677,104 @@ const App: React.FC = () => {
          try {
             let accountsToFetch: string[] = [];
             
-            if (selectedSa360SubAccount.id === 'all') {
+            if (isAllAccounts) {
                 // Filter out the 'all' option itself to get real IDs
                 accountsToFetch = availableSa360SubAccounts
                     .filter(acc => acc.id !== 'all')
                     .map(acc => acc.id);
+                
+                // LIGHTWEIGHT FETCH FOR ALL ACCOUNTS (Campaign Level Only)
+                const allCampaignPromises = accountsToFetch.map(id => fetchSa360(sa360CampaignQuery, id));
+                const campaignResults = await Promise.all(allCampaignPromises);
+                const campaignRows = campaignResults.flat();
+
+                campaignRows.forEach((row: any) => {
+                    const campaignName = row.campaign?.name || 'Unknown Campaign';
+                    // Use Campaign Name as the "URL" key for the overview
+                    const key = `Campaign: ${campaignName}`;
+                    
+                    if (!sa360PaidMap[key]) {
+                        sa360PaidMap[key] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set([campaignName]) };
+                    }
+                    
+                    const metrics = row.metrics;
+                    sa360PaidMap[key].clicksOrSessions += parseInt(metrics?.clicks) || 0;
+                    sa360PaidMap[key].conversions += parseFloat(metrics?.conversions) || 0;
+                    sa360PaidMap[key].impressions += parseInt(metrics?.impressions) || 0;
+                    sa360PaidMap[key].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
+                });
+
             } else {
+                // DETAILED FETCH FOR SINGLE ACCOUNT (Ad/Keyword Level)
                 accountsToFetch = [selectedSa360SubAccount.id];
+                
+                const [urlRows, kwRows] = await Promise.all([
+                    fetchSa360(sa360UrlQuery, accountsToFetch[0]), 
+                    fetchSa360(sa360KwQuery, accountsToFetch[0])
+                ]);
+                
+                // Join keywords with URLs in memory via ad_group.resource_name
+                // Build a map: adGroupResourceName -> first finalUrl found
+                const adGroupUrlMap: Record<string, string> = {};
+                urlRows.forEach((row: any) => {
+                    const adGroupRN = row.adGroup?.resourceName || row.adGroupAd?.adGroup;
+                    const url = row.adGroupAd?.ad?.finalUrls?.[0] || row.adGroupAd?.ad?.final_urls?.[0];
+                    if (adGroupRN && url && !adGroupUrlMap[adGroupRN]) {
+                        adGroupUrlMap[adGroupRN] = url;
+                    }
+                });
+                
+                // Build kwUrlRows by joining kwRows with adGroupUrlMap
+                const kwUrlRows = kwRows.map((row: any) => {
+                    const adGroupRN = row.adGroup?.resourceName;
+                    const url = adGroupRN ? adGroupUrlMap[adGroupRN] : undefined;
+                    return {
+                        ...row,
+                        adGroupAd: { ad: { finalUrls: url ? [url] : [] } }
+                    };
+                });
+                
+                // Procesar URLs para Bridge Data (agregado por URL)
+                urlRows.forEach((row: any) => {
+                    const url = row.adGroupAd?.ad?.finalUrls?.[0] || row.adGroupAd?.ad?.final_urls?.[0]; 
+                    
+                    if(!url) return;
+                    const path = normalizeUrl(url);
+                    
+                    if (!sa360PaidMap[path]) {
+                        sa360PaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set(['SA360']) };
+                    }
+                    
+                    const metrics = row.metrics;
+                    sa360PaidMap[path].clicksOrSessions += parseInt(metrics?.clicks) || 0;
+                    sa360PaidMap[path].conversions += parseFloat(metrics?.conversions) || 0;
+                    sa360PaidMap[path].impressions += parseInt(metrics?.impressions) || 0;
+                    sa360PaidMap[path].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
+                });
+                
+                // NUEVA: Procesar Keywords con URL para mapeo granular
+                kwUrlRows.forEach((row: any) => {
+                    const kw = row.adGroupCriterion?.keyword?.text;
+                    const url = row.adGroupAd?.ad?.finalUrls?.[0] || row.adGroupAd?.ad?.final_urls?.[0];
+                    
+                    if(!kw || !url) return;
+                    
+                    const cleanKw = kw.toLowerCase().trim();
+                    const cleanPath = normalizeUrl(url);
+                    
+                    // Usar clave compuesta URL||KEYWORD
+                    const compositeKey = getCompositeKey(cleanPath, cleanKw);
+                    
+                    if (!sa360KeywordUrlMap[compositeKey]) {
+                        sa360KeywordUrlMap[compositeKey] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
+                    }
+                    
+                    const metrics = row.metrics;
+                    sa360KeywordUrlMap[compositeKey].clicksOrSessions += parseInt(metrics?.clicks) || 0;
+                    sa360KeywordUrlMap[compositeKey].conversions += parseFloat(metrics?.conversions) || 0;
+                    sa360KeywordUrlMap[compositeKey].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
+                });
             }
-            
-            // Parallel Fetching
-            const allUrlPromises = accountsToFetch.map(id => fetchSa360(sa360UrlQuery, id));
-            const allKwPromises = accountsToFetch.map(id => fetchSa360(sa360KwQuery, id));
-
-            const urlResults = await Promise.all(allUrlPromises);
-            const kwResults = await Promise.all(allKwPromises);
-
-            // Flatten results
-            const urlRows = urlResults.flat();
-            const kwRows = kwResults.flat();
-            
-            // Join keywords with URLs in memory via ad_group.resource_name
-            // Build a map: adGroupResourceName -> first finalUrl found
-            const adGroupUrlMap: Record<string, string> = {};
-            urlRows.forEach((row: any) => {
-                const adGroupRN = row.adGroup?.resourceName || row.adGroupAd?.adGroup;
-                const url = row.adGroupAd?.ad?.finalUrls?.[0] || row.adGroupAd?.ad?.final_urls?.[0];
-                if (adGroupRN && url && !adGroupUrlMap[adGroupRN]) {
-                    adGroupUrlMap[adGroupRN] = url;
-                }
-            });
-            
-            // Build kwUrlRows by joining kwRows with adGroupUrlMap
-            const kwUrlRows = kwRows.map((row: any) => {
-                const adGroupRN = row.adGroup?.resourceName;
-                const url = adGroupRN ? adGroupUrlMap[adGroupRN] : undefined;
-                return {
-                    ...row,
-                    adGroupAd: { ad: { finalUrls: url ? [url] : [] } }
-                };
-            });
-            
-            // Procesar URLs para Bridge Data (agregado por URL)
-            urlRows.forEach((row: any) => {
-                const url = row.adGroupAd?.ad?.finalUrls?.[0] || row.adGroupAd?.ad?.final_urls?.[0]; 
-                
-                if(!url) return;
-                const path = normalizeUrl(url);
-                
-                if (!sa360PaidMap[path]) {
-                    sa360PaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set(['SA360']) };
-                }
-                
-                const metrics = row.metrics;
-                sa360PaidMap[path].clicksOrSessions += parseInt(metrics?.clicks) || 0;
-                sa360PaidMap[path].conversions += parseFloat(metrics?.conversions) || 0;
-                sa360PaidMap[path].impressions += parseInt(metrics?.impressions) || 0;
-                sa360PaidMap[path].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
-            });
-            
-            // NUEVA: Procesar Keywords con URL para mapeo granular
-            kwUrlRows.forEach((row: any) => {
-                const kw = row.adGroupCriterion?.keyword?.text;
-                const url = row.adGroupAd?.ad?.finalUrls?.[0] || row.adGroupAd?.ad?.final_urls?.[0];
-                
-                if(!kw || !url) return;
-                
-                const cleanKw = kw.toLowerCase().trim();
-                const cleanPath = normalizeUrl(url);
-                
-                // Usar clave compuesta URL||KEYWORD
-                const compositeKey = getCompositeKey(cleanPath, cleanKw);
-                
-                if (!sa360KeywordUrlMap[compositeKey]) {
-                    sa360KeywordUrlMap[compositeKey] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
-                }
-                
-                const metrics = row.metrics;
-                sa360KeywordUrlMap[compositeKey].clicksOrSessions += parseInt(metrics?.clicks) || 0;
-                sa360KeywordUrlMap[compositeKey].conversions += parseFloat(metrics?.conversions) || 0;
-                sa360KeywordUrlMap[compositeKey].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
-            });
             
             // BUILD SA360 BRIDGE DATA
             const sa360Results: BridgeData[] = [];
