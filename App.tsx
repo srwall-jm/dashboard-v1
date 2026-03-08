@@ -1844,7 +1844,7 @@ const App: React.FC = () => {
                  availableSa360SubAccounts={availableSa360SubAccounts}
                  selectedSa360SubAccount={selectedSa360SubAccount}
                  setSelectedSa360SubAccount={setSelectedSa360SubAccount}
-                 totalGscClicks={gscTotals.clicks}
+                 totalGscClicks={gscTotals?.current?.clicks || 0}
               />
           )}
           
