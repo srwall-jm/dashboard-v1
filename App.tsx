@@ -630,17 +630,15 @@ const App: React.FC = () => {
               AND segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
          `;
 
-         // Query 3: Campaign-level metrics (Lightweight for "All Accounts")
-         const sa360CampaignQuery = `
+         // Query 3: Customer-level metrics (The most accurate "Overview" total)
+         const sa360CustomerQuery = `
             SELECT 
-              campaign.name,
               metrics.cost_micros, 
               metrics.clicks, 
               metrics.impressions, 
               metrics.conversions 
-            FROM campaign
-            WHERE campaign.status = 'ENABLED'
-              AND segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
+            FROM customer
+            WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
          `;
          
          const fetchSa360 = async (query: string, targetId: string) => {
@@ -676,6 +674,9 @@ const App: React.FC = () => {
          
          try {
             let accountsToFetch: string[] = [];
+            let globalAvgCpc = 0;
+            let globalTotalCost = 0;
+            let globalTotalClicks = 0;
             
             if (isAllAccounts) {
                 // Filter out the 'all' option itself to get real IDs
@@ -683,26 +684,35 @@ const App: React.FC = () => {
                     .filter(acc => acc.id !== 'all')
                     .map(acc => acc.id);
                 
-                // LIGHTWEIGHT FETCH FOR ALL ACCOUNTS (Campaign Level Only)
-                const allCampaignPromises = accountsToFetch.map(id => fetchSa360(sa360CampaignQuery, id));
-                const campaignResults = await Promise.all(allCampaignPromises);
-                const campaignRows = campaignResults.flat();
+                // CUSTOMER LEVEL FETCH FOR ACCURATE TOTALS (Overview)
+                const allCustomerPromises = accountsToFetch.map(id => fetchSa360(sa360CustomerQuery, id));
+                const customerResults = await Promise.all(allCustomerPromises);
+                const customerRows = customerResults.flat();
 
-                campaignRows.forEach((row: any) => {
-                    const campaignName = row.campaign?.name || 'Unknown Campaign';
-                    // Use Campaign Name as the "URL" key for the overview
-                    const key = `Campaign: ${campaignName}`;
-                    
-                    if (!sa360PaidMap[key]) {
-                        sa360PaidMap[key] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set([campaignName]) };
-                    }
-                    
+                customerRows.forEach((row: any) => {
                     const metrics = row.metrics;
-                    sa360PaidMap[key].clicksOrSessions += parseInt(metrics?.clicks) || 0;
-                    sa360PaidMap[key].conversions += parseFloat(metrics?.conversions) || 0;
-                    sa360PaidMap[key].impressions += parseInt(metrics?.impressions) || 0;
-                    sa360PaidMap[key].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
+                    const cost = (parseInt(metrics?.costMicros) || 0) / 1000000;
+                    const clicks = parseInt(metrics?.clicks) || 0;
+                    const conversions = parseFloat(metrics?.conversions) || 0;
+                    const impressions = parseInt(metrics?.impressions) || 0;
+
+                    globalTotalCost += cost;
+                    globalTotalClicks += clicks;
+
+                    // Populate sa360PaidMap for Performance View (One Aggregated Row)
+                    const overviewKey = "All Accounts Overview";
+                    if (!sa360PaidMap[overviewKey]) {
+                        sa360PaidMap[overviewKey] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set(['Aggregated']) };
+                    }
+                    sa360PaidMap[overviewKey].clicksOrSessions += clicks;
+                    sa360PaidMap[overviewKey].conversions += conversions;
+                    sa360PaidMap[overviewKey].impressions += impressions;
+                    sa360PaidMap[overviewKey].cost += cost;
                 });
+
+                if (globalTotalClicks > 0) {
+                    globalAvgCpc = globalTotalCost / globalTotalClicks;
+                }
 
             } else {
                 // DETAILED FETCH FOR SINGLE ACCOUNT (Ad/Keyword Level)
@@ -838,7 +848,12 @@ const App: React.FC = () => {
                 const orgVol = item.organicClicks;
                 
                 const cvr = paidVol > 0 ? (paidConv / paidVol) * 100 : 0;
-                const avgCpc = paidVol > 0 ? paidCost / paidVol : 0;
+                let avgCpc = paidVol > 0 ? paidCost / paidVol : 0;
+
+                // FALLBACK FOR ALL ACCOUNTS: Use Global Avg CPC for organic value calculation
+                if (isAllAccounts && avgCpc === 0 && globalAvgCpc > 0) {
+                    avgCpc = globalAvgCpc;
+                }
                 
                 let action = "MAINTAIN";
                 if (item.organicRank !== null && item.organicRank <= 3 && paidVol > 50) action = "CRITICAL (Cannibalization)";
@@ -857,6 +872,22 @@ const App: React.FC = () => {
                     dataSource: 'SA360'
                 });
             });
+
+            // IF ALL ACCOUNTS: Add a summary row to ensure Total Paid Cost is correct in Scorecards
+            if (isAllAccounts && globalTotalCost > 0) {
+                sa360KwResults.push({
+                    keyword: "Total Paid Search (Overview)",
+                    url: "All Accounts Aggregated",
+                    organicRank: null,
+                    organicClicks: 0,
+                    paidSessions: globalTotalClicks,
+                    paidCvr: 0,
+                    ppcCost: globalTotalCost,
+                    avgCpc: globalAvgCpc,
+                    actionLabel: "MONITOR",
+                    dataSource: 'SA360'
+                });
+            }
             
             // 2. NUEVA: Agregar combinaciones URL+KW que solo tienen datos pagados (sin orgánico)
             const knownCompositeKeys = new Set<string>();
