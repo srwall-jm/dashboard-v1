@@ -149,12 +149,18 @@ export const SearchEfficiencyView: React.FC<{
     const totalCost = globalMetrics ? globalMetrics.totalCost : filteredData.reduce((sum, d) => sum + d.ppcCost, 0);
     
     const potentialSavings = filteredData.reduce((sum, d) => sum + d.brandTax, 0);
-    const totalOrganicValue = filteredData.reduce((sum, d) => sum + d.organicValue, 0);
-    
     // Calculate components for Organic Value Tooltip
     const totalOrganicClicks = filteredData.reduce((sum, d) => sum + d.organicClicks, 0);
-    // Weighted Avg CPC based on organic value
-    const impliedAvgCpc = totalOrganicClicks > 0 ? totalOrganicValue / totalOrganicClicks : 0;
+    
+    // User Request: Est Organic Value = GSC Clicks * Avg CPC (from SA360)
+    const appliedAvgCpc = globalMetrics ? globalMetrics.avgCpc : (
+        // Fallback calculation if globalMetrics is missing
+        filteredData.reduce((sum, d) => sum + d.paidSessions, 0) > 0 
+            ? filteredData.reduce((sum, d) => sum + d.ppcCost, 0) / filteredData.reduce((sum, d) => sum + d.paidSessions, 0)
+            : 0
+    );
+
+    const totalOrganicValue = totalOrganicClicks * appliedAvgCpc;
     
     let weightedRankSum = 0;
     let weightSum = 0;
@@ -166,7 +172,7 @@ export const SearchEfficiencyView: React.FC<{
     });
     const weightedRank = weightSum > 0 ? weightedRankSum / weightSum : 0;
 
-    return { totalCost, potentialSavings, totalOrganicValue, weightedRank, totalOrganicClicks, impliedAvgCpc };
+    return { totalCost, potentialSavings, totalOrganicValue, weightedRank, totalOrganicClicks, impliedAvgCpc: appliedAvgCpc };
   }, [filteredData, globalMetrics]);
 
   // 5. Scatter Plot Data
@@ -264,7 +270,7 @@ export const SearchEfficiencyView: React.FC<{
             icon={<DollarSign />} 
             color="orange" 
          />
-         <div title={`Formula: Organic Clicks (${formatNumber(metrics.totalOrganicClicks)}) x Avg. CPC (${currencySymbol}${formatCurrency(metrics.impliedAvgCpc)})`}>
+         <div title={`Formula: Organic Clicks (${formatNumber(metrics.totalOrganicClicks)}) x Global Avg. CPC (${currencySymbol}${formatCurrency(metrics.impliedAvgCpc)})`}>
             <KpiCard 
                 title="Est. Organic Value" 
                 value={formatCurrency(metrics.totalOrganicValue, 0)} 
