@@ -58,7 +58,8 @@ const BridgeAnalysisTable: React.FC<{
   dataSourceName: string;
   headerContent?: React.ReactNode;
   dailyData: DailyData[]; // Passed for charting
-}> = ({ title, subTitle, data, keywordData, metricLabel, dataSourceName, headerContent, dailyData }) => {
+  customEmptyState?: React.ReactNode;
+}> = ({ title, subTitle, data, keywordData, metricLabel, dataSourceName, headerContent, dailyData, customEmptyState }) => {
   const [urlFilter, setUrlFilter] = useState('');
   const [keywordFilter, setKeywordFilter] = useState('');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -327,7 +328,7 @@ const BridgeAnalysisTable: React.FC<{
         </div>
         
         <div className="overflow-x-auto custom-scrollbar">
-          {viewMode === 'url' ? (
+          {customEmptyState ? customEmptyState : viewMode === 'url' ? (
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
@@ -542,8 +543,8 @@ export const SeoPpcBridgeView: React.FC<{
            <BridgeAnalysisTable 
               title="SA360 Paid Search vs Organic" 
               subTitle="Comparing Organic Sessions vs SA360 Clicks/Sessions"
-              data={sa360Data}
-              keywordData={sa360KeywordData}
+              data={selectedSa360SubAccount?.id === 'all' ? [] : sa360Data}
+              keywordData={selectedSa360SubAccount?.id === 'all' ? [] : sa360KeywordData}
               metricLabel="SA360 Clicks"
               dataSourceName="SA360"
               dailyData={dailyData}
@@ -578,11 +579,25 @@ export const SeoPpcBridgeView: React.FC<{
                         >
                             {availableSa360SubAccounts.length === 0 && <option value="">No accounts found</option>}
                             {availableSa360SubAccounts.map(c => (
-                            <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName} ({c.id})</option>
+                            <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName} {c.id !== 'all' ? `(${c.id})` : ''}</option>
                             ))}
                         </select>
                      </div>
                   </div>
+              }
+              customEmptyState={
+                  selectedSa360SubAccount?.id === 'all' ? (
+                     <div className="bg-white p-12 rounded-[32px] border border-slate-200 shadow-sm text-center">
+                         <div className="w-16 h-16 bg-orange-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                             <Filter className="text-orange-500" size={32} />
+                         </div>
+                         <h3 className="text-lg font-black text-slate-900 mb-2">Select a Client Account</h3>
+                         <p className="text-slate-500 text-xs max-w-md mx-auto">
+                             "All Accounts" mode provides high-level performance overview. 
+                             To view detailed URL and Keyword bridge analysis, please select a specific sub-account from the dropdown above.
+                         </p>
+                     </div>
+                  ) : undefined
               }
            />
        )}

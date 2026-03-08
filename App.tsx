@@ -77,6 +77,7 @@ const App: React.FC = () => {
   const [realDailyData, setRealDailyData] = useState<DailyData[]>([]);
   const [realKeywordData, setRealKeywordData] = useState<KeywordData[]>([]);
   
+  const [sa360GlobalMetrics, setSa360GlobalMetrics] = useState<Sa360GlobalMetrics | null>(null);
   const [bridgeDataGA4, setBridgeDataGA4] = useState<BridgeData[]>([]); 
   const [bridgeDataSA360, setBridgeDataSA360] = useState<BridgeData[]>([]); 
   const [keywordBridgeDataGA4, setKeywordBridgeDataGA4] = useState<KeywordBridgeData[]>([]);
@@ -680,8 +681,45 @@ const App: React.FC = () => {
          try {
             let accountsToFetch: string[] = [];
             let globalAvgCpc = 0;
-            let globalTotalCost = 0;
-            let globalTotalClicks = 0;
+            
+            // 1. ALWAYS FETCH GLOBAL TOTALS (Customer Level)
+            // This ensures scorecards always show "Overall" data regardless of selection
+            const allAccountIds = availableSa360SubAccounts
+                .filter(acc => acc.id !== 'all')
+                .map(acc => acc.id);
+
+            let globalMetrics: Sa360GlobalMetrics = {
+                totalCost: 0,
+                totalClicks: 0,
+                totalConversions: 0,
+                totalImpressions: 0,
+                avgCpc: 0,
+                avgCpa: 0
+            };
+
+            if (allAccountIds.length > 0) {
+                const allCustomerPromises = allAccountIds.map(id => fetchSa360(sa360CustomerQuery, id));
+                const customerResults = await Promise.all(allCustomerPromises);
+                const customerRows = customerResults.flat();
+
+                customerRows.forEach((row: any) => {
+                    const metrics = row.metrics;
+                    globalMetrics.totalCost += (parseInt(metrics?.costMicros) || 0) / 1000000;
+                    globalMetrics.totalClicks += parseInt(metrics?.clicks) || 0;
+                    globalMetrics.totalConversions += parseFloat(metrics?.conversions) || 0;
+                    globalMetrics.totalImpressions += parseInt(metrics?.impressions) || 0;
+                });
+
+                if (globalMetrics.totalClicks > 0) {
+                    globalMetrics.avgCpc = globalMetrics.totalCost / globalMetrics.totalClicks;
+                }
+                if (globalMetrics.totalConversions > 0) {
+                    globalMetrics.avgCpa = globalMetrics.totalCost / globalMetrics.totalConversions;
+                }
+                
+                setSa360GlobalMetrics(globalMetrics);
+                globalAvgCpc = globalMetrics.avgCpc; // Used for fallback
+            }
             
             if (isAllAccounts) {
                 // Filter out the 'all' option itself to get real IDs
@@ -689,35 +727,15 @@ const App: React.FC = () => {
                     .filter(acc => acc.id !== 'all')
                     .map(acc => acc.id);
                 
-                // CUSTOMER LEVEL FETCH FOR ACCURATE TOTALS (Overview)
-                const allCustomerPromises = accountsToFetch.map(id => fetchSa360(sa360CustomerQuery, id));
-                const customerResults = await Promise.all(allCustomerPromises);
-                const customerRows = customerResults.flat();
-
-                customerRows.forEach((row: any) => {
-                    const metrics = row.metrics;
-                    const cost = (parseInt(metrics?.costMicros) || 0) / 1000000;
-                    const clicks = parseInt(metrics?.clicks) || 0;
-                    const conversions = parseFloat(metrics?.conversions) || 0;
-                    const impressions = parseInt(metrics?.impressions) || 0;
-
-                    globalTotalCost += cost;
-                    globalTotalClicks += clicks;
-
-                    // Populate sa360PaidMap for Performance View (One Aggregated Row)
-                    const overviewKey = "All Accounts Overview";
-                    if (!sa360PaidMap[overviewKey]) {
-                        sa360PaidMap[overviewKey] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set(['Aggregated']) };
-                    }
-                    sa360PaidMap[overviewKey].clicksOrSessions += clicks;
-                    sa360PaidMap[overviewKey].conversions += conversions;
-                    sa360PaidMap[overviewKey].impressions += impressions;
-                    sa360PaidMap[overviewKey].cost += cost;
-                });
-
-                if (globalTotalClicks > 0) {
-                    globalAvgCpc = globalTotalCost / globalTotalClicks;
+                // Populate sa360PaidMap for Performance View (One Aggregated Row) using Global Metrics
+                const overviewKey = "All Accounts Overview";
+                if (!sa360PaidMap[overviewKey]) {
+                    sa360PaidMap[overviewKey] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set(['Aggregated']) };
                 }
+                sa360PaidMap[overviewKey].clicksOrSessions = globalMetrics.totalClicks;
+                sa360PaidMap[overviewKey].conversions = globalMetrics.totalConversions;
+                sa360PaidMap[overviewKey].impressions = globalMetrics.totalImpressions;
+                sa360PaidMap[overviewKey].cost = globalMetrics.totalCost;
 
             } else {
                 // DETAILED FETCH FOR SINGLE ACCOUNT (Ad/Keyword Level)
@@ -1810,6 +1828,10 @@ const App: React.FC = () => {
               <Sa360PerformanceView 
                   data={bridgeDataSA360} 
                   currencySymbol={currencySymbol} 
+                  globalMetrics={sa360GlobalMetrics}
+                  availableSa360SubAccounts={availableSa360SubAccounts}
+                  selectedSa360SubAccount={selectedSa360SubAccount}
+                  setSelectedSa360SubAccount={setSelectedSa360SubAccount}
               />
           )}
           
@@ -1818,6 +1840,10 @@ const App: React.FC = () => {
                  data={keywordBridgeDataSA360.length > 0 ? keywordBridgeDataSA360 : keywordBridgeDataGA4}
                  brandRegexStr={brandRegexStr}
                  currencySymbol={currencySymbol}
+                 globalMetrics={sa360GlobalMetrics}
+                 availableSa360SubAccounts={availableSa360SubAccounts}
+                 selectedSa360SubAccount={selectedSa360SubAccount}
+                 setSelectedSa360SubAccount={setSelectedSa360SubAccount}
               />
           )}
           

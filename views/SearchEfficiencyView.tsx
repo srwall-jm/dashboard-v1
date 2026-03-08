@@ -5,7 +5,7 @@ import {
 import { 
   DollarSign, TrendingUp, PiggyBank, Target, AlertTriangle, CheckCircle, Search, FileText, Info, Zap, ChevronUp, ChevronDown, Key, ExternalLink, Filter
 } from 'lucide-react';
-import { KeywordBridgeData } from '../types';
+import { KeywordBridgeData, Sa360GlobalMetrics, Sa360Customer } from '../types';
 import { KpiCard } from '../components/KpiCard';
 import { EmptyState } from '../components/EmptyState';
 import { exportToCSV } from '../utils';
@@ -29,7 +29,11 @@ export const SearchEfficiencyView: React.FC<{
   data: KeywordBridgeData[]; 
   brandRegexStr: string;
   currencySymbol: string; 
-}> = ({ data, brandRegexStr, currencySymbol }) => {
+  globalMetrics: Sa360GlobalMetrics | null;
+  availableSa360SubAccounts: Sa360Customer[];
+  selectedSa360SubAccount: Sa360Customer | null;
+  setSelectedSa360SubAccount: (account: Sa360Customer | null) => void;
+}> = ({ data, brandRegexStr, currencySymbol, globalMetrics, availableSa360SubAccounts, selectedSa360SubAccount, setSelectedSa360SubAccount }) => {
   const [querySegmentFilter, setQuerySegmentFilter] = useState<'All' | 'Brand' | 'Non-Brand'>('All');
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -46,6 +50,7 @@ export const SearchEfficiencyView: React.FC<{
         const segment = isBrand ? 'Brand' : 'Non-Brand';
 
         // B. Calculate Organic Value
+        // Use row.avgCpc which should be populated correctly (either from keyword data or global fallback)
         const organicValue = row.organicClicks * row.avgCpc;
 
         // C. Brand Tax / Potential Savings
@@ -125,7 +130,7 @@ export const SearchEfficiencyView: React.FC<{
         if (Number(aValue) < Number(bValue)) return sortConfig.direction === 'asc' ? -1 : 1;
         if (Number(aValue) > Number(bValue)) return sortConfig.direction === 'asc' ? 1 : -1;
         return 0;
-      });
+    });
     }
     return sorted;
   }, [filteredData, sortConfig]);
@@ -140,9 +145,16 @@ export const SearchEfficiencyView: React.FC<{
 
   // 4. Scorecard Calculations
   const metrics = useMemo(() => {
-    const totalCost = filteredData.reduce((sum, d) => sum + d.ppcCost, 0);
+    // Use globalMetrics for Total Paid Cost if available (User Request: "Que tome del Overall")
+    const totalCost = globalMetrics ? globalMetrics.totalCost : filteredData.reduce((sum, d) => sum + d.ppcCost, 0);
+    
     const potentialSavings = filteredData.reduce((sum, d) => sum + d.brandTax, 0);
     const totalOrganicValue = filteredData.reduce((sum, d) => sum + d.organicValue, 0);
+    
+    // Calculate components for Organic Value Tooltip
+    const totalOrganicClicks = filteredData.reduce((sum, d) => sum + d.organicClicks, 0);
+    // Weighted Avg CPC based on organic value
+    const impliedAvgCpc = totalOrganicClicks > 0 ? totalOrganicValue / totalOrganicClicks : 0;
     
     let weightedRankSum = 0;
     let weightSum = 0;
@@ -154,8 +166,8 @@ export const SearchEfficiencyView: React.FC<{
     });
     const weightedRank = weightSum > 0 ? weightedRankSum / weightSum : 0;
 
-    return { totalCost, potentialSavings, totalOrganicValue, weightedRank };
-  }, [filteredData]);
+    return { totalCost, potentialSavings, totalOrganicValue, weightedRank, totalOrganicClicks, impliedAvgCpc };
+  }, [filteredData, globalMetrics]);
 
   // 5. Scatter Plot Data
   const scatterData = useMemo(() => {
@@ -252,13 +264,15 @@ export const SearchEfficiencyView: React.FC<{
             icon={<DollarSign />} 
             color="orange" 
          />
-         <KpiCard 
-            title="Est. Organic Value" 
-            value={formatCurrency(metrics.totalOrganicValue, 0)} 
-            prefix={currencySymbol}
-            icon={<Zap />} 
-            color="indigo" 
-         />
+         <div title={`Formula: Organic Clicks (${formatNumber(metrics.totalOrganicClicks)}) x Avg. CPC (${currencySymbol}${formatCurrency(metrics.impliedAvgCpc)})`}>
+            <KpiCard 
+                title="Est. Organic Value" 
+                value={formatCurrency(metrics.totalOrganicValue, 0)} 
+                prefix={currencySymbol}
+                icon={<Zap />} 
+                color="indigo" 
+            />
+         </div>
          <KpiCard 
             title="Potential Savings" 
             value={formatCurrency(metrics.potentialSavings, 0)} 
@@ -272,6 +286,32 @@ export const SearchEfficiencyView: React.FC<{
             icon={<TrendingUp />} 
             color="sky" 
          />
+      </div>
+
+      {/* SUB-ACCOUNT FILTER */}
+      <div className="flex justify-end">
+          <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
+             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest pl-2">Filter Account:</span>
+             <select 
+                 className="bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-bold py-1.5 px-3 outline-none min-w-[200px] border-l-4 border-l-orange-400 cursor-pointer hover:bg-slate-100 transition-colors"
+                 value={selectedSa360SubAccount?.resourceName || 'all'}
+                 onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === 'all') {
+                        // Find the 'all' option
+                        const allOpt = availableSa360SubAccounts.find(cx => cx.id === 'all');
+                        setSelectedSa360SubAccount(allOpt || null);
+                    } else {
+                        const c = availableSa360SubAccounts.find(cx => cx.resourceName === val);
+                        setSelectedSa360SubAccount(c || null);
+                    }
+                 }}
+             >
+                 {availableSa360SubAccounts.map(c => (
+                 <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName} {c.id !== 'all' ? `(${c.id})` : ''}</option>
+                 ))}
+             </select>
+          </div>
       </div>
 
       {/* Section 2: Efficiency Matrix */}

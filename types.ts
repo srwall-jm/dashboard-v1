@@ -123,6 +123,15 @@ export interface KeywordBridgeData {
   dataSource: 'GA4' | 'SA360'; 
 }
 
+export interface Sa360GlobalMetrics {
+  totalCost: number;
+  totalClicks: number;
+  totalConversions: number;
+  totalImpressions: number;
+  avgCpc: number;
+  avgCpa: number;
+}
+
 export interface AiTrafficData {
   date: string;
   source: string;

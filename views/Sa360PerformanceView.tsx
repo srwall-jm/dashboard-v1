@@ -6,7 +6,7 @@ import {
 import { 
   DollarSign, MousePointerClick, Percent, Search, FileText, Target, ExternalLink, Zap, ChevronUp, ChevronDown
 } from 'lucide-react';
-import { BridgeData } from '../types';
+import { BridgeData, Sa360GlobalMetrics, Sa360Customer } from '../types';
 import { exportToCSV } from '../utils';
 import { KpiCard } from '../components/KpiCard';
 import { EmptyState } from '../components/EmptyState';
@@ -19,11 +19,15 @@ type SortConfig = {
 export const Sa360PerformanceView: React.FC<{ 
   data: BridgeData[]; 
   currencySymbol: string; 
-}> = ({ data, currencySymbol }) => {
+  globalMetrics: Sa360GlobalMetrics | null;
+  availableSa360SubAccounts: Sa360Customer[];
+  selectedSa360SubAccount: Sa360Customer | null;
+  setSelectedSa360SubAccount: (account: Sa360Customer | null) => void;
+}> = ({ data, currencySymbol, globalMetrics, availableSa360SubAccounts, selectedSa360SubAccount, setSelectedSa360SubAccount }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ppcCost', direction: 'desc' });
 
-  // 1. Aggregation Logic
+  // 1. Aggregation Logic (Fallback if globalMetrics is null)
   const stats = useMemo(() => {
     // Filter to only paid data first
     const paidItems = data.filter(d => d.ppcCost > 0 || d.ppcSessions > 0);
@@ -39,6 +43,17 @@ export const Sa360PerformanceView: React.FC<{
 
     return { totalCost, totalClicks, totalConversions, totalImpressions, avgCpc, avgCpa, ctr, items: paidItems };
   }, [data]);
+
+  // Use Global Metrics for Scorecards if available (User Request: "Que tome del Overall")
+  const displayStats = globalMetrics ? {
+      totalCost: globalMetrics.totalCost,
+      totalClicks: globalMetrics.totalClicks,
+      totalConversions: globalMetrics.totalConversions,
+      totalImpressions: globalMetrics.totalImpressions,
+      avgCpc: globalMetrics.avgCpc,
+      avgCpa: globalMetrics.avgCpa,
+      ctr: globalMetrics.totalImpressions > 0 ? (globalMetrics.totalClicks / globalMetrics.totalImpressions) * 100 : 0
+  } : stats;
 
   // 2. Table Data (Grouped by URL & Sorted)
   const tableData = useMemo(() => {
@@ -156,13 +171,39 @@ export const Sa360PerformanceView: React.FC<{
         {/* Updated formatting: symbol together with number */}
         <KpiCard 
             title="Total Spend" 
-            value={`${currencySymbol}${stats.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
+            value={`${currencySymbol}${displayStats.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
             icon={<DollarSign />} 
             color="orange" 
         />
-        <KpiCard title="Total Clicks" value={stats.totalClicks.toLocaleString('en-US')} icon={<MousePointerClick />} color="blue" />
-        <KpiCard title="Avg. CPC" value={stats.avgCpc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} icon={<Target />} color="indigo" />
-        <KpiCard title="Avg. CPA" value={stats.avgCpa.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} icon={<Zap />} color={stats.avgCpa > 50 ? 'rose' : 'emerald'} />
+        <KpiCard title="Total Clicks" value={displayStats.totalClicks.toLocaleString('en-US')} icon={<MousePointerClick />} color="blue" />
+        <KpiCard title="Avg. CPC" value={displayStats.avgCpc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} icon={<Target />} color="indigo" />
+        <KpiCard title="Avg. CPA" value={displayStats.avgCpa.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} icon={<Zap />} color={displayStats.avgCpa > 50 ? 'rose' : 'emerald'} />
+      </div>
+
+      {/* SUB-ACCOUNT FILTER */}
+      <div className="flex justify-end">
+          <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
+             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest pl-2">Filter Account:</span>
+             <select 
+                 className="bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-bold py-1.5 px-3 outline-none min-w-[200px] border-l-4 border-l-orange-400 cursor-pointer hover:bg-slate-100 transition-colors"
+                 value={selectedSa360SubAccount?.resourceName || 'all'}
+                 onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === 'all') {
+                        // Find the 'all' option
+                        const allOpt = availableSa360SubAccounts.find(cx => cx.id === 'all');
+                        setSelectedSa360SubAccount(allOpt || null);
+                    } else {
+                        const c = availableSa360SubAccounts.find(cx => cx.resourceName === val);
+                        setSelectedSa360SubAccount(c || null);
+                    }
+                 }}
+             >
+                 {availableSa360SubAccounts.map(c => (
+                 <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName} {c.id !== 'all' ? `(${c.id})` : ''}</option>
+                 ))}
+             </select>
+          </div>
       </div>
 
       {/* SECTION 2: VISUAL INTELLIGENCE */}
@@ -206,7 +247,7 @@ export const Sa360PerformanceView: React.FC<{
                     </Scatter>
                     </ScatterChart>
                 </ResponsiveContainer>
-                ) : <EmptyState text="No paid data to chart" />}
+                ) : <EmptyState text={selectedSa360SubAccount?.id === 'all' ? "Select a specific account to see granular data" : "No paid data to chart"} />}
             </div>
          </div>
 
@@ -216,23 +257,23 @@ export const Sa360PerformanceView: React.FC<{
                 <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-6">Paid Funnel Health</h4>
                 <div className="space-y-6">
                     <div className="relative">
-                        <div className="flex justify-between text-[10px] font-bold mb-1"><span className="text-slate-500">Impressions</span><span className="text-slate-900">{stats.totalImpressions.toLocaleString('en-US')}</span></div>
+                        <div className="flex justify-between text-[10px] font-bold mb-1"><span className="text-slate-500">Impressions</span><span className="text-slate-900">{displayStats.totalImpressions.toLocaleString('en-US')}</span></div>
                         <div className="w-full h-2 bg-slate-100 rounded-full"><div className="h-full bg-slate-300 rounded-full w-full"></div></div>
                     </div>
                     <div className="relative pl-4">
-                        <div className="flex justify-between text-[10px] font-bold mb-1"><span className="text-slate-500">Clicks (CTR {stats.ctr.toFixed(2)}%)</span><span className="text-slate-900">{stats.totalClicks.toLocaleString('en-US')}</span></div>
-                        <div className="w-full h-2 bg-slate-100 rounded-full"><div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min((stats.totalClicks / stats.totalImpressions) * 100 * 5, 100)}%` }}></div></div>
+                        <div className="flex justify-between text-[10px] font-bold mb-1"><span className="text-slate-500">Clicks (CTR {displayStats.ctr.toFixed(2)}%)</span><span className="text-slate-900">{displayStats.totalClicks.toLocaleString('en-US')}</span></div>
+                        <div className="w-full h-2 bg-slate-100 rounded-full"><div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min((displayStats.totalClicks / displayStats.totalImpressions) * 100 * 5, 100)}%` }}></div></div>
                     </div>
                     <div className="relative pl-8">
-                        <div className="flex justify-between text-[10px] font-bold mb-1"><span className="text-slate-500">Conversions</span><span className="text-slate-900">{stats.totalConversions.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
-                        <div className="w-full h-2 bg-slate-100 rounded-full"><div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min((stats.totalConversions / stats.totalClicks) * 100 * 5, 100)}%` }}></div></div>
+                        <div className="flex justify-between text-[10px] font-bold mb-1"><span className="text-slate-500">Conversions</span><span className="text-slate-900">{displayStats.totalConversions.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                        <div className="w-full h-2 bg-slate-100 rounded-full"><div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min((displayStats.totalConversions / displayStats.totalClicks) * 100 * 5, 100)}%` }}></div></div>
                     </div>
                 </div>
             </div>
             <div className="mt-8 pt-6 border-t border-slate-100">
                 <div className="flex justify-between items-center">
                    <span className="text-[10px] font-black text-slate-400 uppercase">Conversion Rate</span>
-                   <span className="text-xl font-black text-slate-900">{stats.totalClicks > 0 ? ((stats.totalConversions / stats.totalClicks) * 100).toFixed(2) : 0}%</span>
+                   <span className="text-xl font-black text-slate-900">{displayStats.totalClicks > 0 ? ((displayStats.totalConversions / displayStats.totalClicks) * 100).toFixed(2) : 0}%</span>
                 </div>
             </div>
          </div>
