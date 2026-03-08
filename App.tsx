@@ -356,22 +356,27 @@ const App: React.FC = () => {
         }
       }
       
-      console.log("Cuentas finales encontradas:", allLeafAccounts);
+      // Deduplicate leaf accounts by ID to prevent double counting (e.g. if API returns recursive results)
+      const uniqueLeafAccounts = allLeafAccounts.filter((acc, index, self) => 
+          index === self.findIndex((t) => t.id === acc.id)
+      );
+      
+      console.log("Cuentas finales encontradas (Unique):", uniqueLeafAccounts);
       
       // Add "All Accounts" option if there are multiple accounts
-      if (allLeafAccounts.length > 1) {
+      if (uniqueLeafAccounts.length > 1) {
           const allOption: Sa360Customer = {
               resourceName: 'all',
               id: 'all',
-              descriptiveName: `All Accounts (${allLeafAccounts.length})`
+              descriptiveName: `All Accounts (${uniqueLeafAccounts.length})`
           };
-          allLeafAccounts.unshift(allOption);
+          uniqueLeafAccounts.unshift(allOption);
       }
       
-      setAvailableSa360SubAccounts(allLeafAccounts);
+      setAvailableSa360SubAccounts(uniqueLeafAccounts);
       
-      if (allLeafAccounts.length > 0) {
-        setSelectedSa360SubAccount(allLeafAccounts[0]);
+      if (uniqueLeafAccounts.length > 0) {
+        setSelectedSa360SubAccount(uniqueLeafAccounts[0]);
       }
     } catch (e) {
       console.error("Error fetching SA360 recursive sub-accounts:", e);
