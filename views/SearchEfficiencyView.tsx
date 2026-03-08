@@ -269,27 +269,26 @@ export const SearchEfficiencyView: React.FC<{
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
          <KpiCard 
             title="Total Paid Cost" 
-            value={formatCurrency(metrics.totalCost, 0)} 
-            prefix={currencySymbol}
+            value={`${formatCurrency(metrics.totalCost, 0)} ${currencySymbol}`} 
             icon={<DollarSign />} 
             color="orange" 
          />
          <div title={`Formula: Organic Clicks (${formatNumber(metrics.totalOrganicClicks)}) x Global Avg. CPC (${currencySymbol}${formatCurrency(metrics.impliedAvgCpc)})`}>
             <KpiCard 
-                title="Est. Organic Value" 
-                value={formatCurrency(metrics.totalOrganicValue, 0)} 
-                prefix={currencySymbol}
+                title="Est. Organic Traffic Value" 
+                value={`${formatCurrency(metrics.totalOrganicValue, 0)} ${currencySymbol}`} 
                 icon={<Zap />} 
                 color="indigo" 
             />
          </div>
-         <KpiCard 
-            title="Potential Savings" 
-            value={formatCurrency(metrics.potentialSavings, 0)} 
-            prefix={currencySymbol}
-            icon={<PiggyBank />} 
-            color="emerald" 
-         />
+         <div title="Savings = Cost of Brand Keywords ranking <= 1.9 (Brand Tax). Ensure 'Brand Regex' is set correctly in Settings.">
+             <KpiCard 
+                title="Potential Savings" 
+                value={`${formatCurrency(metrics.potentialSavings, 0)} ${currencySymbol}`} 
+                icon={<PiggyBank />} 
+                color="emerald" 
+             />
+         </div>
          <KpiCard 
             title="Weighted Org. Rank" 
             value={metrics.weightedRank.toFixed(1)} 
