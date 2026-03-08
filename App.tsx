@@ -357,6 +357,17 @@ const App: React.FC = () => {
       }
       
       console.log("Cuentas finales encontradas:", allLeafAccounts);
+      
+      // Add "All Accounts" option if there are multiple accounts
+      if (allLeafAccounts.length > 1) {
+          const allOption: Sa360Customer = {
+              resourceName: 'all',
+              id: 'all',
+              descriptiveName: `All Accounts (${allLeafAccounts.length})`
+          };
+          allLeafAccounts.unshift(allOption);
+      }
+      
       setAvailableSa360SubAccounts(allLeafAccounts);
       
       if (allLeafAccounts.length > 0) {
@@ -617,11 +628,7 @@ const App: React.FC = () => {
               AND segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
          `;
          
-         const fetchSa360 = async (query: string) => {
-            if (!selectedSa360SubAccount) {
-                throw new Error("No SA360 sub-account selected");
-            }
-            
+         const fetchSa360 = async (query: string, targetId: string) => {
             if (!sa360Auth?.token) {
                 throw new Error("SA360 token is missing");
             }
@@ -635,8 +642,8 @@ const App: React.FC = () => {
                 headers['login-customer-id'] = selectedSa360Customer.id.toString().replace(/-/g, '');
             }
             
-            const targetId = selectedSa360SubAccount.id.toString().replace(/-/g, '');
-            const res = await fetch(`/api/sa360/v0/customers/${targetId}/searchAds360:searchStream`, {
+            const cleanTargetId = targetId.toString().replace(/-/g, '');
+            const res = await fetch(`/api/sa360/v0/customers/${cleanTargetId}/searchAds360:searchStream`, {
                 method: 'POST',
                 headers: headers,
                 body: JSON.stringify({ query })
@@ -644,8 +651,8 @@ const App: React.FC = () => {
             
             if (!res.ok) {
                 const text = await res.text();
-                console.error("SA360 API Error:", text);
-                throw new Error(`SA360 Error: ${res.status} - ${text.substring(0, 100)}`);
+                console.error(`SA360 API Error for ${targetId}:`, text);
+                return []; // Return empty on error to allow other requests to succeed
             }
             
             const json = await res.json();
@@ -653,7 +660,27 @@ const App: React.FC = () => {
          };
          
          try {
-            const [urlRows, kwRows] = await Promise.all([fetchSa360(sa360UrlQuery), fetchSa360(sa360KwQuery)]);
+            let accountsToFetch: string[] = [];
+            
+            if (selectedSa360SubAccount.id === 'all') {
+                // Filter out the 'all' option itself to get real IDs
+                accountsToFetch = availableSa360SubAccounts
+                    .filter(acc => acc.id !== 'all')
+                    .map(acc => acc.id);
+            } else {
+                accountsToFetch = [selectedSa360SubAccount.id];
+            }
+            
+            // Parallel Fetching
+            const allUrlPromises = accountsToFetch.map(id => fetchSa360(sa360UrlQuery, id));
+            const allKwPromises = accountsToFetch.map(id => fetchSa360(sa360KwQuery, id));
+
+            const urlResults = await Promise.all(allUrlPromises);
+            const kwResults = await Promise.all(allKwPromises);
+
+            // Flatten results
+            const urlRows = urlResults.flat();
+            const kwRows = kwResults.flat();
             
             // Join keywords with URLs in memory via ad_group.resource_name
             // Build a map: adGroupResourceName -> first finalUrl found
