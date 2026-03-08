@@ -33,7 +33,8 @@ export const SearchEfficiencyView: React.FC<{
   availableSa360SubAccounts: Sa360Customer[];
   selectedSa360SubAccount: Sa360Customer | null;
   setSelectedSa360SubAccount: (account: Sa360Customer | null) => void;
-}> = ({ data, brandRegexStr, currencySymbol, globalMetrics, availableSa360SubAccounts, selectedSa360SubAccount, setSelectedSa360SubAccount }) => {
+  totalGscClicks: number;
+}> = ({ data, brandRegexStr, currencySymbol, globalMetrics, availableSa360SubAccounts, selectedSa360SubAccount, setSelectedSa360SubAccount, totalGscClicks }) => {
   const [querySegmentFilter, setQuerySegmentFilter] = useState<'All' | 'Brand' | 'Non-Brand'>('All');
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -150,7 +151,10 @@ export const SearchEfficiencyView: React.FC<{
     
     const potentialSavings = filteredData.reduce((sum, d) => sum + d.brandTax, 0);
     // Calculate components for Organic Value Tooltip
-    const totalOrganicClicks = filteredData.reduce((sum, d) => sum + d.organicClicks, 0);
+    // If no filters are applied, use the total GSC clicks passed from App.tsx (matches SEO Performance tab)
+    // Otherwise, sum the filtered rows.
+    const isFiltered = querySegmentFilter !== 'All' || searchTerm !== '';
+    const totalOrganicClicks = (!isFiltered && totalGscClicks > 0) ? totalGscClicks : filteredData.reduce((sum, d) => sum + d.organicClicks, 0);
     
     // User Request: Est Organic Value = GSC Clicks * Avg CPC (from SA360)
     const appliedAvgCpc = globalMetrics ? globalMetrics.avgCpc : (

@@ -897,15 +897,15 @@ const App: React.FC = () => {
             });
 
             // IF ALL ACCOUNTS: Add a summary row to ensure Total Paid Cost is correct in Scorecards
-            if (isAllAccounts && globalTotalCost > 0) {
+            if (isAllAccounts && globalMetrics.totalCost > 0) {
                 sa360KwResults.push({
                     keyword: "Total Paid Search (Overview)",
                     url: "All Accounts Aggregated",
                     organicRank: null,
                     organicClicks: 0,
-                    paidSessions: globalTotalClicks,
+                    paidSessions: globalMetrics.totalClicks,
                     paidCvr: 0,
-                    ppcCost: globalTotalCost,
+                    ppcCost: globalMetrics.totalCost,
                     avgCpc: globalAvgCpc,
                     actionLabel: "MONITOR",
                     dataSource: 'SA360'
@@ -1844,6 +1844,7 @@ const App: React.FC = () => {
                  availableSa360SubAccounts={availableSa360SubAccounts}
                  selectedSa360SubAccount={selectedSa360SubAccount}
                  setSelectedSa360SubAccount={setSelectedSa360SubAccount}
+                 totalGscClicks={gscTotals.clicks}
               />
           )}
           
