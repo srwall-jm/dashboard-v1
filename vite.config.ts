@@ -5,10 +5,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api/sa360': {
-        target: 'https://searchads360.googleapis.com',
+      '/api/googleads': {
+        target: 'https://googleads.googleapis.com',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/sa360/, ''),
+        rewrite: (path) => path.replace(/^\/api\/googleads/, ''),
       },
     },
   },

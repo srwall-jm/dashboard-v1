@@ -5,7 +5,7 @@ import {
 import { 
   DollarSign, TrendingUp, PiggyBank, Target, AlertTriangle, CheckCircle, Search, FileText, Info, Zap, ChevronUp, ChevronDown, Key, ExternalLink, Filter
 } from 'lucide-react';
-import { KeywordBridgeData, Sa360GlobalMetrics, Sa360Customer } from '../types';
+import { KeywordBridgeData, GoogleAdsGlobalMetrics, GoogleAdsCustomer } from '../types';
 import { KpiCard } from '../components/KpiCard';
 import { EmptyState } from '../components/EmptyState';
 import { exportToCSV } from '../utils';
@@ -29,12 +29,9 @@ export const SearchEfficiencyView: React.FC<{
   data: KeywordBridgeData[]; 
   brandRegexStr: string;
   currencySymbol: string; 
-  globalMetrics: Sa360GlobalMetrics | null;
-  availableSa360SubAccounts: Sa360Customer[];
-  selectedSa360SubAccount: Sa360Customer | null;
-  setSelectedSa360SubAccount: (account: Sa360Customer | null) => void;
+  globalMetrics: GoogleAdsGlobalMetrics | null;
   totalGscClicks: number;
-}> = ({ data, brandRegexStr, currencySymbol, globalMetrics, availableSa360SubAccounts, selectedSa360SubAccount, setSelectedSa360SubAccount, totalGscClicks }) => {
+}> = ({ data, brandRegexStr, currencySymbol, globalMetrics, totalGscClicks }) => {
   const [querySegmentFilter, setQuerySegmentFilter] = useState<'All' | 'Brand' | 'Non-Brand'>('All');
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -156,7 +153,7 @@ export const SearchEfficiencyView: React.FC<{
     const isFiltered = querySegmentFilter !== 'All' || searchTerm !== '';
     const totalOrganicClicks = (!isFiltered && totalGscClicks > 0) ? totalGscClicks : filteredData.reduce((sum, d) => sum + d.organicClicks, 0);
     
-    // User Request: Est Organic Value = GSC Clicks * Avg CPC (from SA360)
+    // User Request: Est Organic Value = GSC Clicks * Avg CPC (from Google Ads)
     const appliedAvgCpc = globalMetrics ? globalMetrics.avgCpc : (
         // Fallback calculation if globalMetrics is missing
         filteredData.reduce((sum, d) => sum + d.paidSessions, 0) > 0 
@@ -295,32 +292,6 @@ export const SearchEfficiencyView: React.FC<{
             icon={<TrendingUp />} 
             color="sky" 
          />
-      </div>
-
-      {/* SUB-ACCOUNT FILTER */}
-      <div className="flex justify-end">
-          <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
-             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest pl-2">Filter Account:</span>
-             <select 
-                 className="bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-bold py-1.5 px-3 outline-none min-w-[200px] border-l-4 border-l-orange-400 cursor-pointer hover:bg-slate-100 transition-colors"
-                 value={selectedSa360SubAccount?.resourceName || 'all'}
-                 onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === 'all') {
-                        // Find the 'all' option
-                        const allOpt = availableSa360SubAccounts.find(cx => cx.id === 'all');
-                        setSelectedSa360SubAccount(allOpt || null);
-                    } else {
-                        const c = availableSa360SubAccounts.find(cx => cx.resourceName === val);
-                        setSelectedSa360SubAccount(c || null);
-                    }
-                 }}
-             >
-                 {availableSa360SubAccounts.map(c => (
-                 <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName} {c.id !== 'all' ? `(${c.id})` : ''}</option>
-                 ))}
-             </select>
-          </div>
       </div>
 
       {/* Section 2: Efficiency Matrix */}

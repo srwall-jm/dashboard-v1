@@ -3,12 +3,12 @@ export async function onRequest(context) {
   const url = new URL(context.request.url);
 
   // Si la URL contiene nuestro prefijo de API
-  if (url.pathname.includes('/api/sa360/')) {
-    // 1. Extraemos la parte de Google (después de /api/sa360)
-    const parts = url.pathname.split('/api/sa360');
+  if (url.pathname.includes('/api/googleads/')) {
+    // 1. Extraemos la parte de Google (después de /api/googleads)
+    const parts = url.pathname.split('/api/googleads');
     const apiPath = parts[1]; 
     
-    const targetUrl = `https://searchads360.googleapis.com${apiPath}${url.search}`;
+    const targetUrl = `https://googleads.googleapis.com${apiPath}${url.search}`;
 
     // 2. Filtramos cabeceras conflictivas
     const newHeaders = new Headers();

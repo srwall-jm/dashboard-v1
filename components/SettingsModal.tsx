@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { X, Cpu, Settings2, Database, ExternalLink, Search, CornerDownRight } from 'lucide-react';
-import { Ga4Property, GscSite, Sa360Customer } from '../types';
+import { Ga4Property, GscSite, GoogleAdsCustomer } from '../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -14,43 +14,40 @@ interface SettingsModalProps {
   setBrandRegexStr: (str: string) => void;
   ga4Auth: any;
   gscAuth: any;
-  sa360Auth: any;
+  googleAdsAuth: any;
   handleConnectGa4: () => void;
   handleConnectGsc: () => void;
-  handleConnectSa360: () => void;
+  handleConnectGoogleAds: () => void;
   ga4Search: string;
   setGa4Search: (s: string) => void;
   gscSearch: string;
   setGscSearch: (s: string) => void;
-  sa360Search: string;
-  setSa360Search: (s: string) => void;
+  googleAdsSearch: string;
+  setGoogleAdsSearch: (s: string) => void;
   availableProperties: Ga4Property[];
   availableSites: GscSite[];
-  availableSa360Customers: Sa360Customer[];
-  availableSa360SubAccounts?: Sa360Customer[];
-  selectedSa360Customer?: Sa360Customer | null;
-  selectedSa360SubAccount?: Sa360Customer | null;
-  onSa360CustomerChange?: (customer: Sa360Customer | null) => void;
-  onSa360SubAccountChange?: (customer: Sa360Customer | null) => void;
+  availableGoogleAdsCustomers: GoogleAdsCustomer[];
+  selectedGoogleAdsCustomer?: GoogleAdsCustomer | null;
+  onGoogleAdsCustomerChange?: (customer: GoogleAdsCustomer | null) => void;
   setGa4Auth: (auth: any) => void;
   setGscAuth: (auth: any) => void;
-  setSa360Auth: (auth: any) => void;
+  setGoogleAdsAuth: (auth: any) => void;
   filteredProperties: Ga4Property[];
   filteredSites: GscSite[];
-  filteredSa360Customers: Sa360Customer[];
+  filteredGoogleAdsCustomers: GoogleAdsCustomer[];
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen, onClose,
   aiProvider, setAiProvider, openaiKey, setOpenaiKey,
   brandRegexStr, setBrandRegexStr,
-  ga4Auth, gscAuth, sa360Auth,
-  handleConnectGa4, handleConnectGsc, handleConnectSa360,
-  ga4Search, setGa4Search, gscSearch, setGscSearch, sa360Search, setSa360Search,
-  availableProperties, availableSites, availableSa360Customers, availableSa360SubAccounts,
-  selectedSa360Customer, selectedSa360SubAccount, onSa360CustomerChange, onSa360SubAccountChange,
-  setGa4Auth, setGscAuth, setSa360Auth,
-  filteredProperties, filteredSites, filteredSa360Customers
+  ga4Auth, gscAuth, googleAdsAuth,
+  handleConnectGa4, handleConnectGsc, handleConnectGoogleAds,
+  ga4Search, setGa4Search, gscSearch, setGscSearch, googleAdsSearch, setGoogleAdsSearch,
+  availableProperties, availableSites, availableGoogleAdsCustomers,
+  selectedGoogleAdsCustomer, onGoogleAdsCustomerChange,
+  setGa4Auth, setGscAuth, setGoogleAdsAuth,
+  filteredProperties, filteredSites, filteredGoogleAdsCustomers
 }) => {
   if (!isOpen) return null;
 
@@ -120,11 +117,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   )}
                </div>
 
-               {/* SA360 */}
+               {/* Google Ads */}
                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                  <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest block mb-2">Search Ads 360</label>
-                  {!sa360Auth?.token ? (
-                    <button onClick={handleConnectSa360} className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Connect SA360</button>
+                  <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest block mb-2">Google Ads</label>
+                  {!googleAdsAuth?.token ? (
+                    <button onClick={handleConnectGoogleAds} className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Connect Google Ads</button>
                   ) : (
                     <div className="space-y-3">
                       {/* Main Account Selection */}
@@ -132,47 +129,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <label className="text-[8px] font-bold text-slate-500 uppercase">Main Account / Manager</label>
                         <select 
                             className="w-full bg-white border border-slate-200 rounded-xl text-[10px] p-2 outline-none cursor-pointer" 
-                            value={selectedSa360Customer?.resourceName || ''} 
+                            value={selectedGoogleAdsCustomer?.resourceName || ''} 
                             onChange={e => {
-                                const cust = availableSa360Customers.find(c => c.resourceName === e.target.value) || null;
-                                if (onSa360CustomerChange) onSa360CustomerChange(cust);
+                                const cust = availableGoogleAdsCustomers.find(c => c.resourceName === e.target.value) || null;
+                                if (onGoogleAdsCustomerChange) onGoogleAdsCustomerChange(cust);
                             }}
                         >
-                            {filteredSa360Customers.map(c => <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName} ({c.id})</option>)}
+                            {filteredGoogleAdsCustomers.map(c => <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName} ({c.id})</option>)}
                         </select>
                       </div>
-
-                      {/* Sub Account Selection */}
-                      {selectedSa360Customer && availableSa360SubAccounts && (
-                          <div className="space-y-1 animate-in fade-in slide-in-from-top-1">
-                              <label className="text-[8px] font-bold text-slate-500 uppercase flex items-center gap-1"><CornerDownRight size={10} /> Sub Account / Client</label>
-                              <select 
-                                  className="w-full bg-white border border-slate-200 rounded-xl text-[10px] p-2 outline-none cursor-pointer border-l-4 border-l-orange-400" 
-                                  value={selectedSa360SubAccount?.resourceName || ''} 
-                                  onChange={e => {
-                                      const cust = availableSa360SubAccounts.find(c => c.resourceName === e.target.value) || null;
-                                      if (onSa360SubAccountChange) onSa360SubAccountChange(cust);
-                                  }}
-                                  disabled={availableSa360SubAccounts.length === 0}
-                              >
-                                  {availableSa360SubAccounts.length === 0 && <option value="">No sub-accounts found</option>}
-                                  {availableSa360SubAccounts.map(c => {
-                                      // Visual Indentation based on Level
-                                      // Level 0 (Direct/Root) -> No indent
-                                      // Level 1 -> 2 spaces
-                                      // Level 2 -> 4 spaces
-                                      const indent = c.level ? '\u00A0\u00A0'.repeat(c.level) : ''; 
-                                      const suffix = c.isManager ? ' (Mgr)' : '';
-                                      return (
-                                        <option key={c.resourceName} value={c.resourceName}>
-                                            {indent}{c.descriptiveName}{suffix} ({c.id})
-                                        </option>
-                                      );
-                                  })}
-                              </select>
-                          </div>
-                      )}
-
                       <div className="flex items-center gap-1.5 text-[9px] text-emerald-600 font-bold px-1 pt-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> Connected</div>
                     </div>
                   )}

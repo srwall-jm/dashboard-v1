@@ -6,7 +6,7 @@ import {
 import { 
   AlertOctagon, Zap, ShieldCheck, FileText, ExternalLink, Search, Filter, ChevronDown, ChevronRight, ChevronUp, CornerDownRight, BarChart2, TrendingUp, DollarSign, Info, LayoutList, Key, Settings, CheckSquare, Square
 } from 'lucide-react';
-import { BridgeData, DailyData, KeywordBridgeData, Sa360Customer } from '../types';
+import { BridgeData, DailyData, KeywordBridgeData, GoogleAdsCustomer } from '../types';
 import { exportToCSV, formatDate } from '../utils';
 import { KpiCard } from '../components/KpiCard';
 import { ComparisonTooltip } from '../components/ComparisonTooltip'; 
@@ -245,10 +245,10 @@ const BridgeAnalysisTable: React.FC<{
 
   // Dynamic Labeling based on Data Source
   const chartLabels = useMemo(() => {
-    if (dataSourceName === 'SA360') {
+    if (dataSourceName === 'GOOGLE_ADS') {
       return {
         organic: "Org. Sessions (GA4)",
-        paid: "SA360 Clicks",
+        paid: "Google Ads Clicks",
         paidColor: "#ea580c" // Orange-600
       };
     }
@@ -489,23 +489,19 @@ const BridgeAnalysisTable: React.FC<{
 
 export const SeoPpcBridgeView: React.FC<{
   ga4Data: BridgeData[];
-  sa360Data: BridgeData[];
+  googleAdsData: BridgeData[];
   ga4KeywordData: KeywordBridgeData[];
-  sa360KeywordData: KeywordBridgeData[];
+  googleAdsKeywordData: KeywordBridgeData[];
   dailyData: DailyData[];
   currencySymbol: string;
-  availableSa360Customers: Sa360Customer[];
-  selectedSa360Customer: Sa360Customer | null;
-  onSa360CustomerChange: (c: Sa360Customer | null) => void;
-  availableSa360SubAccounts: Sa360Customer[];
-  selectedSa360SubAccount: Sa360Customer | null;
-  setSelectedSa360SubAccount: (c: Sa360Customer | null) => void;
+  availableGoogleAdsCustomers: GoogleAdsCustomer[];
+  selectedGoogleAdsCustomer: GoogleAdsCustomer | null;
+  onGoogleAdsCustomerChange: (c: GoogleAdsCustomer | null) => void;
 }> = ({ 
-  ga4Data, sa360Data, ga4KeywordData, sa360KeywordData, dailyData, currencySymbol,
-  availableSa360Customers, selectedSa360Customer, onSa360CustomerChange,
-  availableSa360SubAccounts, selectedSa360SubAccount, setSelectedSa360SubAccount
+  ga4Data, googleAdsData, ga4KeywordData, googleAdsKeywordData, dailyData, currencySymbol,
+  availableGoogleAdsCustomers, selectedGoogleAdsCustomer, onGoogleAdsCustomerChange
 }) => {
-  const [activeDataSource, setActiveDataSource] = useState<'GA4' | 'SA360'>('GA4');
+  const [activeDataSource, setActiveDataSource] = useState<'GA4' | 'GOOGLE_ADS'>('GA4');
 
   return (
     <div className="space-y-6">
@@ -520,11 +516,11 @@ export const SeoPpcBridgeView: React.FC<{
                 GA4 Data (Sessions)
              </button>
              <button 
-                onClick={() => setActiveDataSource('SA360')}
-                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeDataSource === 'SA360' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                onClick={() => setActiveDataSource('GOOGLE_ADS')}
+                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeDataSource === 'GOOGLE_ADS' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
              >
-                <div className="w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-[8px]">S</div>
-                SA360 Data (Paid Search)
+                <div className="w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-[8px]">G</div>
+                Google Ads Data (Paid Search)
              </button>
           </div>
        </div>
@@ -541,12 +537,12 @@ export const SeoPpcBridgeView: React.FC<{
            />
        ) : (
            <BridgeAnalysisTable 
-              title="SA360 Paid Search vs Organic" 
-              subTitle="Comparing Organic Sessions vs SA360 Clicks/Sessions"
-              data={selectedSa360SubAccount?.id === 'all' ? [] : sa360Data}
-              keywordData={selectedSa360SubAccount?.id === 'all' ? [] : sa360KeywordData}
-              metricLabel="SA360 Clicks"
-              dataSourceName="SA360"
+              title="Google Ads Paid Search vs Organic" 
+              subTitle="Comparing Organic Sessions vs Google Ads Clicks/Sessions"
+              data={googleAdsData}
+              keywordData={googleAdsKeywordData}
+              metricLabel="Google Ads Clicks"
+              dataSourceName="GOOGLE_ADS"
               dailyData={dailyData}
               headerContent={
                   <div className="flex items-center gap-4 ml-4">
@@ -554,50 +550,18 @@ export const SeoPpcBridgeView: React.FC<{
                         <span className="text-[9px] font-bold text-slate-400">Manager:</span>
                         <select 
                             className="bg-slate-50 border border-slate-200 rounded-lg text-[9px] font-bold py-1 px-2 outline-none max-w-[150px]"
-                            value={selectedSa360Customer?.resourceName || ''}
+                            value={selectedGoogleAdsCustomer?.resourceName || ''}
                             onChange={(e) => {
-                            const c = availableSa360Customers.find(cx => cx.resourceName === e.target.value);
-                            onSa360CustomerChange(c || null);
+                            const c = availableGoogleAdsCustomers.find(cx => cx.resourceName === e.target.value);
+                            onGoogleAdsCustomerChange(c || null);
                             }}
                         >
-                            {availableSa360Customers.map(c => (
+                            {availableGoogleAdsCustomers.map(c => (
                             <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName}</option>
                             ))}
                         </select>
                      </div>
-
-                     <div className="flex items-center gap-2">
-                        <span className="text-[9px] font-bold text-slate-400">Client Account:</span>
-                        <select 
-                            className="bg-slate-50 border border-slate-200 rounded-lg text-[9px] font-bold py-1 px-2 outline-none max-w-[200px] border-l-4 border-l-orange-400"
-                            value={selectedSa360SubAccount?.resourceName || ''}
-                            onChange={(e) => {
-                            const c = availableSa360SubAccounts.find(cx => cx.resourceName === e.target.value);
-                            setSelectedSa360SubAccount(c || null);
-                            }}
-                            disabled={availableSa360SubAccounts.length === 0}
-                        >
-                            {availableSa360SubAccounts.length === 0 && <option value="">No accounts found</option>}
-                            {availableSa360SubAccounts.map(c => (
-                            <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName} {c.id !== 'all' ? `(${c.id})` : ''}</option>
-                            ))}
-                        </select>
-                     </div>
                   </div>
-              }
-              customEmptyState={
-                  selectedSa360SubAccount?.id === 'all' ? (
-                     <div className="bg-white p-12 rounded-[32px] border border-slate-200 shadow-sm text-center">
-                         <div className="w-16 h-16 bg-orange-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                             <Filter className="text-orange-500" size={32} />
-                         </div>
-                         <h3 className="text-lg font-black text-slate-900 mb-2">Select a Client Account</h3>
-                         <p className="text-slate-500 text-xs max-w-md mx-auto">
-                             "All Accounts" mode provides high-level performance overview. 
-                             To view detailed URL and Keyword bridge analysis, please select a specific sub-account from the dropdown above.
-                         </p>
-                     </div>
-                  ) : undefined
               }
            />
        )}

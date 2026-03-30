@@ -5,7 +5,7 @@ export enum DashboardTab {
   KEYWORD_DEEP_DIVE = 'KEYWORD_DEEP_DIVE',
   PPC_SEO_BRIDGE = 'PPC_SEO_BRIDGE',
   AI_TRAFFIC_MONITOR = 'AI_TRAFFIC_MONITOR',
-  SA360_PERFORMANCE = 'SA360_PERFORMANCE',
+  GOOGLE_ADS_PERFORMANCE = 'GOOGLE_ADS_PERFORMANCE',
   SEARCH_EFFICIENCY = 'SEARCH_EFFICIENCY'
 }
 
@@ -76,18 +76,12 @@ export interface GscSite {
   siteUrl: string;
 }
 
-export interface Sa360Customer {
+export interface GoogleAdsCustomer {
   resourceName: string;
   id: string;
   descriptiveName?: string;
   level?: number;
   isManager?: boolean;
-}
-
-export interface GoogleAdsCustomer {
-  id: string;
-  resourceName: string;
-  name: string;
 }
 
 export interface BridgeData {
@@ -100,13 +94,13 @@ export interface BridgeData {
   ppcCost: number;
   ppcConversions: number;
   ppcCpa: number;
-  ppcSessions: number; // Value depends on dataSource (GA4=Sessions, SA360=Clicks)
+  ppcSessions: number; // Value depends on dataSource (GA4=Sessions, GoogleAds=Clicks)
   ppcImpressions: number;
   blendedCostRatio: number;
   actionLabel: string;
   status?: string;
   ppcSourceMedium?: string;
-  dataSource: 'GA4' | 'SA360';
+  dataSource: 'GA4' | 'GOOGLE_ADS';
   gscTopQueries?: { query: string; rank: number; clicks: number }[]; // NEW: Top 10 Queries
 }
 
@@ -120,10 +114,10 @@ export interface KeywordBridgeData {
   ppcCost: number; // Added for Efficiency View
   avgCpc: number;  // Added for Efficiency View
   actionLabel: string;
-  dataSource: 'GA4' | 'SA360'; 
+  dataSource: 'GA4' | 'GOOGLE_ADS'; 
 }
 
-export interface Sa360GlobalMetrics {
+export interface GoogleAdsGlobalMetrics {
   totalCost: number;
   totalClicks: number;
   totalConversions: number;

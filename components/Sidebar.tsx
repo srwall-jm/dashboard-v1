@@ -103,10 +103,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           />
           <SidebarLink 
             isCollapsed={isCollapsed}
-            active={activeTab === DashboardTab.SA360_PERFORMANCE} 
-            onClick={() => setActiveTab(DashboardTab.SA360_PERFORMANCE)} 
+            active={activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE} 
+            onClick={() => setActiveTab(DashboardTab.GOOGLE_ADS_PERFORMANCE)} 
             icon={<Megaphone />} 
-            label="SA360 Performance" 
+            label="Google Ads Performance" 
           />
            <SidebarLink 
             isCollapsed={isCollapsed}

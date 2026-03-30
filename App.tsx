@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   RefreshCw, Filter, Globe, Tag, AlertCircle, Sparkles, Cpu, Activity, Menu, X
 } from 'lucide-react';
-import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, Sa360Customer, QueryType, BridgeData, AiTrafficData, KeywordBridgeData } from './types';
+import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, GoogleAdsCustomer, QueryType, BridgeData, AiTrafficData, KeywordBridgeData, GoogleAdsGlobalMetrics } from './types';
 import { getDashboardInsights, getOpenAiInsights } from './geminiService';
 import GoogleLogin from './GoogleLogin'; 
 import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry, extractPath, AI_SOURCE_REGEX_STRING } from './utils';
@@ -16,13 +16,14 @@ import { SeoMarketplaceView } from './views/SeoMarketplaceView';
 import { SeoDeepDiveView } from './views/SeoDeepDiveView';
 import { SeoPpcBridgeView } from './views/SeoPpcBridgeView';
 import { AiTrafficView } from './views/AiTrafficView';
-import { Sa360PerformanceView } from './views/Sa360PerformanceView';
+import { GoogleAdsPerformanceView } from './views/GoogleAdsPerformanceView';
 import { SearchEfficiencyView } from './views/SearchEfficiencyView';
 
 const CLIENT_ID = "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com"; 
+const DEVELOPER_TOKEN = import.meta.env.VITE_GOOGLE_ADS_DEVELOPER_TOKEN || "oZ5EnjmTqUCcS8dZbRjulA"; // Reemplaza con tu Developer Token de Google Ads
 const SCOPE_GA4 = "https://www.googleapis.com/auth/analytics.readonly";
 const SCOPE_GSC = "https://www.googleapis.com/auth/webmasters.readonly";
-const SCOPE_SA360 = "https://www.googleapis.com/auth/doubleclicksearch";
+const SCOPE_GOOGLE_ADS = "https://www.googleapis.com/auth/adwords";
 
 const PRIORITY_DIMENSIONS = [
   'sessionDefaultChannelGroup',
@@ -51,37 +52,36 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : null;
   });
   
-  const [sa360Auth, setSa360Auth] = useState<{ token: string; customer: Sa360Customer | null } | null>(() => {
-    const saved = sessionStorage.getItem('sa360_auth');
+  const [googleAdsAuth, setGoogleAdsAuth] = useState<{ token: string; customer: GoogleAdsCustomer | null } | null>(() => {
+    const saved = sessionStorage.getItem('googleads_auth');
     return saved ? JSON.parse(saved) : null;
   });
   
   const [availableProperties, setAvailableProperties] = useState<Ga4Property[]>([]);
   const [availableSites, setAvailableSites] = useState<GscSite[]>([]);
   
-  // SA360: Main Accounts (Managers) and Sub Accounts (Clients)
-  const [availableSa360Customers, setAvailableSa360Customers] = useState<Sa360Customer[]>([]);
-  const [availableSa360SubAccounts, setAvailableSa360SubAccounts] = useState<Sa360Customer[]>([]);
+  // Google Ads: Main Accounts (Managers) and Sub Accounts (Clients)
+  const [availableGoogleAdsCustomers, setAvailableGoogleAdsCustomers] = useState<GoogleAdsCustomer[]>([]);
+  const [availableGoogleAdsSubAccounts, setAvailableGoogleAdsSubAccounts] = useState<GoogleAdsCustomer[]>([]);
   
   // Track selected Manager and selected Sub-account
-  const [selectedSa360Customer, setSelectedSa360Customer] = useState<Sa360Customer | null>(null);
-  const [selectedSa360SubAccount, setSelectedSa360SubAccount] = useState<Sa360Customer | null>(null);
+  const [selectedGoogleAdsCustomer, setSelectedGoogleAdsCustomer] = useState<GoogleAdsCustomer | null>(null);
   
   const [availableDimensions, setAvailableDimensions] = useState<{ label: string; value: string }[]>([]);
   const [currencySymbol, setCurrencySymbol] = useState('€');
   
   const [ga4Search, setGa4Search] = useState('');
   const [gscSearch, setGscSearch] = useState('');
-  const [sa360Search, setSa360Search] = useState('');
+  const [googleAdsSearch, setGoogleAdsSearch] = useState('');
   
   const [realDailyData, setRealDailyData] = useState<DailyData[]>([]);
   const [realKeywordData, setRealKeywordData] = useState<KeywordData[]>([]);
   
-  const [sa360GlobalMetrics, setSa360GlobalMetrics] = useState<Sa360GlobalMetrics | null>(null);
+  const [googleAdsGlobalMetrics, setGoogleAdsGlobalMetrics] = useState<GoogleAdsGlobalMetrics | null>(null);
   const [bridgeDataGA4, setBridgeDataGA4] = useState<BridgeData[]>([]); 
-  const [bridgeDataSA360, setBridgeDataSA360] = useState<BridgeData[]>([]); 
+  const [bridgeDataGoogleAds, setBridgeDataGoogleAds] = useState<BridgeData[]>([]); 
   const [keywordBridgeDataGA4, setKeywordBridgeDataGA4] = useState<KeywordBridgeData[]>([]);
-  const [keywordBridgeDataSA360, setKeywordBridgeDataSA360] = useState<KeywordBridgeData[]>([]);
+  const [keywordBridgeDataGoogleAds, setKeywordBridgeDataGoogleAds] = useState<KeywordBridgeData[]>([]);
   
   const [aiTrafficData, setAiTrafficData] = useState<AiTrafficData[]>([]); 
   const [gscDailyTotals, setGscDailyTotals] = useState<any[]>([]);
@@ -91,7 +91,7 @@ const App: React.FC = () => {
   const [isLoadingGsc, setIsLoadingGsc] = useState(false);
   const [isLoadingBridge, setIsLoadingBridge] = useState(false);
   const [isLoadingAi, setIsLoadingAi] = useState(false);
-  const [isLoadingSa360, setIsLoadingSa360] = useState(false);
+  const [isLoadingGoogleAds, setIsLoadingGoogleAds] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -114,7 +114,7 @@ const App: React.FC = () => {
     [DashboardTab.SEO_BY_COUNTRY]: null,
     [DashboardTab.KEYWORD_DEEP_DIVE]: null,
     [DashboardTab.PPC_SEO_BRIDGE]: null,
-    [DashboardTab.SA360_PERFORMANCE]: null,
+    [DashboardTab.GOOGLE_ADS_PERFORMANCE]: null,
     [DashboardTab.AI_TRAFFIC_MONITOR]: null,
     [DashboardTab.SEARCH_EFFICIENCY]: null
   });
@@ -139,7 +139,7 @@ const App: React.FC = () => {
   
   const tokenClientGa4 = useRef<any>(null);
   const tokenClientGsc = useRef<any>(null);
-  const tokenClientSa360 = useRef<any>(null);
+  const tokenClientGoogleAds = useRef<any>(null);
   
   const isBranded = (text: string) => {
     if (!text || text.trim() === '') return false;
@@ -248,18 +248,25 @@ const App: React.FC = () => {
     }
   };
   
-  const fetchSa360Customers = async (token: string) => {
+  const fetchGoogleAdsCustomers = async (token: string) => {
     try {
-        setIsLoadingSa360(true);
-        const resp = await fetch('/api/sa360/v0/customers:listAccessibleCustomers', {
+        setIsLoadingGoogleAds(true);
+        const resp = await fetch('/api/googleads/v21/customers:listAccessibleCustomers', {
             method: 'GET',
-            headers: { Authorization: `Bearer ${token}` }
+            headers: { 
+              'Authorization': `Bearer ${token}`,
+              'developer-token': DEVELOPER_TOKEN
+            }
         });
         
-        if (!resp.ok) throw new Error(`SA360 Status: ${resp.status}`);
+        if (!resp.ok) {
+            const errData = await resp.json().catch(() => ({}));
+            const errMsg = errData.error?.message || `Google Ads Status: ${resp.status}`;
+            throw new Error(errMsg);
+        }
         const data = await resp.json();
         
-        const customers: Sa360Customer[] = (data.resourceNames || []).map((rn: string) => {
+        const customers: GoogleAdsCustomer[] = (data.resourceNames || []).map((rn: string) => {
             const id = rn.split('/')[1];
             return {
                 resourceName: rn,
@@ -268,29 +275,29 @@ const App: React.FC = () => {
             };
         });
         
-        setAvailableSa360Customers(customers);
+        setAvailableGoogleAdsCustomers(customers);
         
         if (customers.length > 0) {
-           if (!sa360Auth?.customer) {
-               setSa360Auth({ token, customer: customers[0] });
+           if (!googleAdsAuth?.customer) {
+               setGoogleAdsAuth({ token, customer: customers[0] });
            }
-           if (!selectedSa360Customer) {
+           if (!selectedGoogleAdsCustomer) {
                const defaultCust = customers[0];
-               setSelectedSa360Customer(defaultCust);
-               fetchSa360SubAccounts(token, defaultCust.id);
+               setSelectedGoogleAdsCustomer(defaultCust);
+               fetchGoogleAdsSubAccounts(token, defaultCust.id);
            }
         }
-    } catch (e) {
+    } catch (e: any) {
         console.error(e);
-        setError("Error connecting to Search Ads 360 API.");
+        setError(`Error connecting to Google Ads API: ${e.message || 'Unknown error'}`);
     } finally {
-        setIsLoadingSa360(false);
+        setIsLoadingGoogleAds(false);
     }
   };
   
-  const fetchSa360SubAccounts = async (token: string, managerId: string) => {
-    setIsLoadingSa360(true);
-    let allLeafAccounts: Sa360Customer[] = [];
+  const fetchGoogleAdsSubAccounts = async (token: string, managerId: string) => {
+    setIsLoadingGoogleAds(true);
+    let allLeafAccounts: GoogleAdsCustomer[] = [];
     let processingQueue = [managerId];
     let processedIds = new Set<string>();
     
@@ -307,16 +314,17 @@ const App: React.FC = () => {
             customer_client.manager, 
             customer_client.status, 
             customer_client.id
-          FROM customer_client 
-          WHERE customer_client.status = 'ENABLED'
+          FROM customer_client
+          WHERE customer_client.level <= 1
         `.trim();
         
-        const targetUrl = `/api/sa360/v0/customers/${currentId}/searchAds360:searchStream`;
+        const targetUrl = `/api/googleads/v21/customers/${currentId}/googleAds:search`;
         const resp = await fetch(targetUrl, {
           method: 'POST',
           headers: { 
             'Authorization': `Bearer ${token}`, 
             'Content-Type': 'application/json',
+            'developer-token': DEVELOPER_TOKEN,
             'login-customer-id': managerId 
           },
           body: JSON.stringify({ query })
@@ -330,70 +338,65 @@ const App: React.FC = () => {
         
         const json = await resp.json();
         
-        if (Array.isArray(json)) {
-          for (const batch of json) {
-            if (!batch.results) continue;
-            for (const row of batch.results) {
-              const client = row.customerClient;
-              if (!client) continue;
-              
-              const id = String(client.id);
-              const isManager = client.manager === true;
-              const name = client.descriptiveName || 'Unnamed Account';
-              
-              if (isManager) {
-                if (!processedIds.has(id)) {
-                  processingQueue.push(id);
-                }
-              } else {
-                allLeafAccounts.push({
-                  resourceName: client.resourceName,
-                  id: id,
-                  descriptiveName: name
-                });
-              }
+        const results = json.results || [];
+        for (const row of results) {
+          const client = row.customerClient;
+          if (!client) continue;
+          
+          const id = String(client.id);
+          const isManager = client.manager === true;
+          const name = client.descriptiveName || 'Unnamed Account';
+          
+          if (isManager) {
+            if (!processedIds.has(id)) {
+              processingQueue.push(id);
             }
+          } else {
+            allLeafAccounts.push({
+              resourceName: client.resourceName,
+              id: id,
+              descriptiveName: name
+            });
           }
         }
       }
       
       // Deduplicate leaf accounts by ID to prevent double counting (e.g. if API returns recursive results)
-      const uniqueLeafAccounts = allLeafAccounts.filter((acc, index, self) => 
+      let uniqueLeafAccounts = allLeafAccounts.filter((acc, index, self) => 
           index === self.findIndex((t) => t.id === acc.id)
       );
       
+      if (uniqueLeafAccounts.length === 0) {
+          uniqueLeafAccounts = [{
+              id: managerId,
+              descriptiveName: 'Selected Account',
+              resourceName: `customers/${managerId}`
+          }];
+      }
+      
       console.log("Cuentas finales encontradas (Unique):", uniqueLeafAccounts);
       
-      // Add "All Accounts" option if there are multiple accounts
-      if (uniqueLeafAccounts.length > 1) {
-          const allOption: Sa360Customer = {
-              resourceName: 'all',
-              id: 'all',
-              descriptiveName: `All Accounts (${uniqueLeafAccounts.length})`
-          };
-          uniqueLeafAccounts.unshift(allOption);
-      }
+      setAvailableGoogleAdsSubAccounts(uniqueLeafAccounts);
       
-      setAvailableSa360SubAccounts(uniqueLeafAccounts);
-      
-      if (uniqueLeafAccounts.length > 0) {
-        setSelectedSa360SubAccount(uniqueLeafAccounts[0]);
-      }
     } catch (e) {
-      console.error("Error fetching SA360 recursive sub-accounts:", e);
-      setError("Error al obtener la jerarquía de cuentas.");
+      console.error("Error fetching Google Ads recursive sub-accounts:", e);
+      setError("Error al obtener la jerarquía de cuentas. Usando cuenta principal.");
+      setAvailableGoogleAdsSubAccounts([{
+          id: managerId,
+          descriptiveName: 'Selected Account',
+          resourceName: `customers/${managerId}`
+      }]);
     } finally {
-      setIsLoadingSa360(false);
+      setIsLoadingGoogleAds(false);
     }
   };
   
-  const handleSa360CustomerChange = (customer: Sa360Customer | null) => {
-    setSelectedSa360Customer(customer);
-    setAvailableSa360SubAccounts([]);
-    setSelectedSa360SubAccount(null);
+  const handleGoogleAdsCustomerChange = (customer: GoogleAdsCustomer | null) => {
+    setSelectedGoogleAdsCustomer(customer);
+    setAvailableGoogleAdsSubAccounts([]);
     
-    if (customer && sa360Auth?.token) {
-        fetchSa360SubAccounts(sa360Auth.token, customer.id);
+    if (customer && googleAdsAuth?.token) {
+        fetchGoogleAdsSubAccounts(googleAdsAuth.token, customer.id);
     }
   };
   
@@ -465,9 +468,9 @@ const App: React.FC = () => {
     setIsLoadingBridge(true);
     
     // --- MOCK FALLBACK IF NOTHING CONNECTED ---
-    if (!gscAuth?.token && !ga4Auth?.token && !sa360Auth?.token) {
+    if (!gscAuth?.token && !ga4Auth?.token && !googleAdsAuth?.token) {
         if (!bridgeDataGA4.length) setBridgeDataGA4(generateMockBridgeData());
-        if (!bridgeDataSA360.length) setBridgeDataSA360(generateMockBridgeData());
+        if (!bridgeDataGoogleAds.length) setBridgeDataGoogleAds(generateMockBridgeData());
         setIsLoadingBridge(false);
         return;
     }
@@ -479,6 +482,8 @@ const App: React.FC = () => {
       path = path.replace(/^https?:\/\/[^\/]+/, '');
       path = path.split('?')[0];
       path = path.split('#')[0];
+      // Remove Google Ads ValueTrack parameters like {ignore}
+      path = path.replace(/\{[^}]*\}/g, '');
       if (path.endsWith('/') && path.length > 1) { path = path.slice(0, -1); }
       if (!path.startsWith('/')) { path = '/' + path; }
       return path;
@@ -612,44 +617,40 @@ const App: React.FC = () => {
         }
     }
     
-    // 2. TRY SA360 FETCH (If Available & Selected)
-    if (sa360Auth?.token && selectedSa360SubAccount) {
-         const sa360PaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
+    // 2. TRY GOOGLE ADS FETCH (If Available & Selected)
+    if (googleAdsAuth?.token && availableGoogleAdsSubAccounts.length > 0) {
+         const googleAdsPaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
          
          // NUEVA: Mapa granular con clave URL||KEYWORD para coste específico por URL
-         const sa360KeywordUrlMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number }> = {};
-         
-         const isAllAccounts = selectedSa360SubAccount.id === 'all';
+         const googleAdsKeywordUrlMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number }> = {};
 
-         // Query 1: URL-level metrics from ad_group_ad (valid resource)
-         const sa360UrlQuery = `
+         // Query 1: URL-level metrics from landing_page_view (supports all campaign types including PMax)
+         const googleAdsUrlQuery = `
            SELECT 
-             ad_group_ad.ad.final_urls,
-             ad_group.resource_name,
+             landing_page_view.unexpanded_final_url,
+             campaign.resource_name,
              metrics.cost_micros, 
              metrics.clicks, 
              metrics.impressions, 
              metrics.conversions 
-           FROM ad_group_ad 
+           FROM landing_page_view 
            WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
          `;
          
          // Query 2: Keyword-level metrics using keyword_view (supports metrics + criterion fields)
-         const sa360KwQuery = `
+         const googleAdsKwQuery = `
             SELECT 
               ad_group_criterion.keyword.text,
-              ad_group.resource_name,
+              campaign.resource_name,
               metrics.cost_micros, 
               metrics.clicks, 
               metrics.conversions 
             FROM keyword_view
-            WHERE ad_group_criterion.type = 'KEYWORD'
-              AND ad_group.status = 'ENABLED'
-              AND segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
+            WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
          `;
 
          // Query 3: Customer-level metrics (The most accurate "Overview" total)
-         const sa360CustomerQuery = `
+         const googleAdsCustomerQuery = `
             SELECT 
               metrics.cost_micros, 
               metrics.clicks, 
@@ -659,22 +660,23 @@ const App: React.FC = () => {
             WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
          `;
          
-         const fetchSa360 = async (query: string, targetId: string) => {
-            if (!sa360Auth?.token) {
-                throw new Error("SA360 token is missing");
+         const fetchGoogleAds = async (query: string, targetId: string) => {
+            if (!googleAdsAuth?.token) {
+                throw new Error("Google Ads token is missing");
             }
             
             const headers: any = { 
-                Authorization: `Bearer ${sa360Auth.token}`, 
-                'Content-Type': 'application/json' 
+                Authorization: `Bearer ${googleAdsAuth.token}`, 
+                'Content-Type': 'application/json',
+                'developer-token': DEVELOPER_TOKEN
             };
             
-            if (selectedSa360Customer) {
-                headers['login-customer-id'] = selectedSa360Customer.id.toString().replace(/-/g, '');
+            if (selectedGoogleAdsCustomer) {
+                headers['login-customer-id'] = selectedGoogleAdsCustomer.id.toString().replace(/-/g, '');
             }
             
             const cleanTargetId = targetId.toString().replace(/-/g, '');
-            const res = await fetch(`/api/sa360/v0/customers/${cleanTargetId}/searchAds360:searchStream`, {
+            const res = await fetch(`/api/googleads/v21/customers/${cleanTargetId}/googleAds:search`, {
                 method: 'POST',
                 headers: headers,
                 body: JSON.stringify({ query })
@@ -682,25 +684,25 @@ const App: React.FC = () => {
             
             if (!res.ok) {
                 const text = await res.text();
-                console.error(`SA360 API Error for ${targetId}:`, text);
+                console.error(`Google Ads API Error for ${targetId}:`, text);
                 return []; // Return empty on error to allow other requests to succeed
             }
             
             const json = await res.json();
-            return (Array.isArray(json) ? json : []).flatMap((batch: any) => batch.results || []);
+            console.log(`Google Ads API Response for ${targetId}:`, json);
+            return json.results || [];
          };
          
          try {
             let accountsToFetch: string[] = [];
             let globalAvgCpc = 0;
+            const isAllAccounts = true; // Always true since we removed sub-account selection
             
             // 1. ALWAYS FETCH GLOBAL TOTALS (Customer Level)
             // This ensures scorecards always show "Overall" data regardless of selection
-            const allAccountIds = availableSa360SubAccounts
-                .filter(acc => acc.id !== 'all')
-                .map(acc => acc.id);
+            const allAccountIds = availableGoogleAdsSubAccounts.map(acc => acc.id);
 
-            let globalMetrics: Sa360GlobalMetrics = {
+            let globalMetrics: GoogleAdsGlobalMetrics = {
                 totalCost: 0,
                 totalClicks: 0,
                 totalConversions: 0,
@@ -710,9 +712,14 @@ const App: React.FC = () => {
             };
 
             if (allAccountIds.length > 0) {
-                const allCustomerPromises = allAccountIds.map(id => fetchSa360(sa360CustomerQuery, id));
-                const customerResults = await Promise.all(allCustomerPromises);
-                const customerRows = customerResults.flat();
+                const customerRows: any[] = [];
+                const chunkSize = 5;
+                for (let i = 0; i < allAccountIds.length; i += chunkSize) {
+                    const chunk = allAccountIds.slice(i, i + chunkSize);
+                    const customerPromises = chunk.map(id => fetchGoogleAds(googleAdsCustomerQuery, id));
+                    const customerResults = await Promise.all(customerPromises);
+                    customerRows.push(...customerResults.flat());
+                }
 
                 customerRows.forEach((row: any) => {
                     const metrics = row.metrics;
@@ -729,105 +736,97 @@ const App: React.FC = () => {
                     globalMetrics.avgCpa = globalMetrics.totalCost / globalMetrics.totalConversions;
                 }
                 
-                setSa360GlobalMetrics(globalMetrics);
+                setGoogleAdsGlobalMetrics(globalMetrics);
                 globalAvgCpc = globalMetrics.avgCpc; // Used for fallback
             }
             
-            if (isAllAccounts) {
-                // Filter out the 'all' option itself to get real IDs
-                accountsToFetch = availableSa360SubAccounts
-                    .filter(acc => acc.id !== 'all')
-                    .map(acc => acc.id);
+            // DETAILED FETCH FOR ALL ACCOUNTS (Ad/Keyword Level)
+            accountsToFetch = allAccountIds;
+            const urlRows: any[] = [];
+            const kwRows: any[] = [];
+            
+            const chunkSize = 5;
+            for (let i = 0; i < accountsToFetch.length; i += chunkSize) {
+                const chunk = accountsToFetch.slice(i, i + chunkSize);
+                const urlPromises = chunk.map(id => fetchGoogleAds(googleAdsUrlQuery, id));
+                const kwPromises = chunk.map(id => fetchGoogleAds(googleAdsKwQuery, id));
                 
-                // Populate sa360PaidMap for Performance View (One Aggregated Row) using Global Metrics
-                const overviewKey = "All Accounts Overview";
-                if (!sa360PaidMap[overviewKey]) {
-                    sa360PaidMap[overviewKey] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set(['Aggregated']) };
-                }
-                sa360PaidMap[overviewKey].clicksOrSessions = globalMetrics.totalClicks;
-                sa360PaidMap[overviewKey].conversions = globalMetrics.totalConversions;
-                sa360PaidMap[overviewKey].impressions = globalMetrics.totalImpressions;
-                sa360PaidMap[overviewKey].cost = globalMetrics.totalCost;
-
-            } else {
-                // DETAILED FETCH FOR SINGLE ACCOUNT (Ad/Keyword Level)
-                accountsToFetch = [selectedSa360SubAccount.id];
+                const urlResults = await Promise.all(urlPromises);
+                const kwResults = await Promise.all(kwPromises);
                 
-                const [urlRows, kwRows] = await Promise.all([
-                    fetchSa360(sa360UrlQuery, accountsToFetch[0]), 
-                    fetchSa360(sa360KwQuery, accountsToFetch[0])
-                ]);
-                
-                // Join keywords with URLs in memory via ad_group.resource_name
-                // Build a map: adGroupResourceName -> first finalUrl found
-                const adGroupUrlMap: Record<string, string> = {};
-                urlRows.forEach((row: any) => {
-                    const adGroupRN = row.adGroup?.resourceName || row.adGroupAd?.adGroup;
-                    const url = row.adGroupAd?.ad?.finalUrls?.[0] || row.adGroupAd?.ad?.final_urls?.[0];
-                    if (adGroupRN && url && !adGroupUrlMap[adGroupRN]) {
-                        adGroupUrlMap[adGroupRN] = url;
-                    }
-                });
-                
-                // Build kwUrlRows by joining kwRows with adGroupUrlMap
-                const kwUrlRows = kwRows.map((row: any) => {
-                    const adGroupRN = row.adGroup?.resourceName;
-                    const url = adGroupRN ? adGroupUrlMap[adGroupRN] : undefined;
-                    return {
-                        ...row,
-                        adGroupAd: { ad: { finalUrls: url ? [url] : [] } }
-                    };
-                });
-                
-                // Procesar URLs para Bridge Data (agregado por URL)
-                urlRows.forEach((row: any) => {
-                    const url = row.adGroupAd?.ad?.finalUrls?.[0] || row.adGroupAd?.ad?.final_urls?.[0]; 
-                    
-                    if(!url) return;
-                    const path = normalizeUrl(url);
-                    
-                    if (!sa360PaidMap[path]) {
-                        sa360PaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set(['SA360']) };
-                    }
-                    
-                    const metrics = row.metrics;
-                    sa360PaidMap[path].clicksOrSessions += parseInt(metrics?.clicks) || 0;
-                    sa360PaidMap[path].conversions += parseFloat(metrics?.conversions) || 0;
-                    sa360PaidMap[path].impressions += parseInt(metrics?.impressions) || 0;
-                    sa360PaidMap[path].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
-                });
-                
-                // NUEVA: Procesar Keywords con URL para mapeo granular
-                kwUrlRows.forEach((row: any) => {
-                    const kw = row.adGroupCriterion?.keyword?.text;
-                    const url = row.adGroupAd?.ad?.finalUrls?.[0] || row.adGroupAd?.ad?.final_urls?.[0];
-                    
-                    if(!kw || !url) return;
-                    
-                    const cleanKw = kw.toLowerCase().trim();
-                    const cleanPath = normalizeUrl(url);
-                    
-                    // Usar clave compuesta URL||KEYWORD
-                    const compositeKey = getCompositeKey(cleanPath, cleanKw);
-                    
-                    if (!sa360KeywordUrlMap[compositeKey]) {
-                        sa360KeywordUrlMap[compositeKey] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
-                    }
-                    
-                    const metrics = row.metrics;
-                    sa360KeywordUrlMap[compositeKey].clicksOrSessions += parseInt(metrics?.clicks) || 0;
-                    sa360KeywordUrlMap[compositeKey].conversions += parseFloat(metrics?.conversions) || 0;
-                    sa360KeywordUrlMap[compositeKey].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
-                });
+                urlRows.push(...urlResults.flat());
+                kwRows.push(...kwResults.flat());
             }
             
-            // BUILD SA360 BRIDGE DATA
-            const sa360Results: BridgeData[] = [];
-            const allPaths = new Set([...Object.keys(gscUrlMap), ...Object.keys(sa360PaidMap)]);
+            // Join keywords with URLs in memory via campaign.resource_name
+            // Build a map: campaignResourceName -> first unexpandedFinalUrl found
+            const campaignUrlMap: Record<string, string> = {};
+            urlRows.forEach((row: any) => {
+                const campaignRN = row.campaign?.resourceName;
+                const url = row.landingPageView?.unexpandedFinalUrl;
+                if (campaignRN && url && !campaignUrlMap[campaignRN]) {
+                    campaignUrlMap[campaignRN] = url;
+                }
+            });
+            
+            // Build kwUrlRows by joining kwRows with campaignUrlMap
+            const kwUrlRows = kwRows.map((row: any) => {
+                const campaignRN = row.campaign?.resourceName;
+                const url = campaignRN ? campaignUrlMap[campaignRN] : undefined;
+                return {
+                    ...row,
+                    landingPageView: { unexpandedFinalUrl: url }
+                };
+            });
+            
+            // Procesar URLs para Bridge Data (agregado por URL)
+            urlRows.forEach((row: any) => {
+                const url = row.landingPageView?.unexpandedFinalUrl; 
+                
+                if(!url) return;
+                const path = normalizeUrl(url);
+                
+                if (!googleAdsPaidMap[path]) {
+                    googleAdsPaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set(['Google Ads']) };
+                }
+                
+                const metrics = row.metrics;
+                googleAdsPaidMap[path].clicksOrSessions += parseInt(metrics?.clicks) || 0;
+                googleAdsPaidMap[path].conversions += parseFloat(metrics?.conversions) || 0;
+                googleAdsPaidMap[path].impressions += parseInt(metrics?.impressions) || 0;
+                googleAdsPaidMap[path].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
+            });
+            
+            // NUEVA: Procesar Keywords con URL para mapeo granular
+            kwUrlRows.forEach((row: any) => {
+                const kw = row.adGroupCriterion?.keyword?.text;
+                const url = row.landingPageView?.unexpandedFinalUrl;
+                
+                if(!kw) return;
+                
+                const cleanKw = kw.toLowerCase().trim();
+                const cleanPath = url ? normalizeUrl(url) : 'Unknown URL';
+                
+                // Usar clave compuesta URL||KEYWORD
+                const compositeKey = getCompositeKey(cleanPath, cleanKw);
+                
+                if (!googleAdsKeywordUrlMap[compositeKey]) {
+                    googleAdsKeywordUrlMap[compositeKey] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
+                }
+                
+                const metrics = row.metrics;
+                googleAdsKeywordUrlMap[compositeKey].clicksOrSessions += parseInt(metrics?.clicks) || 0;
+                googleAdsKeywordUrlMap[compositeKey].conversions += parseFloat(metrics?.conversions) || 0;
+                googleAdsKeywordUrlMap[compositeKey].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
+            });
+            
+            // BUILD GOOGLE ADS BRIDGE DATA
+            const googleAdsResults: BridgeData[] = [];
+            const allPaths = new Set([...Object.keys(gscUrlMap), ...Object.keys(googleAdsPaidMap)]);
             
             allPaths.forEach(path => {
                 const gscData = gscUrlMap[path]; 
-                const paidStats = sa360PaidMap[path];
+                const paidStats = googleAdsPaidMap[path];
                 
                 const organicSessions = ga4OrganicMap[path] || 0;
                 const organicClicks = gscData ? gscData.totalClicks : 0;
@@ -840,7 +839,7 @@ const App: React.FC = () => {
                 const topQueriesList = gscData ? gscData.queries.slice(0, 10) : [];
                 const paidVolume = paidStats ? paidStats.clicksOrSessions : 0;
                 
-                if (organicSessions === 0 && organicClicks === 0 && paidVolume === 0) return;
+                if (organicSessions === 0 && organicClicks === 0 && paidVolume === 0 && (!paidStats || paidStats.cost === 0)) return;
                 
                 const totalVolume = organicSessions + paidVolume;
                 const paidShare = totalVolume > 0 ? (paidVolume / totalVolume) : 0;
@@ -850,13 +849,13 @@ const App: React.FC = () => {
                 else if (organicRank && organicRank <= 3.0 && paidVolume > 0) action = "REVIEW";
                 else if (organicRank && organicRank > 10.0 && paidVolume === 0) action = "INCREASE";
                 
-                sa360Results.push({
+                googleAdsResults.push({
                     url: path, 
                     query: topQuery, 
                     organicRank: organicRank, 
                     organicClicks: organicClicks, 
                     organicSessions: organicSessions, 
-                    ppcCampaign: "SA360", 
+                    ppcCampaign: "Google Ads", 
                     ppcCost: paidStats?.cost || 0, 
                     ppcConversions: paidStats?.conversions || 0, 
                     ppcCpa: paidStats?.conversions ? paidStats.cost / paidStats.conversions : 0,
@@ -864,20 +863,22 @@ const App: React.FC = () => {
                     ppcImpressions: paidStats?.impressions || 0, 
                     blendedCostRatio: paidShare, 
                     actionLabel: action, 
-                    dataSource: 'SA360',
+                    dataSource: 'GOOGLE_ADS',
                     gscTopQueries: topQueriesList
                 });
             });
             
-            setBridgeDataSA360(sa360Results.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
+            setBridgeDataGoogleAds(googleAdsResults.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
             
-            // BUILD SA360 KEYWORD DATA (GRANULAR: URL + KW MATCH)
-            const sa360KwResults: KeywordBridgeData[] = [];
+            // BUILD GOOGLE ADS KEYWORD DATA (GRANULAR: URL + KW MATCH)
+            const googleAdsKwResults: KeywordBridgeData[] = [];
             
             // 1. NUEVA LÓGICA: Process granularCompositeMap usando datos específicos de URL+KW
+            const processedCompositeKeys = new Set<string>();
             Object.values(granularCompositeMap).forEach(item => {
                 const compositeKey = getCompositeKey(item.url, item.keyword);
-                const paidData = sa360KeywordUrlMap[compositeKey]; // ✅ Ahora usa datos específicos por URL+KW
+                processedCompositeKeys.add(compositeKey);
+                const paidData = googleAdsKeywordUrlMap[compositeKey]; // ✅ Ahora usa datos específicos por URL+KW
                 
                 if (!paidData && item.organicClicks === 0) return;
                 
@@ -902,7 +903,7 @@ const App: React.FC = () => {
                 if (avgRank !== null && avgRank <= 3 && paidVol > 50) action = "CRITICAL (Cannibalization)";
                 else if (avgRank !== null && avgRank > 10 && paidVol === 0) action = "OPPORTUNITY (Growth)";
                 
-                sa360KwResults.push({
+                googleAdsKwResults.push({
                     keyword: item.keyword, 
                     url: item.url,
                     organicRank: avgRank, 
@@ -912,13 +913,47 @@ const App: React.FC = () => {
                     ppcCost: paidCost, 
                     avgCpc: avgCpc,
                     actionLabel: action, 
-                    dataSource: 'SA360'
+                    dataSource: 'GOOGLE_ADS'
                 });
+            });
+
+            // 2. Add Google Ads keywords that are NOT in granularCompositeMap
+            Object.keys(googleAdsKeywordUrlMap).forEach(compositeKey => {
+                if (!processedCompositeKeys.has(compositeKey)) {
+                    const paidData = googleAdsKeywordUrlMap[compositeKey];
+                    // compositeKey is url||keyword
+                    const parts = compositeKey.split('||');
+                    const url = parts[0];
+                    const keyword = parts[1] || '';
+                    
+                    const paidVol = paidData.clicksOrSessions;
+                    const paidCost = paidData.cost;
+                    const paidConv = paidData.conversions;
+                    const cvr = paidVol > 0 ? (paidConv / paidVol) * 100 : 0;
+                    let avgCpc = paidVol > 0 ? paidCost / paidVol : 0;
+
+                    if (isAllAccounts && avgCpc === 0 && globalAvgCpc > 0) {
+                        avgCpc = globalAvgCpc;
+                    }
+
+                    googleAdsKwResults.push({
+                        keyword: keyword,
+                        url: url,
+                        organicRank: null,
+                        organicClicks: 0,
+                        paidSessions: paidVol,
+                        paidCvr: cvr,
+                        ppcCost: paidCost,
+                        avgCpc: avgCpc,
+                        actionLabel: "MAINTAIN",
+                        dataSource: 'GOOGLE_ADS'
+                    });
+                }
             });
 
             // IF ALL ACCOUNTS: Add a summary row to ensure Total Paid Cost is correct in Scorecards
             if (isAllAccounts && globalMetrics.totalCost > 0) {
-                sa360KwResults.push({
+                googleAdsKwResults.push({
                     keyword: "Total Paid Search (Overview)",
                     url: "All Accounts Aggregated",
                     organicRank: null,
@@ -928,48 +963,20 @@ const App: React.FC = () => {
                     ppcCost: globalMetrics.totalCost,
                     avgCpc: globalAvgCpc,
                     actionLabel: "MONITOR",
-                    dataSource: 'SA360'
+                    dataSource: 'GOOGLE_ADS'
                 });
             }
             
-            // 2. NUEVA: Agregar combinaciones URL+KW que solo tienen datos pagados (sin orgánico)
-            const knownCompositeKeys = new Set<string>();
-            Object.values(granularCompositeMap).forEach(v => knownCompositeKeys.add(getCompositeKey(v.url, v.keyword)));
-            
-            Object.keys(sa360KeywordUrlMap).forEach(compositeKey => {
-                if (!knownCompositeKeys.has(compositeKey)) {
-                    // Extraer URL y Keyword de la clave compuesta
-                    const [url, keyword] = compositeKey.split('||');
-                    const paidData = sa360KeywordUrlMap[compositeKey];
-                    
-                    const cvr = paidData.clicksOrSessions > 0 ? (paidData.conversions / paidData.clicksOrSessions) * 100 : 0;
-                    const avgCpc = paidData.clicksOrSessions > 0 ? paidData.cost / paidData.clicksOrSessions : 0;
-                    
-                    sa360KwResults.push({
-                        keyword: keyword,
-                        url: url,
-                        organicRank: null,
-                        organicClicks: 0,
-                        paidSessions: paidData.clicksOrSessions,
-                        paidCvr: cvr,
-                        ppcCost: paidData.cost,
-                        avgCpc: avgCpc,
-                        actionLabel: "PAID ONLY",
-                        dataSource: 'SA360'
-                    });
-                }
-            });
-            
-            setKeywordBridgeDataSA360(sa360KwResults.sort((a,b) => b.paidSessions - a.paidSessions));
+            setKeywordBridgeDataGoogleAds(googleAdsKwResults.sort((a,b) => b.paidSessions - a.paidSessions));
          } catch (err: any) {
-             console.error("Error fetching SA360 data:", err);
-             setError(err.message || "Failed to fetch SA360 data");
-             setBridgeDataSA360([]);
-             setKeywordBridgeDataSA360([]);
+             console.error("Error fetching Google Ads data:", err);
+             setError(err.message || "Failed to fetch Google Ads data");
+             setBridgeDataGoogleAds([]);
+             setKeywordBridgeDataGoogleAds([]);
          }
     } else {
-         setBridgeDataSA360([]);
-         setKeywordBridgeDataSA360([]);
+         setBridgeDataGoogleAds([]);
+         setKeywordBridgeDataGoogleAds([]);
     }
     
     // 3. TRY GA4 FETCH (If Available)
@@ -1016,8 +1023,8 @@ const App: React.FC = () => {
                 headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     dateRanges: [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }],
-                    dimensions: [{ name: 'sessionGoogleAdsKeywordText' }, { name: 'landingPage' }],
-                    metrics: [{ name: 'sessions' }, { name: 'sessionConversionRate' }, { name: 'googleAdsCost' }],
+                    dimensions: [{ name: 'sessionGoogleAdsKeyword' }, { name: 'landingPage' }],
+                    metrics: [{ name: 'sessions' }, { name: 'sessionConversionRate' }, { name: 'advertiserAdCost' }],
                     limit: 25000
                 })
             });
@@ -1046,7 +1053,9 @@ const App: React.FC = () => {
                          paidSessions: 0, 
                          paidConversions: 0, 
                          paidCost: 0, 
-                         bestRank: 999
+                         bestRank: 999,
+                         totalImpressions: 0,
+                         weightedRankSum: 0
                      };
                  }
                  granularCompositeMap[key].paidSessions += sessions;
@@ -1073,7 +1082,7 @@ const App: React.FC = () => {
                 const topQueriesList = gscData ? gscData.queries.slice(0, 10) : [];
                 const paidVolume = paidStats ? paidStats.clicksOrSessions : 0;
                 
-                if (organicSessions === 0 && organicClicks === 0 && paidVolume === 0) return;
+                if (organicSessions === 0 && organicClicks === 0 && paidVolume === 0 && (!paidStats || paidStats.cost === 0)) return;
                 
                 const totalVolume = organicSessions + paidVolume;
                 const paidShare = totalVolume > 0 ? (paidVolume / totalVolume) : 0;
@@ -1149,12 +1158,12 @@ const App: React.FC = () => {
     setIsLoadingBridge(false);
   };
   
-  // Restore SA360 Data on Load if Auth exists (Persistency Logic)
+  // Restore Google Ads Data on Load if Auth exists (Persistency Logic)
   useEffect(() => {
-    if (sa360Auth?.token && availableSa360Customers.length === 0 && !isLoadingSa360) {
-        fetchSa360Customers(sa360Auth.token);
+    if (googleAdsAuth?.token && availableGoogleAdsCustomers.length === 0 && !isLoadingGoogleAds) {
+        fetchGoogleAdsCustomers(googleAdsAuth.token);
     }
-  }, [sa360Auth]);
+  }, [googleAdsAuth]);
 
   const fetchGa4Data = async () => {
     if (!ga4Auth?.property || !ga4Auth.token) return;
@@ -1185,8 +1194,8 @@ const App: React.FC = () => {
             { name: 'totalRevenue' }, 
             { name: 'transactions' }, 
             { name: 'sessionConversionRate' },
-            { name: 'addToCarts' },
-            { name: 'checkouts' }
+            { name: 'itemsAddedToCart' },
+            { name: 'itemsCheckedOut' }
           ],
           limit: 100000
         })
@@ -1346,7 +1355,7 @@ const App: React.FC = () => {
   };
   
   useEffect(() => {
-    if (activeTab === DashboardTab.PPC_SEO_BRIDGE || activeTab === DashboardTab.SA360_PERFORMANCE || activeTab === DashboardTab.SEARCH_EFFICIENCY) {
+    if (activeTab === DashboardTab.PPC_SEO_BRIDGE || activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE || activeTab === DashboardTab.SEARCH_EFFICIENCY) {
       fetchBridgeData();
     } else if (activeTab === DashboardTab.AI_TRAFFIC_MONITOR) {
       fetchAiTrafficData();
@@ -1356,8 +1365,7 @@ const App: React.FC = () => {
     ga4Auth?.property?.id, 
     gscAuth?.site?.siteUrl, 
     filters.dateRange.start,
-    filters.dateRange.end,
-    selectedSa360SubAccount?.id
+    filters.dateRange.end
   ]);
   
   useEffect(() => {
@@ -1391,16 +1399,16 @@ const App: React.FC = () => {
           },
         });
         
-        tokenClientSa360.current = (window as any).google.accounts.oauth2.initTokenClient({
+        tokenClientGoogleAds.current = (window as any).google.accounts.oauth2.initTokenClient({
             client_id: CLIENT_ID,
-            scope: SCOPE_SA360,
+            scope: SCOPE_GOOGLE_ADS,
             prompt: '',
             callback: (resp: any) => {
               if (resp.access_token) {
-                const newAuth = { token: resp.access_token, customer: sa360Auth?.customer || null };
-                setSa360Auth(newAuth);
-                sessionStorage.setItem('sa360_auth', JSON.stringify(newAuth));
-                fetchSa360Customers(resp.access_token);
+                const newAuth = { token: resp.access_token, customer: googleAdsAuth?.customer || null };
+                setGoogleAdsAuth(newAuth);
+                sessionStorage.setItem('googleads_auth', JSON.stringify(newAuth));
+                fetchGoogleAdsCustomers(resp.access_token);
               }
             },
         });
@@ -1428,11 +1436,11 @@ const App: React.FC = () => {
     setUser(null); 
     setGa4Auth(null); 
     setGscAuth(null); 
-    setSa360Auth(null);
+    setGoogleAdsAuth(null);
     localStorage.removeItem('seo_suite_user');
     sessionStorage.removeItem('ga4_auth');
     sessionStorage.removeItem('gsc_auth');
-    sessionStorage.removeItem('sa360_auth');
+    sessionStorage.removeItem('googleads_auth');
   };
   
   const handleConnectGa4 = () => { 
@@ -1443,8 +1451,8 @@ const App: React.FC = () => {
     if (tokenClientGsc.current) tokenClientGsc.current.requestAccessToken(); 
   };
   
-  const handleConnectSa360 = () => { 
-    if (tokenClientSa360.current) tokenClientSa360.current.requestAccessToken(); 
+  const handleConnectGoogleAds = () => { 
+    if (tokenClientGoogleAds.current) tokenClientGoogleAds.current.requestAccessToken(); 
   };
   
   useEffect(() => { 
@@ -1478,7 +1486,7 @@ const App: React.FC = () => {
   
   const filteredProperties = useMemo(() => availableProperties.filter(p => p.name.toLowerCase().includes(ga4Search.toLowerCase())), [availableProperties, ga4Search]);
   const filteredSites = useMemo(() => availableSites.filter(s => s.siteUrl.toLowerCase().includes(gscSearch.toLowerCase())), [availableSites, gscSearch]);
-  const filteredSa360Customers = useMemo(() => availableSa360Customers.filter(c => c.descriptiveName?.toLowerCase().includes(sa360Search.toLowerCase()) || c.id.includes(sa360Search)), [availableSa360Customers, sa360Search]);
+  const filteredGoogleAdsCustomers = useMemo(() => availableGoogleAdsCustomers.filter(c => c.descriptiveName?.toLowerCase().includes(googleAdsSearch.toLowerCase()) || c.id.includes(googleAdsSearch)), [availableGoogleAdsCustomers, googleAdsSearch]);
   
   const uniqueCountries = useMemo(() => {
     const set = new Set([...realDailyData.map(d => d.country), ...realKeywordData.map(k => k.country)]);
@@ -1518,7 +1526,7 @@ const App: React.FC = () => {
       const dashboardName = activeTab === DashboardTab.ORGANIC_VS_PAID ? "Organic vs Paid Performance" : 
                            (activeTab === DashboardTab.SEO_BY_COUNTRY ? "SEO Performance by Country" : 
                            activeTab === DashboardTab.PPC_SEO_BRIDGE ? "PPC & SEO Bridge Intelligence" :
-                           activeTab === DashboardTab.SA360_PERFORMANCE ? "SA360 Paid Search Performance" :
+                           activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE ? "Google Ads Paid Search Performance" :
                            activeTab === DashboardTab.SEARCH_EFFICIENCY ? "Search Efficiency & Cost Savings" :
                            activeTab === DashboardTab.AI_TRAFFIC_MONITOR ? "AI Traffic Tracker" :
                            "Deep URL and Keyword Analysis");
@@ -1536,7 +1544,7 @@ const App: React.FC = () => {
           Organic GA4 Rev: ${currencySymbol}${channelStats.organic.current.revenue.toLocaleString()}.
         `;
       } else if (activeTab === DashboardTab.PPC_SEO_BRIDGE) {
-        const primaryBridgeData = bridgeDataSA360.length > 0 ? bridgeDataSA360 : bridgeDataGA4;
+        const primaryBridgeData = bridgeDataGoogleAds.length > 0 ? bridgeDataGoogleAds : bridgeDataGA4;
         const riskCount = primaryBridgeData.filter(b => b.organicRank !== null && b.organicRank <= 3 && b.ppcSessions > 0).length;
         const opportunityCount = primaryBridgeData.filter(b => b.organicRank !== null && b.organicRank > 5 && b.organicRank <= 20).length;
         summary = `
@@ -1544,13 +1552,13 @@ const App: React.FC = () => {
           Cannibalization Risks detected: ${riskCount} keywords where we rank Top 3 organically but still pay for Sessions.
           Growth Opportunities detected: ${opportunityCount} keywords where we rank 5-20 and could increase ad spend.
         `;
-      } else if (activeTab === DashboardTab.SA360_PERFORMANCE) {
-          const primaryData = bridgeDataSA360.length > 0 ? bridgeDataSA360 : bridgeDataGA4;
+      } else if (activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE) {
+          const primaryData = bridgeDataGoogleAds.length > 0 ? bridgeDataGoogleAds : bridgeDataGA4;
           const totalCost = primaryData.reduce((acc, c) => acc + c.ppcCost, 0);
           const totalConv = primaryData.reduce((acc, c) => acc + c.ppcConversions, 0);
           const avgCpa = totalConv > 0 ? totalCost / totalConv : 0;
           summary = `
-            Context: SA360 / Paid Search Performance Analysis by URL.
+            Context: Google Ads / Paid Search Performance Analysis by URL.
             Total Spend: ${currencySymbol}${totalCost.toLocaleString()}.
             Total Conversions: ${totalConv}.
             Average CPA: ${currencySymbol}${avgCpa.toFixed(2)}.
@@ -1564,7 +1572,7 @@ const App: React.FC = () => {
           Top Sources identified in list.
         `;
       } else if (activeTab === DashboardTab.SEARCH_EFFICIENCY) {
-         const primaryData = bridgeDataSA360.length > 0 ? bridgeDataSA360 : bridgeDataGA4;
+         const primaryData = bridgeDataGoogleAds.length > 0 ? bridgeDataGoogleAds : bridgeDataGA4;
          const brandTax = primaryData.filter(d => isBranded(d.query) && d.organicRank !== null && d.organicRank <= 1.5).reduce((acc, d) => acc + d.ppcCost, 0);
          summary = `
            Context: Search Efficiency & Cost Savings.
@@ -1592,7 +1600,7 @@ const App: React.FC = () => {
     }
   };
   
-  const isAnythingLoading = isLoadingGa4 || isLoadingGsc || isLoadingBridge || isLoadingAi || isLoadingSa360;
+  const isAnythingLoading = isLoadingGa4 || isLoadingGsc || isLoadingBridge || isLoadingAi || isLoadingGoogleAds;
   
   useEffect(() => { 
     localStorage.setItem('ai_provider', aiProvider); 
@@ -1655,30 +1663,27 @@ const App: React.FC = () => {
         setBrandRegexStr={setBrandRegexStr}
         ga4Auth={ga4Auth} 
         gscAuth={gscAuth} 
-        sa360Auth={sa360Auth}
+        googleAdsAuth={googleAdsAuth}
         handleConnectGa4={handleConnectGa4} 
         handleConnectGsc={handleConnectGsc} 
-        handleConnectSa360={handleConnectSa360}
+        handleConnectGoogleAds={handleConnectGoogleAds}
         ga4Search={ga4Search} 
         setGa4Search={setGa4Search}
         gscSearch={gscSearch} 
         setGscSearch={setGscSearch}
-        sa360Search={sa360Search} 
-        setSa360Search={setSa360Search}
+        googleAdsSearch={googleAdsSearch} 
+        setGoogleAdsSearch={setGoogleAdsSearch}
         availableProperties={availableProperties} 
         availableSites={availableSites} 
-        availableSa360Customers={availableSa360Customers}
-        availableSa360SubAccounts={availableSa360SubAccounts}
-        selectedSa360Customer={selectedSa360Customer}
-        selectedSa360SubAccount={selectedSa360SubAccount}
-        onSa360CustomerChange={handleSa360CustomerChange}
-        onSa360SubAccountChange={setSelectedSa360SubAccount}
+        availableGoogleAdsCustomers={availableGoogleAdsCustomers}
+        selectedGoogleAdsCustomer={selectedGoogleAdsCustomer}
+        onGoogleAdsCustomerChange={handleGoogleAdsCustomerChange}
         setGa4Auth={setGa4Auth} 
         setGscAuth={setGscAuth} 
-        setSa360Auth={setSa360Auth}
+        setGoogleAdsAuth={setGoogleAdsAuth}
         filteredProperties={filteredProperties} 
         filteredSites={filteredSites} 
-        filteredSa360Customers={filteredSa360Customers}
+        filteredGoogleAdsCustomers={filteredGoogleAdsCustomers}
       />
       
       <main className={`flex-1 transition-all duration-300 ease-in-out p-5 md:p-8 xl:p-12 overflow-x-hidden ${isSidebarOpen ? (isCollapsed ? 'xl:ml-20' : 'xl:ml-80') : 'ml-0'}`}>
@@ -1697,7 +1702,7 @@ const App: React.FC = () => {
               <div className="flex items-center gap-2 mb-2">
                 <span className={`w-2 h-2 rounded-full ${isAnythingLoading ? 'bg-amber-500 animate-ping' : 'bg-emerald-500'}`} />
                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                  {isLoadingGa4 ? 'Syncing GA4...' : isLoadingGsc ? 'Syncing GSC...' : isLoadingSa360 ? 'Syncing SA360...' : isLoadingBridge ? 'Joining Data...' : isLoadingAi ? 'Scanning AI...' : 'Dashboard Active'}
+                  {isLoadingGa4 ? 'Syncing GA4...' : isLoadingGsc ? 'Syncing GSC...' : isLoadingGoogleAds ? 'Syncing Google Ads...' : isLoadingBridge ? 'Joining Data...' : isLoadingAi ? 'Scanning AI...' : 'Dashboard Active'}
                 </span>
               </div>
               <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">
@@ -1705,7 +1710,7 @@ const App: React.FC = () => {
                 {activeTab === DashboardTab.SEO_BY_COUNTRY && "SEO Performance by Country"}
                 {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && "URL & Keyword Analysis"}
                 {activeTab === DashboardTab.PPC_SEO_BRIDGE && "The Bridge: SEO vs PPC Intelligence"}
-                {activeTab === DashboardTab.SA360_PERFORMANCE && "SA360 & Paid Search Analysis"}
+                {activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE && "Google Ads & Paid Search Analysis"}
                 {activeTab === DashboardTab.SEARCH_EFFICIENCY && "Search Efficiency & Savings"}
                 {activeTab === DashboardTab.AI_TRAFFIC_MONITOR && "AI Traffic Monitor"}
               </h2>
@@ -1776,7 +1781,7 @@ const App: React.FC = () => {
                 {aiProvider === 'openai' ? <Cpu className="w-5 h-5 text-emerald-400" /> : <Sparkles className="w-5 h-5 text-indigo-400" />}
                 <div className="flex flex-col">
                   <h3 className="text-xl font-black">
-                    Strategic Report: {activeTab === DashboardTab.ORGANIC_VS_PAID ? "Channels" : activeTab === DashboardTab.SEO_BY_COUNTRY ? "Markets" : activeTab === DashboardTab.PPC_SEO_BRIDGE ? "The Bridge" : activeTab === DashboardTab.SA360_PERFORMANCE ? "Paid Search" : activeTab === DashboardTab.AI_TRAFFIC_MONITOR ? "AI Intelligence" : "Deep Dive"}
+                    Strategic Report: {activeTab === DashboardTab.ORGANIC_VS_PAID ? "Channels" : activeTab === DashboardTab.SEO_BY_COUNTRY ? "Markets" : activeTab === DashboardTab.PPC_SEO_BRIDGE ? "The Bridge" : activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE ? "Paid Search" : activeTab === DashboardTab.AI_TRAFFIC_MONITOR ? "AI Intelligence" : "Deep Dive"}
                   </h3>
                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
                     Generated by {aiProvider === 'openai' ? 'OpenAI GPT-4o-mini' : 'Google Gemini 3 Pro'}
@@ -1838,40 +1843,31 @@ const App: React.FC = () => {
           {activeTab === DashboardTab.PPC_SEO_BRIDGE && (
             <SeoPpcBridgeView 
                 ga4Data={bridgeDataGA4} 
-                sa360Data={bridgeDataSA360}
+                googleAdsData={bridgeDataGoogleAds}
                 ga4KeywordData={keywordBridgeDataGA4}
-                sa360KeywordData={keywordBridgeDataSA360}
+                googleAdsKeywordData={keywordBridgeDataGoogleAds}
                 dailyData={filteredDailyData} 
                 currencySymbol={currencySymbol} 
-                availableSa360Customers={availableSa360Customers}
-                selectedSa360Customer={selectedSa360Customer}
-                onSa360CustomerChange={handleSa360CustomerChange}
-                availableSa360SubAccounts={availableSa360SubAccounts}
-                selectedSa360SubAccount={selectedSa360SubAccount}
-                setSelectedSa360SubAccount={setSelectedSa360SubAccount}
+                availableGoogleAdsCustomers={availableGoogleAdsCustomers}
+                selectedGoogleAdsCustomer={selectedGoogleAdsCustomer}
+                onGoogleAdsCustomerChange={handleGoogleAdsCustomerChange}
             />
           )}
           
-          {activeTab === DashboardTab.SA360_PERFORMANCE && (
-              <Sa360PerformanceView 
-                  data={bridgeDataSA360} 
+          {activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE && (
+              <GoogleAdsPerformanceView 
+                  data={bridgeDataGoogleAds} 
                   currencySymbol={currencySymbol} 
-                  globalMetrics={sa360GlobalMetrics}
-                  availableSa360SubAccounts={availableSa360SubAccounts}
-                  selectedSa360SubAccount={selectedSa360SubAccount}
-                  setSelectedSa360SubAccount={setSelectedSa360SubAccount}
+                  globalMetrics={googleAdsGlobalMetrics}
               />
           )}
           
           {activeTab === DashboardTab.SEARCH_EFFICIENCY && (
               <SearchEfficiencyView 
-                 data={keywordBridgeDataSA360.length > 0 ? keywordBridgeDataSA360 : keywordBridgeDataGA4}
+                 data={keywordBridgeDataGoogleAds.length > 0 ? keywordBridgeDataGoogleAds : keywordBridgeDataGA4}
                  brandRegexStr={brandRegexStr}
                  currencySymbol={currencySymbol}
-                 globalMetrics={sa360GlobalMetrics}
-                 availableSa360SubAccounts={availableSa360SubAccounts}
-                 selectedSa360SubAccount={selectedSa360SubAccount}
-                 setSelectedSa360SubAccount={setSelectedSa360SubAccount}
+                 globalMetrics={googleAdsGlobalMetrics}
                  totalGscClicks={gscTotals?.current?.clicks || 0}
               />
           )}
@@ -1895,7 +1891,7 @@ const App: React.FC = () => {
             ) : (
               aiProvider === 'openai' ? <Cpu className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />
             )} 
-            Generate {activeTab === DashboardTab.ORGANIC_VS_PAID ? 'Channel' : activeTab === DashboardTab.SEO_BY_COUNTRY ? 'Market' : activeTab === DashboardTab.PPC_SEO_BRIDGE ? 'Bridge' : activeTab === DashboardTab.SA360_PERFORMANCE ? 'Paid' : activeTab === DashboardTab.AI_TRAFFIC_MONITOR ? 'AI' : 'SEO'} Insights
+            Generate {activeTab === DashboardTab.ORGANIC_VS_PAID ? 'Channel' : activeTab === DashboardTab.SEO_BY_COUNTRY ? 'Market' : activeTab === DashboardTab.PPC_SEO_BRIDGE ? 'Bridge' : activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE ? 'Paid' : activeTab === DashboardTab.AI_TRAFFIC_MONITOR ? 'AI' : 'SEO'} Insights
           </button>
         </div>
       </main>
