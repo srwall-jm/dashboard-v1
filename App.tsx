@@ -702,8 +702,10 @@ const App: React.FC = () => {
                     }
                     
                     const json = await res.json();
-                    if (json.results) {
-                        allResults.push(...json.results);
+                    if (json.results && Array.isArray(json.results)) {
+                        for (const item of json.results) {
+                            allResults.push(item);
+                        }
                     }
                     nextPageToken = json.nextPageToken;
                 } while (nextPageToken);
@@ -739,7 +741,13 @@ const App: React.FC = () => {
                     const chunk = allAccountIds.slice(i, i + chunkSize);
                     const customerPromises = chunk.map(id => fetchGoogleAds(googleAdsCustomerQuery, id));
                     const customerResults = await Promise.all(customerPromises);
-                    customerRows.push(...customerResults.flat());
+                    customerResults.forEach(res => {
+                        if (Array.isArray(res)) {
+                            for (const item of res) {
+                                customerRows.push(item);
+                            }
+                        }
+                    });
                 }
 
                 customerRows.forEach((row: any) => {
@@ -775,8 +783,20 @@ const App: React.FC = () => {
                 const urlResults = await Promise.all(urlPromises);
                 const kwResults = await Promise.all(kwPromises);
                 
-                urlRows.push(...urlResults.flat());
-                kwRows.push(...kwResults.flat());
+                urlResults.forEach(res => {
+                    if (Array.isArray(res)) {
+                        for (const item of res) {
+                            urlRows.push(item);
+                        }
+                    }
+                });
+                kwResults.forEach(res => {
+                    if (Array.isArray(res)) {
+                        for (const item of res) {
+                            kwRows.push(item);
+                        }
+                    }
+                });
             }
             
             // 1. Build Ad Group URL Distribution Map
