@@ -779,36 +779,91 @@ const App: React.FC = () => {
                 kwRows.push(...kwResults.flat());
             }
             
-            // Join keywords with URLs in memory via ad_group.resource_name (much more precise than campaign)
-            // Build a map: adGroupResourceName -> first unexpandedFinalUrl found
-            const adGroupUrlMap: Record<string, string> = {};
+            // 1. Build Ad Group URL Distribution Map
+            const adGroupUrlDistribution: Record<string, { url: string, clicks: number, share: number }[]> = {};
+            const adGroupTotalClicks: Record<string, number> = {};
+
             urlRows.forEach((row: any) => {
                 const adGroupRN = row.adGroup?.resourceName;
                 const url = row.landingPageView?.unexpandedFinalUrl;
-                if (adGroupRN && url && !adGroupUrlMap[adGroupRN]) {
-                    adGroupUrlMap[adGroupRN] = url;
+                const clicks = parseInt(row.metrics?.clicks) || 0;
+                
+                if (adGroupRN && url) {
+                    if (!adGroupUrlDistribution[adGroupRN]) {
+                        adGroupUrlDistribution[adGroupRN] = [];
+                        adGroupTotalClicks[adGroupRN] = 0;
+                    }
+                    adGroupUrlDistribution[adGroupRN].push({ url, clicks, share: 0 });
+                    adGroupTotalClicks[adGroupRN] += clicks;
                 }
             });
-            
-            // Build kwUrlRows by joining kwRows with adGroupUrlMap or direct final_urls
-            const kwUrlRows = kwRows.map((row: any) => {
+
+            // Calculate shares for each URL within its Ad Group
+            Object.keys(adGroupUrlDistribution).forEach(adGroupRN => {
+                const total = adGroupTotalClicks[adGroupRN];
+                const urls = adGroupUrlDistribution[adGroupRN];
+                if (total > 0) {
+                    urls.forEach(u => u.share = u.clicks / total);
+                } else if (urls.length > 0) {
+                    // Fallback: equal share if total clicks is 0
+                    urls.forEach(u => u.share = 1 / urls.length);
+                }
+            });
+
+            // 2. Process Keywords with Proportional Attribution
+            kwRows.forEach((row: any) => {
+                const kw = row.adGroupCriterion?.keyword?.text;
                 const adGroupRN = row.adGroup?.resourceName;
                 const kwFinalUrls = row.adGroupCriterion?.finalUrls || [];
                 
-                // Priority 1: Direct URL on keyword
-                // Priority 2: URL from landing_page_view for the same Ad Group
-                const url = kwFinalUrls.length > 0 ? kwFinalUrls[0] : (adGroupRN ? adGroupUrlMap[adGroupRN] : undefined);
-                
-                return {
-                    ...row,
-                    landingPageView: { unexpandedFinalUrl: url }
-                };
+                if (!kw) return;
+                const cleanKw = kw.toLowerCase().trim();
+                const metrics = row.metrics;
+                const kwClicks = parseInt(metrics?.clicks) || 0;
+                const kwConversions = parseFloat(metrics?.conversions) || 0;
+                const kwCost = (parseInt(metrics?.costMicros) || 0) / 1000000;
+
+                // Priority 1: Direct URL on keyword (if defined)
+                if (kwFinalUrls.length > 0) {
+                    const url = kwFinalUrls[0];
+                    const cleanPath = normalizeUrl(url);
+                    const compositeKey = getCompositeKey(cleanPath, cleanKw);
+                    if (!googleAdsKeywordUrlMap[compositeKey]) {
+                        googleAdsKeywordUrlMap[compositeKey] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
+                    }
+                    googleAdsKeywordUrlMap[compositeKey].clicksOrSessions += kwClicks;
+                    googleAdsKeywordUrlMap[compositeKey].conversions += kwConversions;
+                    googleAdsKeywordUrlMap[compositeKey].cost += kwCost;
+                } 
+                // Priority 2: Proportional distribution across Ad Group URLs (Standard Search Ads)
+                else if (adGroupRN && adGroupUrlDistribution[adGroupRN]) {
+                    const distributions = adGroupUrlDistribution[adGroupRN];
+                    distributions.forEach(dist => {
+                        const cleanPath = normalizeUrl(dist.url);
+                        const compositeKey = getCompositeKey(cleanPath, cleanKw);
+                        if (!googleAdsKeywordUrlMap[compositeKey]) {
+                            googleAdsKeywordUrlMap[compositeKey] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
+                        }
+                        googleAdsKeywordUrlMap[compositeKey].clicksOrSessions += kwClicks * dist.share;
+                        googleAdsKeywordUrlMap[compositeKey].conversions += kwConversions * dist.share;
+                        googleAdsKeywordUrlMap[compositeKey].cost += kwCost * dist.share;
+                    });
+                }
+                // Fallback: Unknown URL
+                else {
+                    const compositeKey = getCompositeKey('Unknown URL', cleanKw);
+                    if (!googleAdsKeywordUrlMap[compositeKey]) {
+                        googleAdsKeywordUrlMap[compositeKey] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
+                    }
+                    googleAdsKeywordUrlMap[compositeKey].clicksOrSessions += kwClicks;
+                    googleAdsKeywordUrlMap[compositeKey].conversions += kwConversions;
+                    googleAdsKeywordUrlMap[compositeKey].cost += kwCost;
+                }
             });
-            
-            // Procesar URLs para Bridge Data (agregado por URL)
+
+            // 3. Process URLs for Bridge Data (source of truth for URL-level metrics)
             urlRows.forEach((row: any) => {
                 const url = row.landingPageView?.unexpandedFinalUrl; 
-                
                 if(!url) return;
                 const path = normalizeUrl(url);
                 
@@ -821,29 +876,6 @@ const App: React.FC = () => {
                 googleAdsPaidMap[path].conversions += parseFloat(metrics?.conversions) || 0;
                 googleAdsPaidMap[path].impressions += parseInt(metrics?.impressions) || 0;
                 googleAdsPaidMap[path].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
-            });
-            
-            // NUEVA: Procesar Keywords con URL para mapeo granular
-            kwUrlRows.forEach((row: any) => {
-                const kw = row.adGroupCriterion?.keyword?.text;
-                const url = row.landingPageView?.unexpandedFinalUrl;
-                
-                if(!kw) return;
-                
-                const cleanKw = kw.toLowerCase().trim();
-                const cleanPath = url ? normalizeUrl(url) : 'Unknown URL';
-                
-                // Usar clave compuesta URL||KEYWORD
-                const compositeKey = getCompositeKey(cleanPath, cleanKw);
-                
-                if (!googleAdsKeywordUrlMap[compositeKey]) {
-                    googleAdsKeywordUrlMap[compositeKey] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
-                }
-                
-                const metrics = row.metrics;
-                googleAdsKeywordUrlMap[compositeKey].clicksOrSessions += parseInt(metrics?.clicks) || 0;
-                googleAdsKeywordUrlMap[compositeKey].conversions += parseFloat(metrics?.conversions) || 0;
-                googleAdsKeywordUrlMap[compositeKey].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
             });
             
             // BUILD GOOGLE ADS BRIDGE DATA
