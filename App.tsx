@@ -968,6 +968,47 @@ const App: React.FC = () => {
             }
             
             setKeywordBridgeDataGoogleAds(googleAdsKwResults.sort((a,b) => b.paidSessions - a.paidSessions));
+
+            // 3. Add "Unaccounted" URL-level traffic (PMax / Other)
+            // This ensures that URLs with traffic from PMax or other non-keyword campaigns show up in Search Efficiency
+            Object.keys(googleAdsPaidMap).forEach(urlPath => {
+                const totalUrlPaid = googleAdsPaidMap[urlPath];
+                
+                // Sum up all keywords for this URL that were already accounted for
+                let accountedClicks = 0;
+                let accountedCost = 0;
+                let accountedConversions = 0;
+                
+                Object.keys(googleAdsKeywordUrlMap).forEach(compositeKey => {
+                    if (compositeKey.startsWith(urlPath + '||')) {
+                        accountedClicks += googleAdsKeywordUrlMap[compositeKey].clicksOrSessions;
+                        accountedCost += googleAdsKeywordUrlMap[compositeKey].cost;
+                        accountedConversions += googleAdsKeywordUrlMap[compositeKey].conversions;
+                    }
+                });
+                
+                const diffClicks = totalUrlPaid.clicksOrSessions - accountedClicks;
+                const diffCost = totalUrlPaid.cost - accountedCost;
+                const diffConversions = totalUrlPaid.conversions - accountedConversions;
+                
+                // If there's a significant difference, add a row for it
+                if (diffClicks > 1 || diffCost > 0.01) {
+                    googleAdsKwResults.push({
+                        keyword: "(PMax / Other Campaigns)",
+                        url: urlPath,
+                        organicRank: null,
+                        organicClicks: 0,
+                        paidSessions: Math.max(0, diffClicks),
+                        paidCvr: diffClicks > 0 ? (diffConversions / diffClicks) * 100 : 0,
+                        ppcCost: Math.max(0, diffCost),
+                        avgCpc: diffClicks > 0 ? diffCost / diffClicks : globalAvgCpc,
+                        actionLabel: "MONITOR",
+                        dataSource: 'GOOGLE_ADS'
+                    });
+                }
+            });
+            
+            setKeywordBridgeDataGoogleAds(googleAdsKwResults.sort((a,b) => b.paidSessions - a.paidSessions));
          } catch (err: any) {
              console.error("Error fetching Google Ads data:", err);
              setError(err.message || "Failed to fetch Google Ads data");
