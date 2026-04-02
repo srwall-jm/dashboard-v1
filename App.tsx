@@ -629,6 +629,7 @@ const App: React.FC = () => {
            SELECT 
              landing_page_view.unexpanded_final_url,
              campaign.resource_name,
+             ad_group.resource_name,
              metrics.cost_micros, 
              metrics.clicks, 
              metrics.impressions, 
@@ -641,7 +642,9 @@ const App: React.FC = () => {
          const googleAdsKwQuery = `
             SELECT 
               ad_group_criterion.keyword.text,
+              ad_group_criterion.final_urls,
               campaign.resource_name,
+              ad_group.resource_name,
               metrics.cost_micros, 
               metrics.clicks, 
               metrics.conversions 
@@ -676,21 +679,39 @@ const App: React.FC = () => {
             }
             
             const cleanTargetId = targetId.toString().replace(/-/g, '');
-            const res = await fetch(`/api/googleads/v21/customers/${cleanTargetId}/googleAds:search`, {
-                method: 'POST',
-                headers: headers,
-                body: JSON.stringify({ query })
-            });
-            
-            if (!res.ok) {
-                const text = await res.text();
-                console.error(`Google Ads API Error for ${targetId}:`, text);
-                return []; // Return empty on error to allow other requests to succeed
+            const allResults: any[] = [];
+            let nextPageToken: string | undefined = undefined;
+
+            try {
+                do {
+                    const body: any = { query };
+                    if (nextPageToken) {
+                        body.pageToken = nextPageToken;
+                    }
+
+                    const res = await fetch(`/api/googleads/v21/customers/${cleanTargetId}/googleAds:search`, {
+                        method: 'POST',
+                        headers: headers,
+                        body: JSON.stringify(body)
+                    });
+                    
+                    if (!res.ok) {
+                        const text = await res.text();
+                        console.error(`Google Ads API Error for ${targetId}:`, text);
+                        break;
+                    }
+                    
+                    const json = await res.json();
+                    if (json.results) {
+                        allResults.push(...json.results);
+                    }
+                    nextPageToken = json.nextPageToken;
+                } while (nextPageToken);
+            } catch (err) {
+                console.error(`Fetch error for ${targetId}:`, err);
             }
-            
-            const json = await res.json();
-            console.log(`Google Ads API Response for ${targetId}:`, json);
-            return json.results || [];
+
+            return allResults;
          };
          
          try {
@@ -758,21 +779,26 @@ const App: React.FC = () => {
                 kwRows.push(...kwResults.flat());
             }
             
-            // Join keywords with URLs in memory via campaign.resource_name
-            // Build a map: campaignResourceName -> first unexpandedFinalUrl found
-            const campaignUrlMap: Record<string, string> = {};
+            // Join keywords with URLs in memory via ad_group.resource_name (much more precise than campaign)
+            // Build a map: adGroupResourceName -> first unexpandedFinalUrl found
+            const adGroupUrlMap: Record<string, string> = {};
             urlRows.forEach((row: any) => {
-                const campaignRN = row.campaign?.resourceName;
+                const adGroupRN = row.adGroup?.resourceName;
                 const url = row.landingPageView?.unexpandedFinalUrl;
-                if (campaignRN && url && !campaignUrlMap[campaignRN]) {
-                    campaignUrlMap[campaignRN] = url;
+                if (adGroupRN && url && !adGroupUrlMap[adGroupRN]) {
+                    adGroupUrlMap[adGroupRN] = url;
                 }
             });
             
-            // Build kwUrlRows by joining kwRows with campaignUrlMap
+            // Build kwUrlRows by joining kwRows with adGroupUrlMap or direct final_urls
             const kwUrlRows = kwRows.map((row: any) => {
-                const campaignRN = row.campaign?.resourceName;
-                const url = campaignRN ? campaignUrlMap[campaignRN] : undefined;
+                const adGroupRN = row.adGroup?.resourceName;
+                const kwFinalUrls = row.adGroupCriterion?.finalUrls || [];
+                
+                // Priority 1: Direct URL on keyword
+                // Priority 2: URL from landing_page_view for the same Ad Group
+                const url = kwFinalUrls.length > 0 ? kwFinalUrls[0] : (adGroupRN ? adGroupUrlMap[adGroupRN] : undefined);
+                
                 return {
                     ...row,
                     landingPageView: { unexpandedFinalUrl: url }
