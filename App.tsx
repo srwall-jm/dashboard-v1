@@ -90,6 +90,7 @@ const App: React.FC = () => {
   const [isLoadingGa4, setIsLoadingGa4] = useState(false);
   const [isLoadingGsc, setIsLoadingGsc] = useState(false);
   const [isLoadingBridge, setIsLoadingBridge] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [isLoadingAi, setIsLoadingAi] = useState(false);
   const [isLoadingGoogleAds, setIsLoadingGoogleAds] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -466,6 +467,7 @@ const App: React.FC = () => {
   // UPDATED: Nueva lógica granular con URL+Keyword
   const fetchBridgeData = async () => {
     setIsLoadingBridge(true);
+    setLoadingProgress(0);
     
     // --- MOCK FALLBACK IF NOTHING CONNECTED ---
     if (!gscAuth?.token && !ga4Auth?.token && !googleAdsAuth?.token) {
@@ -735,28 +737,25 @@ const App: React.FC = () => {
             };
 
             if (allAccountIds.length > 0) {
-                const customerRows: any[] = [];
-                const chunkSize = 5;
+                const chunkSize = 3; // Smaller chunks to prevent memory spikes
                 for (let i = 0; i < allAccountIds.length; i += chunkSize) {
                     const chunk = allAccountIds.slice(i, i + chunkSize);
                     const customerPromises = chunk.map(id => fetchGoogleAds(googleAdsCustomerQuery, id));
                     const customerResults = await Promise.all(customerPromises);
+                    
                     customerResults.forEach(res => {
                         if (Array.isArray(res)) {
-                            for (const item of res) {
-                                customerRows.push(item);
+                            for (const row of res) {
+                                const metrics = row.metrics;
+                                globalMetrics.totalCost += (parseInt(metrics?.costMicros) || 0) / 1000000;
+                                globalMetrics.totalClicks += parseInt(metrics?.clicks) || 0;
+                                globalMetrics.totalConversions += parseFloat(metrics?.conversions) || 0;
+                                globalMetrics.totalImpressions += parseInt(metrics?.impressions) || 0;
                             }
                         }
                     });
+                    setLoadingProgress(Math.round(((i + chunk.length) / (allAccountIds.length * 2)) * 100));
                 }
-
-                customerRows.forEach((row: any) => {
-                    const metrics = row.metrics;
-                    globalMetrics.totalCost += (parseInt(metrics?.costMicros) || 0) / 1000000;
-                    globalMetrics.totalClicks += parseInt(metrics?.clicks) || 0;
-                    globalMetrics.totalConversions += parseFloat(metrics?.conversions) || 0;
-                    globalMetrics.totalImpressions += parseInt(metrics?.impressions) || 0;
-                });
 
                 if (globalMetrics.totalClicks > 0) {
                     globalMetrics.avgCpc = globalMetrics.totalCost / globalMetrics.totalClicks;
@@ -769,134 +768,110 @@ const App: React.FC = () => {
                 globalAvgCpc = globalMetrics.avgCpc; // Used for fallback
             }
             
-            // DETAILED FETCH FOR ALL ACCOUNTS (Ad/Keyword Level)
+            // DETAILED FETCH & IMMEDIATE AGGREGATION (Account by Account)
             accountsToFetch = allAccountIds;
-            const urlRows: any[] = [];
-            const kwRows: any[] = [];
             
-            const chunkSize = 5;
+            const chunkSize = 2; // Process very few accounts at a time to keep memory low
             for (let i = 0; i < accountsToFetch.length; i += chunkSize) {
                 const chunk = accountsToFetch.slice(i, i + chunkSize);
-                const urlPromises = chunk.map(id => fetchGoogleAds(googleAdsUrlQuery, id));
-                const kwPromises = chunk.map(id => fetchGoogleAds(googleAdsKwQuery, id));
                 
-                const urlResults = await Promise.all(urlPromises);
-                const kwResults = await Promise.all(kwPromises);
-                
-                urlResults.forEach(res => {
-                    if (Array.isArray(res)) {
-                        for (const item of res) {
-                            urlRows.push(item);
+                // Fetch and process each account in the chunk
+                for (const accountId of chunk) {
+                    const accountUrlRows = await fetchGoogleAds(googleAdsUrlQuery, accountId);
+                    const accountKwRows = await fetchGoogleAds(googleAdsKwQuery, accountId);
+                    
+                    // 1. Build Ad Group URL Distribution Map for THIS account only
+                    const accountAdGroupUrlDistribution: Record<string, { url: string, clicks: number, share: number }[]> = {};
+                    const accountAdGroupTotalClicks: Record<string, number> = {};
+
+                    accountUrlRows.forEach((row: any) => {
+                        const adGroupRN = row.adGroup?.resourceName;
+                        const url = row.landingPageView?.unexpandedFinalUrl;
+                        const clicks = parseInt(row.metrics?.clicks) || 0;
+                        
+                        if (adGroupRN && url) {
+                            if (!accountAdGroupUrlDistribution[adGroupRN]) {
+                                accountAdGroupUrlDistribution[adGroupRN] = [];
+                                accountAdGroupTotalClicks[adGroupRN] = 0;
+                            }
+                            accountAdGroupUrlDistribution[adGroupRN].push({ url, clicks, share: 0 });
+                            accountAdGroupTotalClicks[adGroupRN] += clicks;
                         }
-                    }
-                });
-                kwResults.forEach(res => {
-                    if (Array.isArray(res)) {
-                        for (const item of res) {
-                            kwRows.push(item);
+
+                        // Aggregate into googleAdsPaidMap immediately
+                        const path = normalizeUrl(url);
+                        if (path) {
+                            if (!googleAdsPaidMap[path]) {
+                                googleAdsPaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set(['Google Ads']) };
+                            }
+                            const metrics = row.metrics;
+                            googleAdsPaidMap[path].clicksOrSessions += parseInt(metrics?.clicks) || 0;
+                            googleAdsPaidMap[path].conversions += parseFloat(metrics?.conversions) || 0;
+                            googleAdsPaidMap[path].impressions += parseInt(metrics?.impressions) || 0;
+                            googleAdsPaidMap[path].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
                         }
-                    }
-                });
-            }
-            
-            // 1. Build Ad Group URL Distribution Map
-            const adGroupUrlDistribution: Record<string, { url: string, clicks: number, share: number }[]> = {};
-            const adGroupTotalClicks: Record<string, number> = {};
+                    });
 
-            urlRows.forEach((row: any) => {
-                const adGroupRN = row.adGroup?.resourceName;
-                const url = row.landingPageView?.unexpandedFinalUrl;
-                const clicks = parseInt(row.metrics?.clicks) || 0;
-                
-                if (adGroupRN && url) {
-                    if (!adGroupUrlDistribution[adGroupRN]) {
-                        adGroupUrlDistribution[adGroupRN] = [];
-                        adGroupTotalClicks[adGroupRN] = 0;
-                    }
-                    adGroupUrlDistribution[adGroupRN].push({ url, clicks, share: 0 });
-                    adGroupTotalClicks[adGroupRN] += clicks;
-                }
-            });
-
-            // Calculate shares for each URL within its Ad Group
-            Object.keys(adGroupUrlDistribution).forEach(adGroupRN => {
-                const total = adGroupTotalClicks[adGroupRN];
-                const urls = adGroupUrlDistribution[adGroupRN];
-                if (total > 0) {
-                    urls.forEach(u => u.share = u.clicks / total);
-                } else if (urls.length > 0) {
-                    // Fallback: equal share if total clicks is 0
-                    urls.forEach(u => u.share = 1 / urls.length);
-                }
-            });
-
-            // 2. Process Keywords with Proportional Attribution
-            kwRows.forEach((row: any) => {
-                const kw = row.adGroupCriterion?.keyword?.text;
-                const adGroupRN = row.adGroup?.resourceName;
-                const kwFinalUrls = row.adGroupCriterion?.finalUrls || [];
-                
-                if (!kw) return;
-                const cleanKw = kw.toLowerCase().trim();
-                const metrics = row.metrics;
-                const kwClicks = parseInt(metrics?.clicks) || 0;
-                const kwConversions = parseFloat(metrics?.conversions) || 0;
-                const kwCost = (parseInt(metrics?.costMicros) || 0) / 1000000;
-
-                // Priority 1: Direct URL on keyword (if defined)
-                if (kwFinalUrls.length > 0) {
-                    const url = kwFinalUrls[0];
-                    const cleanPath = normalizeUrl(url);
-                    const compositeKey = getCompositeKey(cleanPath, cleanKw);
-                    if (!googleAdsKeywordUrlMap[compositeKey]) {
-                        googleAdsKeywordUrlMap[compositeKey] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
-                    }
-                    googleAdsKeywordUrlMap[compositeKey].clicksOrSessions += kwClicks;
-                    googleAdsKeywordUrlMap[compositeKey].conversions += kwConversions;
-                    googleAdsKeywordUrlMap[compositeKey].cost += kwCost;
-                } 
-                // Priority 2: Proportional distribution across Ad Group URLs (Standard Search Ads)
-                else if (adGroupRN && adGroupUrlDistribution[adGroupRN]) {
-                    const distributions = adGroupUrlDistribution[adGroupRN];
-                    distributions.forEach(dist => {
-                        const cleanPath = normalizeUrl(dist.url);
-                        const compositeKey = getCompositeKey(cleanPath, cleanKw);
-                        if (!googleAdsKeywordUrlMap[compositeKey]) {
-                            googleAdsKeywordUrlMap[compositeKey] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
+                    // Calculate shares for this account
+                    Object.keys(accountAdGroupUrlDistribution).forEach(adGroupRN => {
+                        const total = accountAdGroupTotalClicks[adGroupRN];
+                        const urls = accountAdGroupUrlDistribution[adGroupRN];
+                        if (total > 0) {
+                            urls.forEach(u => u.share = u.clicks / total);
+                        } else if (urls.length > 0) {
+                            urls.forEach(u => u.share = 1 / urls.length);
                         }
-                        googleAdsKeywordUrlMap[compositeKey].clicksOrSessions += kwClicks * dist.share;
-                        googleAdsKeywordUrlMap[compositeKey].conversions += kwConversions * dist.share;
-                        googleAdsKeywordUrlMap[compositeKey].cost += kwCost * dist.share;
+                    });
+
+                    // 2. Process Keywords for THIS account with Proportional Attribution
+                    accountKwRows.forEach((row: any) => {
+                        const kw = row.adGroupCriterion?.keyword?.text;
+                        const adGroupRN = row.adGroup?.resourceName;
+                        const kwFinalUrls = row.adGroupCriterion?.finalUrls || [];
+                        
+                        if (!kw) return;
+                        const cleanKw = kw.toLowerCase().trim();
+                        const metrics = row.metrics;
+                        const kwClicks = parseInt(metrics?.clicks) || 0;
+                        const kwConversions = parseFloat(metrics?.conversions) || 0;
+                        const kwCost = (parseInt(metrics?.costMicros) || 0) / 1000000;
+
+                        if (kwFinalUrls.length > 0) {
+                            const url = kwFinalUrls[0];
+                            const cleanPath = normalizeUrl(url);
+                            const compositeKey = getCompositeKey(cleanPath, cleanKw);
+                            if (!googleAdsKeywordUrlMap[compositeKey]) {
+                                googleAdsKeywordUrlMap[compositeKey] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
+                            }
+                            googleAdsKeywordUrlMap[compositeKey].clicksOrSessions += kwClicks;
+                            googleAdsKeywordUrlMap[compositeKey].conversions += kwConversions;
+                            googleAdsKeywordUrlMap[compositeKey].cost += kwCost;
+                        } else if (adGroupRN && accountAdGroupUrlDistribution[adGroupRN]) {
+                            const distributions = accountAdGroupUrlDistribution[adGroupRN];
+                            distributions.forEach(dist => {
+                                const cleanPath = normalizeUrl(dist.url);
+                                const compositeKey = getCompositeKey(cleanPath, cleanKw);
+                                if (!googleAdsKeywordUrlMap[compositeKey]) {
+                                    googleAdsKeywordUrlMap[compositeKey] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
+                                }
+                                googleAdsKeywordUrlMap[compositeKey].clicksOrSessions += kwClicks * dist.share;
+                                googleAdsKeywordUrlMap[compositeKey].conversions += kwConversions * dist.share;
+                                googleAdsKeywordUrlMap[compositeKey].cost += kwCost * dist.share;
+                            });
+                        } else {
+                            const compositeKey = getCompositeKey('Unknown URL', cleanKw);
+                            if (!googleAdsKeywordUrlMap[compositeKey]) {
+                                googleAdsKeywordUrlMap[compositeKey] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
+                            }
+                            googleAdsKeywordUrlMap[compositeKey].clicksOrSessions += kwClicks;
+                            googleAdsKeywordUrlMap[compositeKey].conversions += kwConversions;
+                            googleAdsKeywordUrlMap[compositeKey].cost += kwCost;
+                        }
                     });
                 }
-                // Fallback: Unknown URL
-                else {
-                    const compositeKey = getCompositeKey('Unknown URL', cleanKw);
-                    if (!googleAdsKeywordUrlMap[compositeKey]) {
-                        googleAdsKeywordUrlMap[compositeKey] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
-                    }
-                    googleAdsKeywordUrlMap[compositeKey].clicksOrSessions += kwClicks;
-                    googleAdsKeywordUrlMap[compositeKey].conversions += kwConversions;
-                    googleAdsKeywordUrlMap[compositeKey].cost += kwCost;
-                }
-            });
-
-            // 3. Process URLs for Bridge Data (source of truth for URL-level metrics)
-            urlRows.forEach((row: any) => {
-                const url = row.landingPageView?.unexpandedFinalUrl; 
-                if(!url) return;
-                const path = normalizeUrl(url);
-                
-                if (!googleAdsPaidMap[path]) {
-                    googleAdsPaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set(['Google Ads']) };
-                }
-                
-                const metrics = row.metrics;
-                googleAdsPaidMap[path].clicksOrSessions += parseInt(metrics?.clicks) || 0;
-                googleAdsPaidMap[path].conversions += parseFloat(metrics?.conversions) || 0;
-                googleAdsPaidMap[path].impressions += parseInt(metrics?.impressions) || 0;
-                googleAdsPaidMap[path].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
-            });
+                const progress = 50 + Math.round(((i + chunk.length) / accountsToFetch.length) * 50);
+                setLoadingProgress(progress);
+            }
             
             // BUILD GOOGLE ADS BRIDGE DATA
             const googleAdsResults: BridgeData[] = [];
@@ -2014,6 +1989,36 @@ const App: React.FC = () => {
           </button>
         </div>
       </main>
+      {isLoadingBridge && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl text-center space-y-6">
+            <div className="relative w-24 h-24 mx-auto">
+              <div className="absolute inset-0 border-4 border-blue-100 rounded-full"></div>
+              <div 
+                className="absolute inset-0 border-4 border-blue-600 rounded-full border-t-transparent animate-spin"
+                style={{ animationDuration: '1.5s' }}
+              ></div>
+              <div className="absolute inset-0 flex items-center justify-center font-bold text-blue-600">
+                {loadingProgress}%
+              </div>
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-xl font-bold text-gray-900">Sincronizando Datos</h3>
+              <p className="text-gray-500 text-sm">
+                Estamos procesando tus {availableGoogleAdsSubAccounts.length > 0 ? availableGoogleAdsSubAccounts.length : '7000+'} campañas. 
+                Esta operación es masiva y se está realizando de forma segura para tu navegador.
+              </p>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+              <div 
+                className="bg-blue-600 h-full transition-all duration-500 ease-out"
+                style={{ width: `${loadingProgress}%` }}
+              ></div>
+            </div>
+            <p className="text-xs text-gray-400 italic">Por favor, no cierres esta pestaña...</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
