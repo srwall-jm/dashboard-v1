@@ -13,9 +13,10 @@ import { ComparisonTooltip } from '../components/ComparisonTooltip';
 import { EmptyState } from '../components/EmptyState';
 
 // Helper component for expanded rows (Shows Keyword Detail)
-const QueryDetailRow: React.FC<{ query: string, rank: number | null, clicks: number }> = ({ query, rank, clicks }) => (
+const QueryDetailRow: React.FC<{ query: string, rank: number | null, clicks: number, paidClicks?: number, paidCost?: number, currencySymbol: string }> = ({ query, rank, clicks, paidClicks = 0, paidCost = 0, currencySymbol }) => (
   <tr className="bg-slate-50/80 border-b border-slate-100/50">
-    <td colSpan={3} className="py-2 pl-16">
+    <td colSpan={2} className="py-2 pl-16"></td>
+    <td className="py-2">
       <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
         <CornerDownRight size={10} className="text-slate-300 flex-shrink-0" />
         <span className="truncate max-w-[200px]" title={query}>{query}</span>
@@ -28,10 +29,19 @@ const QueryDetailRow: React.FC<{ query: string, rank: number | null, clicks: num
         </span>
       ) : '-'}
     </td>
-    <td className="text-right pr-4 py-2 text-[10px] text-slate-500 font-mono">
-       {clicks.toLocaleString()} clicks
+    <td className="text-right py-2 text-[10px] font-bold text-slate-700">{clicks.toLocaleString()}</td>
+    <td className="text-right py-2 text-[10px] font-bold text-indigo-600">
+        <div className="flex flex-col items-end">
+            <span>{paidClicks.toLocaleString()}</span>
+            <span className="text-[8px] text-rose-500">{currencySymbol}{paidCost.toFixed(2)}</span>
+        </div>
     </td>
-    <td colSpan={3} className="py-2"></td>
+    <td className="text-center py-2">
+        {paidClicks > 0 && clicks > 0 ? (
+            <span className="text-[9px] font-bold text-slate-400">{(paidClicks / (paidClicks + clicks) * 100).toFixed(0)}%</span>
+        ) : '-'}
+    </td>
+    <td className="py-2"></td>
   </tr>
 );
 
@@ -58,8 +68,9 @@ const BridgeAnalysisTable: React.FC<{
   dataSourceName: string;
   headerContent?: React.ReactNode;
   dailyData: DailyData[]; // Passed for charting
+  currencySymbol: string;
   customEmptyState?: React.ReactNode;
-}> = ({ title, subTitle, data, keywordData, metricLabel, dataSourceName, headerContent, dailyData, customEmptyState }) => {
+}> = ({ title, subTitle, data, keywordData, metricLabel, dataSourceName, headerContent, dailyData, currencySymbol, customEmptyState }) => {
   const [urlFilter, setUrlFilter] = useState('');
   const [keywordFilter, setKeywordFilter] = useState('');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -393,7 +404,15 @@ const BridgeAnalysisTable: React.FC<{
                         </tr>
                         {row.gscTopQueries && row.gscTopQueries.length > 0 ? (
                             row.gscTopQueries.map((q, qIdx) => (
-                                <QueryDetailRow key={`${idx}-${qIdx}`} query={q.query} rank={q.rank} clicks={q.clicks} />
+                                <QueryDetailRow 
+                                    key={`${idx}-${qIdx}`} 
+                                    query={q.query} 
+                                    rank={q.rank} 
+                                    clicks={q.clicks} 
+                                    paidClicks={q.paidClicks}
+                                    paidCost={q.paidCost}
+                                    currencySymbol={currencySymbol}
+                                />
                             ))
                         ) : (
                             <tr><td colSpan={8} className="text-center py-2 text-[10px] text-slate-400 italic">No specific query data available via GSC</td></tr>
@@ -533,6 +552,7 @@ export const SeoPpcBridgeView: React.FC<{
               keywordData={ga4KeywordData}
               metricLabel="Paid Sessions"
               dataSourceName="GA4"
+              currencySymbol={currencySymbol}
               dailyData={dailyData}
            />
        ) : (
@@ -543,6 +563,7 @@ export const SeoPpcBridgeView: React.FC<{
               keywordData={googleAdsKeywordData}
               metricLabel="Google Ads Clicks"
               dataSourceName="GOOGLE_ADS"
+              currencySymbol={currencySymbol}
               dailyData={dailyData}
               headerContent={
                   <div className="flex items-center gap-4 ml-4">

@@ -101,7 +101,7 @@ export interface BridgeData {
   status?: string;
   ppcSourceMedium?: string;
   dataSource: 'GA4' | 'GOOGLE_ADS';
-  gscTopQueries?: { query: string; rank: number; clicks: number }[]; // NEW: Top 10 Queries
+  gscTopQueries?: { query: string; rank: number; clicks: number; paidClicks?: number; paidCost?: number }[]; // NEW: Top 10 Queries
 }
 
 export interface KeywordBridgeData {

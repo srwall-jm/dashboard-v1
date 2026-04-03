@@ -36,6 +36,7 @@ const PRIORITY_DIMENSIONS = [
 
 const App: React.FC = () => {
   const lastFetchParams = useRef<string>('');
+  const lastBridgeFetchParams = useRef<string>('');
   
   const [user, setUser] = useState<{ name: string; email: string; picture: string } | null>(() => {
     const saved = localStorage.getItem('seo_suite_user');
@@ -82,6 +83,7 @@ const App: React.FC = () => {
   const [bridgeDataGoogleAds, setBridgeDataGoogleAds] = useState<BridgeData[]>([]); 
   const [keywordBridgeDataGA4, setKeywordBridgeDataGA4] = useState<KeywordBridgeData[]>([]);
   const [keywordBridgeDataGoogleAds, setKeywordBridgeDataGoogleAds] = useState<KeywordBridgeData[]>([]);
+  const [globalKeywordBridgeDataGoogleAds, setGlobalKeywordBridgeDataGoogleAds] = useState<KeywordBridgeData[]>([]);
   
   const [aiTrafficData, setAiTrafficData] = useState<AiTrafficData[]>([]); 
   const [gscDailyTotals, setGscDailyTotals] = useState<any[]>([]);
@@ -833,7 +835,17 @@ const App: React.FC = () => {
                     : (gscData ? gscData.bestRank : null);
                 
                 const topQuery = gscData && gscData.queries.length > 0 ? gscData.queries[0].query : '(direct/none)';
-                const topQueriesList = gscData ? gscData.queries.slice(0, 10) : [];
+                const topQueriesList = gscData ? gscData.queries.slice(0, 10).map(q => {
+                    const cleanKw = q.query.toLowerCase().trim();
+                    const paidKwData = googleAdsGlobalKeywordMap[cleanKw];
+                    return {
+                        query: q.query,
+                        rank: q.rank,
+                        clicks: q.clicks,
+                        paidClicks: paidKwData?.clicks || 0,
+                        paidCost: paidKwData?.cost || 0
+                    };
+                }) : [];
                 const paidVolume = paidStats ? paidStats.clicksOrSessions : 0;
                 
                 if (organicSessions === 0 && organicClicks === 0 && paidVolume === 0 && (!paidStats || paidStats.cost === 0)) return;
@@ -863,49 +875,53 @@ const App: React.FC = () => {
                     dataSource: 'GOOGLE_ADS',
                     gscTopQueries: topQueriesList
                 });
-            });
 
-            // NEW: Build the Keyword Bridge Data (Global Aggregate for Exact Match View)
-            const globalKwBridgeMap: Record<string, any> = {};
-            
-            allPaths.forEach(path => {
-                const gscData = gscUrlMap[path];
+                // Populate URL-based keyword results for Search Efficiency
                 if (gscData) {
-                    gscData.queries.forEach(q => {
+                    gscData.queries.slice(0, 15).forEach(q => {
                         const cleanKw = q.query.toLowerCase().trim();
                         const paidKwData = googleAdsGlobalKeywordMap[cleanKw];
                         
-                        if (!globalKwBridgeMap[cleanKw]) {
-                            const paidVol = paidKwData ? paidKwData.clicks : 0;
-                            const paidCost = paidKwData ? paidKwData.cost : 0;
-                            const paidConv = paidKwData ? paidKwData.conversions : 0;
-                            const cvr = paidVol > 0 ? (paidConv / paidVol) * 100 : 0;
-                            let avgCpc = paidVol > 0 ? paidCost / paidVol : 0;
-                            if (avgCpc === 0 && globalAvgCpc > 0) avgCpc = globalAvgCpc;
+                        const paidVol = paidKwData ? paidKwData.clicks : 0;
+                        const paidCost = paidKwData ? paidKwData.cost : 0;
+                        const cvr = paidVol > 0 ? (paidKwData!.conversions / paidVol) * 100 : 0;
+                        let avgCpc = paidVol > 0 ? paidCost / paidVol : 0;
+                        if (avgCpc === 0 && globalAvgCpc > 0) avgCpc = globalAvgCpc;
 
-                            globalKwBridgeMap[cleanKw] = {
-                                keyword: q.query,
-                                organicClicks: 0,
-                                organicRankSum: 0,
-                                organicRankCount: 0,
-                                paidSessions: paidVol,
-                                ppcCost: paidCost,
-                                paidCvr: cvr,
-                                avgCpc: avgCpc,
-                                actionLabel: "MAINTAIN",
-                                dataSource: 'GOOGLE_ADS'
-                            };
-                        }
-                        
-                        globalKwBridgeMap[cleanKw].organicClicks += q.clicks;
-                        globalKwBridgeMap[cleanKw].organicRankSum += q.rank;
-                        globalKwBridgeMap[cleanKw].organicRankCount += 1;
+                        googleAdsKwResults.push({
+                            url: path,
+                            keyword: q.query,
+                            organicClicks: q.clicks,
+                            organicRank: q.rank,
+                            paidSessions: paidVol,
+                            ppcCost: paidCost,
+                            paidCvr: cvr,
+                            avgCpc: avgCpc,
+                            actionLabel: q.rank <= 3 && paidVol > 0 ? "REVIEW" : "MAINTAIN",
+                            dataSource: 'GOOGLE_ADS'
+                        });
                     });
                 }
             });
 
-            // Convert map to array and finalize metrics
-            googleAdsKwResults = Object.values(globalKwBridgeMap).map(item => {
+            // Build Global Aggregate for Exact Match View
+            const globalKwBridgeMap: Record<string, any> = {};
+            googleAdsKwResults.forEach(item => {
+                const cleanKw = item.keyword.toLowerCase().trim();
+                if (!globalKwBridgeMap[cleanKw]) {
+                    globalKwBridgeMap[cleanKw] = { ...item, organicRankSum: 0, organicRankCount: 0, organicClicks: 0, paidSessions: 0, ppcCost: 0 };
+                    delete globalKwBridgeMap[cleanKw].url;
+                }
+                globalKwBridgeMap[cleanKw].organicClicks += item.organicClicks;
+                globalKwBridgeMap[cleanKw].paidSessions = item.paidSessions; // Already global from map
+                globalKwBridgeMap[cleanKw].ppcCost = item.ppcCost; // Already global from map
+                if (item.organicRank !== null) {
+                    globalKwBridgeMap[cleanKw].organicRankSum += item.organicRank;
+                    globalKwBridgeMap[cleanKw].organicRankCount += 1;
+                }
+            });
+
+            const finalGlobalKwResults = Object.values(globalKwBridgeMap).map((item: any) => {
                 const avgRank = item.organicRankCount > 0 ? item.organicRankSum / item.organicRankCount : null;
                 return {
                     ...item,
@@ -914,33 +930,9 @@ const App: React.FC = () => {
                 };
             });
 
-            // Also add keywords that are ONLY in Paid (not in GSC)
-            Object.keys(googleAdsGlobalKeywordMap).forEach(kw => {
-                if (!globalKwBridgeMap[kw]) {
-                    const paidData = googleAdsGlobalKeywordMap[kw];
-                    const paidVol = paidData.clicks;
-                    const paidCost = paidData.cost;
-                    const paidConv = paidData.conversions;
-                    const cvr = paidVol > 0 ? (paidConv / paidVol) * 100 : 0;
-                    let avgCpc = paidVol > 0 ? paidCost / paidVol : 0;
-                    if (avgCpc === 0 && globalAvgCpc > 0) avgCpc = globalAvgCpc;
-
-                    googleAdsKwResults.push({
-                        keyword: kw,
-                        organicClicks: 0,
-                        organicRank: null,
-                        paidSessions: paidVol,
-                        ppcCost: paidCost,
-                        paidCvr: cvr,
-                        avgCpc: avgCpc,
-                        actionLabel: "PAID ONLY",
-                        dataSource: 'GOOGLE_ADS'
-                    });
-                }
-            });
-            
             setBridgeDataGoogleAds(googleAdsResults.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
             setKeywordBridgeDataGoogleAds(googleAdsKwResults.sort((a, b) => b.paidSessions - a.paidSessions));
+            setGlobalKeywordBridgeDataGoogleAds(finalGlobalKwResults.sort((a, b) => b.paidSessions - a.paidSessions));
          } catch (err: any) {
              console.error("Error fetching Google Ads data:", err);
              setError(err.message || "Failed to fetch Google Ads data");
@@ -1328,7 +1320,13 @@ const App: React.FC = () => {
   };
   
   useEffect(() => {
+    const currentParams = `${ga4Auth?.property?.id}-${gscAuth?.site?.siteUrl}-${filters.dateRange.start}-${filters.dateRange.end}`;
+    if (lastBridgeFetchParams.current === currentParams && (bridgeDataGA4.length > 0 || bridgeDataGoogleAds.length > 0)) {
+      return;
+    }
+
     if (activeTab === DashboardTab.PPC_SEO_BRIDGE || activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE || activeTab === DashboardTab.SEARCH_EFFICIENCY) {
+      lastBridgeFetchParams.current = currentParams;
       fetchBridgeData();
     } else if (activeTab === DashboardTab.AI_TRAFFIC_MONITOR) {
       fetchAiTrafficData();
@@ -1818,7 +1816,7 @@ const App: React.FC = () => {
                 ga4Data={bridgeDataGA4} 
                 googleAdsData={bridgeDataGoogleAds}
                 ga4KeywordData={keywordBridgeDataGA4}
-                googleAdsKeywordData={keywordBridgeDataGoogleAds}
+                googleAdsKeywordData={globalKeywordBridgeDataGoogleAds.length > 0 ? globalKeywordBridgeDataGoogleAds : keywordBridgeDataGoogleAds}
                 dailyData={filteredDailyData} 
                 currencySymbol={currencySymbol} 
                 availableGoogleAdsCustomers={availableGoogleAdsCustomers}
