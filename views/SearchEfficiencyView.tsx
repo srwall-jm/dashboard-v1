@@ -28,11 +28,13 @@ type SortConfig = {
 };
 
 export const SearchEfficiencyView: React.FC<{ 
-  data: KeywordBridgeData[]; 
+  urlData: any[]; // BridgeData[]
+  keywordData: KeywordBridgeData[]; 
   currencySymbol: string; 
   globalMetrics: GoogleAdsGlobalMetrics | null;
   totalGscClicks: number;
-}> = ({ data, currencySymbol, globalMetrics, totalGscClicks }) => {
+  isLoading?: boolean;
+}> = ({ urlData, keywordData, currencySymbol, globalMetrics, totalGscClicks, isLoading }) => {
   const [clusterFilter, setClusterFilter] = useState<'All' | 'Cannibalization Risk' | 'Paid Reliance' | 'Paid Gap'>('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ppcCost', direction: 'desc' });
@@ -49,39 +51,55 @@ export const SearchEfficiencyView: React.FC<{
     // Group by URL
     const urlMap = new Map<string, UrlEfficiencyRow>();
 
-    for (let i = 0; i < data.length; i++) {
-        const row = data[i];
+    // 1. Initialize with precise URL-level data
+    for (let i = 0; i < urlData.length; i++) {
+        const row = urlData[i];
+        const url = row.url || '(not set)';
         
-        // Calculate metrics for all data
-        totalCost += row.ppcCost || 0;
-        if (row.organicRank !== null && row.organicRank <= 3 && row.ppcCost > 0) {
-            potentialSavings += row.ppcCost;
-        }
+        urlMap.set(url, {
+            url,
+            cluster: 'Other',
+            organicClicks: row.organicClicks || 0,
+            paidSessions: row.paidSessions || 0,
+            paidShare: 0,
+            ppcCost: row.paidCost || 0,
+            avgCpc: row.paidSessions > 0 ? (row.paidCost || 0) / row.paidSessions : 0,
+            queries: [],
+            avgOrganicRank: null
+        });
 
+        // Global metrics from precise URL data
+        totalCost += row.paidCost || 0;
         totalOrganicClicks += row.organicClicks || 0;
         totalPaidSessions += row.paidSessions || 0;
+    }
 
-        const url = row.url || 'Unknown URL';
+    // 2. Attach keyword data for breakdown and rank calculation
+    for (let i = 0; i < keywordData.length; i++) {
+        const row = keywordData[i];
+        const url = row.url || '(not set)';
         
-        if (!urlMap.has(url)) {
-            urlMap.set(url, {
+        let urlEntry = urlMap.get(url);
+        if (!urlEntry) {
+            urlEntry = {
                 url,
                 cluster: 'Other',
-                organicClicks: 0,
-                paidSessions: 0,
+                organicClicks: row.organicClicks || 0,
+                paidSessions: row.paidSessions || 0,
                 paidShare: 0,
-                ppcCost: 0,
-                avgCpc: 0,
+                ppcCost: row.paidCost || 0,
+                avgCpc: row.paidSessions > 0 ? (row.paidCost || 0) / row.paidSessions : 0,
                 queries: [],
                 avgOrganicRank: null
-            });
+            };
+            urlMap.set(url, urlEntry);
+            
+            totalCost += row.paidCost || 0;
+            totalOrganicClicks += row.organicClicks || 0;
+            totalPaidSessions += row.paidSessions || 0;
         }
         
-        const urlData = urlMap.get(url)!;
-        urlData.organicClicks += row.organicClicks || 0;
-        urlData.paidSessions += row.paidSessions || 0;
-        urlData.ppcCost += row.ppcCost || 0;
-        urlData.queries.push(row);
+        urlEntry.queries.push(row);
     }
 
     const result: UrlEfficiencyRow[] = [];
@@ -101,9 +119,10 @@ export const SearchEfficiencyView: React.FC<{
         });
         urlData.avgOrganicRank = rankCount > 0 ? totalRank / rankCount : null;
 
-        // Determine cluster based on aggregated data
+        // Clustering
         if (urlData.avgOrganicRank !== null && urlData.avgOrganicRank <= 3 && urlData.ppcCost > 0) {
             urlData.cluster = 'Cannibalization Risk';
+            potentialSavings += urlData.ppcCost;
         } else if ((urlData.avgOrganicRank === null || urlData.avgOrganicRank > 10) && urlData.ppcCost > 0) {
             urlData.cluster = 'Paid Reliance';
         } else if (urlData.organicClicks > 0 && (!urlData.ppcCost || urlData.ppcCost === 0)) {
@@ -114,7 +133,6 @@ export const SearchEfficiencyView: React.FC<{
 
         const totalTraffic = urlData.organicClicks + urlData.paidSessions;
         urlData.paidShare = totalTraffic > 0 ? (urlData.paidSessions / totalTraffic) * 100 : 0;
-        urlData.avgCpc = urlData.paidSessions > 0 ? urlData.ppcCost / urlData.paidSessions : 0;
 
         // Sort queries by traffic/cost
         urlData.queries.sort((a, b) => (b.organicClicks + b.paidSessions) - (a.organicClicks + a.paidSessions));
@@ -143,7 +161,7 @@ export const SearchEfficiencyView: React.FC<{
         filteredData: result, 
         metrics: { totalCost, potentialSavings, optimizedSpend, accumulatedSavings, avgPaidShare, topCannibalizedUrls } 
     };
-  }, [data, clusterFilter, searchTerm, globalMetrics]);
+  }, [urlData, keywordData, clusterFilter, searchTerm, globalMetrics]);
 
   // 3. Sorting
   const sortedData = useMemo(() => {
@@ -242,6 +260,15 @@ export const SearchEfficiencyView: React.FC<{
         </div>
     </th>
   );
+
+  if (isLoading && urlData.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 space-y-4">
+        <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-slate-500 font-black uppercase tracking-widest text-[10px]">Sincronizando datos de Keywords...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">

@@ -13,7 +13,7 @@ import { ComparisonTooltip } from '../components/ComparisonTooltip';
 import { EmptyState } from '../components/EmptyState';
 
 // Helper component for expanded rows (Shows Keyword Detail)
-const QueryDetailRow: React.FC<{ query: string, rank: number | null, clicks: number, paidClicks?: number, paidCost?: number, currencySymbol: string }> = ({ query, rank, clicks, paidClicks = 0, paidCost = 0, currencySymbol }) => (
+const QueryDetailRow: React.FC<{ query: string, rank: number | null, clicks: number, paidClicks?: number, paidCost?: number, currencySymbol: string, isLoading?: boolean }> = ({ query, rank, clicks, paidClicks = 0, paidCost = 0, currencySymbol, isLoading }) => (
   <tr className="bg-slate-50/80 border-b border-slate-100/50">
     <td colSpan={2} className="py-2 pl-16"></td>
     <td className="py-2">
@@ -32,12 +32,18 @@ const QueryDetailRow: React.FC<{ query: string, rank: number | null, clicks: num
     <td className="text-right py-2 text-[10px] font-bold text-slate-700">{clicks.toLocaleString()}</td>
     <td className="text-right py-2 text-[10px] font-bold text-indigo-600">
         <div className="flex flex-col items-end">
-            <span>{paidClicks.toLocaleString()}</span>
-            <span className="text-[8px] text-rose-500">{currencySymbol}{paidCost.toFixed(2)}</span>
+            {isLoading ? (
+              <span className="text-[8px] text-slate-400 animate-pulse italic">Cargando...</span>
+            ) : (
+              <>
+                <span>{paidClicks.toLocaleString()}</span>
+                <span className="text-[8px] text-rose-500">{currencySymbol}{paidCost.toFixed(2)}</span>
+              </>
+            )}
         </div>
     </td>
     <td className="text-center py-2">
-        {paidClicks > 0 && clicks > 0 ? (
+        {!isLoading && paidClicks > 0 && clicks > 0 ? (
             <span className="text-[9px] font-bold text-slate-400">{(paidClicks / (paidClicks + clicks) * 100).toFixed(0)}%</span>
         ) : '-'}
     </td>
@@ -70,7 +76,8 @@ const BridgeAnalysisTable: React.FC<{
   dailyData: DailyData[]; // Passed for charting
   currencySymbol: string;
   customEmptyState?: React.ReactNode;
-}> = ({ title, subTitle, data, keywordData, metricLabel, dataSourceName, headerContent, dailyData, currencySymbol, customEmptyState }) => {
+  isGoogleAdsKeywordsLoading?: boolean;
+}> = ({ title, subTitle, data, keywordData, metricLabel, dataSourceName, headerContent, dailyData, currencySymbol, customEmptyState, isGoogleAdsKeywordsLoading }) => {
   const [urlFilter, setUrlFilter] = useState('');
   const [keywordFilter, setKeywordFilter] = useState('');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -412,6 +419,7 @@ const BridgeAnalysisTable: React.FC<{
                                     paidClicks={q.paidClicks}
                                     paidCost={q.paidCost}
                                     currencySymbol={currencySymbol}
+                                    isLoading={isGoogleAdsKeywordsLoading && dataSourceName === 'GOOGLE_ADS'}
                                 />
                             ))
                         ) : (
@@ -516,9 +524,11 @@ export const SeoPpcBridgeView: React.FC<{
   availableGoogleAdsCustomers: GoogleAdsCustomer[];
   selectedGoogleAdsCustomer: GoogleAdsCustomer | null;
   onGoogleAdsCustomerChange: (c: GoogleAdsCustomer | null) => void;
+  isGoogleAdsKeywordsLoading?: boolean;
 }> = ({ 
   ga4Data, googleAdsData, ga4KeywordData, googleAdsKeywordData, dailyData, currencySymbol,
-  availableGoogleAdsCustomers, selectedGoogleAdsCustomer, onGoogleAdsCustomerChange
+  availableGoogleAdsCustomers, selectedGoogleAdsCustomer, onGoogleAdsCustomerChange,
+  isGoogleAdsKeywordsLoading
 }) => {
   const [activeDataSource, setActiveDataSource] = useState<'GA4' | 'GOOGLE_ADS'>('GA4');
 
