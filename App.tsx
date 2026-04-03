@@ -480,7 +480,7 @@ const App: React.FC = () => {
     }
     
     const normalizeUrl = (url: string) => {
-      if (!url || url === '(not set)') return '';
+      if (!url || url === '(not set)') return '(not set)';
       try { url = decodeURIComponent(url); } catch (e) {}
       let path = url.toLowerCase().trim();
       path = path.replace(/^https?:\/\/[^\/]+/, '');
@@ -877,6 +877,7 @@ const App: React.FC = () => {
                 });
 
                 // Populate URL-based keyword results for Search Efficiency
+                const displayPath = path || '(not set)';
                 if (gscData) {
                     gscData.queries.slice(0, 15).forEach(q => {
                         const cleanKw = q.query.toLowerCase().trim();
@@ -889,7 +890,7 @@ const App: React.FC = () => {
                         if (avgCpc === 0 && globalAvgCpc > 0) avgCpc = globalAvgCpc;
 
                         googleAdsKwResults.push({
-                            url: path,
+                            url: displayPath,
                             keyword: q.query,
                             organicClicks: q.clicks,
                             organicRank: q.rank,
@@ -900,6 +901,20 @@ const App: React.FC = () => {
                             actionLabel: q.rank <= 3 && paidVol > 0 ? "REVIEW" : "MAINTAIN",
                             dataSource: 'GOOGLE_ADS'
                         });
+                    });
+                } else if (paidStats) {
+                    // URL only has Paid traffic - still include it for Search Efficiency analysis
+                    googleAdsKwResults.push({
+                        url: displayPath,
+                        keyword: '(no organic keywords)',
+                        organicClicks: 0,
+                        organicRank: null,
+                        paidSessions: paidStats.clicksOrSessions,
+                        ppcCost: paidStats.cost,
+                        paidCvr: paidStats.clicksOrSessions > 0 ? (paidStats.conversions / paidStats.clicksOrSessions) * 100 : 0,
+                        avgCpc: paidStats.clicksOrSessions > 0 ? paidStats.cost / paidStats.clicksOrSessions : globalAvgCpc,
+                        actionLabel: "PAID ONLY",
+                        dataSource: 'GOOGLE_ADS'
                     });
                 }
             });
