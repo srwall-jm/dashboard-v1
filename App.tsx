@@ -768,37 +768,22 @@ const App: React.FC = () => {
                 globalAvgCpc = globalMetrics.avgCpc; // Used for fallback
             }
             
-            // DETAILED FETCH & IMMEDIATE AGGREGATION (Account by Account)
-            accountsToFetch = allAccountIds;
-            
-            const chunkSize = 2; // Process very few accounts at a time to keep memory low
-            for (let i = 0; i < accountsToFetch.length; i += chunkSize) {
-                const chunk = accountsToFetch.slice(i, i + chunkSize);
+            // 1. Process URLs for Bridge Data (source of truth for URL-level metrics)
+            const googleAdsPaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
+            const googleAdsGlobalKeywordMap: Record<string, { clicks: number, conversions: number, cost: number, impressions: number }> = {};
+
+            const chunkSize = 2; 
+            for (let i = 0; i < allAccountIds.length; i += chunkSize) {
+                const chunk = allAccountIds.slice(i, i + chunkSize);
                 
-                // Fetch and process each account in the chunk
                 for (const accountId of chunk) {
                     const accountUrlRows = await fetchGoogleAds(googleAdsUrlQuery, accountId);
                     const accountKwRows = await fetchGoogleAds(googleAdsKwQuery, accountId);
                     
-                    // 1. Build Ad Group URL Distribution Map for THIS account only
-                    const accountAdGroupUrlDistribution: Record<string, { url: string, clicks: number, share: number }[]> = {};
-                    const accountAdGroupTotalClicks: Record<string, number> = {};
-
+                    // URL Level Metrics (Direct from Landing Page View)
                     accountUrlRows.forEach((row: any) => {
-                        const adGroupRN = row.adGroup?.resourceName;
                         const url = row.landingPageView?.unexpandedFinalUrl;
-                        const clicks = parseInt(row.metrics?.clicks) || 0;
-                        
-                        if (adGroupRN && url) {
-                            if (!accountAdGroupUrlDistribution[adGroupRN]) {
-                                accountAdGroupUrlDistribution[adGroupRN] = [];
-                                accountAdGroupTotalClicks[adGroupRN] = 0;
-                            }
-                            accountAdGroupUrlDistribution[adGroupRN].push({ url, clicks, share: 0 });
-                            accountAdGroupTotalClicks[adGroupRN] += clicks;
-                        }
-
-                        // Aggregate into googleAdsPaidMap immediately
+                        if (!url) return;
                         const path = normalizeUrl(url);
                         if (path) {
                             if (!googleAdsPaidMap[path]) {
@@ -812,69 +797,29 @@ const App: React.FC = () => {
                         }
                     });
 
-                    // Calculate shares for this account
-                    Object.keys(accountAdGroupUrlDistribution).forEach(adGroupRN => {
-                        const total = accountAdGroupTotalClicks[adGroupRN];
-                        const urls = accountAdGroupUrlDistribution[adGroupRN];
-                        if (total > 0) {
-                            urls.forEach(u => u.share = u.clicks / total);
-                        } else if (urls.length > 0) {
-                            urls.forEach(u => u.share = 1 / urls.length);
-                        }
-                    });
-
-                    // 2. Process Keywords for THIS account with Proportional Attribution
+                    // Global Keyword Dictionary (Pure Keyword Match)
                     accountKwRows.forEach((row: any) => {
                         const kw = row.adGroupCriterion?.keyword?.text;
-                        const adGroupRN = row.adGroup?.resourceName;
-                        const kwFinalUrls = row.adGroupCriterion?.finalUrls || [];
-                        
                         if (!kw) return;
                         const cleanKw = kw.toLowerCase().trim();
                         const metrics = row.metrics;
-                        const kwClicks = parseInt(metrics?.clicks) || 0;
-                        const kwConversions = parseFloat(metrics?.conversions) || 0;
-                        const kwCost = (parseInt(metrics?.costMicros) || 0) / 1000000;
-
-                        if (kwFinalUrls.length > 0) {
-                            const url = kwFinalUrls[0];
-                            const cleanPath = normalizeUrl(url);
-                            const compositeKey = getCompositeKey(cleanPath, cleanKw);
-                            if (!googleAdsKeywordUrlMap[compositeKey]) {
-                                googleAdsKeywordUrlMap[compositeKey] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
-                            }
-                            googleAdsKeywordUrlMap[compositeKey].clicksOrSessions += kwClicks;
-                            googleAdsKeywordUrlMap[compositeKey].conversions += kwConversions;
-                            googleAdsKeywordUrlMap[compositeKey].cost += kwCost;
-                        } else if (adGroupRN && accountAdGroupUrlDistribution[adGroupRN]) {
-                            const distributions = accountAdGroupUrlDistribution[adGroupRN];
-                            distributions.forEach(dist => {
-                                const cleanPath = normalizeUrl(dist.url);
-                                const compositeKey = getCompositeKey(cleanPath, cleanKw);
-                                if (!googleAdsKeywordUrlMap[compositeKey]) {
-                                    googleAdsKeywordUrlMap[compositeKey] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
-                                }
-                                googleAdsKeywordUrlMap[compositeKey].clicksOrSessions += kwClicks * dist.share;
-                                googleAdsKeywordUrlMap[compositeKey].conversions += kwConversions * dist.share;
-                                googleAdsKeywordUrlMap[compositeKey].cost += kwCost * dist.share;
-                            });
-                        } else {
-                            const compositeKey = getCompositeKey('Unknown URL', cleanKw);
-                            if (!googleAdsKeywordUrlMap[compositeKey]) {
-                                googleAdsKeywordUrlMap[compositeKey] = { clicksOrSessions: 0, conversions: 0, cost: 0 };
-                            }
-                            googleAdsKeywordUrlMap[compositeKey].clicksOrSessions += kwClicks;
-                            googleAdsKeywordUrlMap[compositeKey].conversions += kwConversions;
-                            googleAdsKeywordUrlMap[compositeKey].cost += kwCost;
+                        
+                        if (!googleAdsGlobalKeywordMap[cleanKw]) {
+                            googleAdsGlobalKeywordMap[cleanKw] = { clicks: 0, conversions: 0, cost: 0, impressions: 0 };
                         }
+                        googleAdsGlobalKeywordMap[cleanKw].clicks += parseInt(metrics?.clicks) || 0;
+                        googleAdsGlobalKeywordMap[cleanKw].conversions += parseFloat(metrics?.conversions) || 0;
+                        googleAdsGlobalKeywordMap[cleanKw].impressions += parseInt(metrics?.impressions) || 0;
+                        googleAdsGlobalKeywordMap[cleanKw].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
                     });
                 }
-                const progress = 50 + Math.round(((i + chunk.length) / accountsToFetch.length) * 50);
-                setLoadingProgress(progress);
+                setLoadingProgress(50 + Math.round(((i + chunk.length) / allAccountIds.length) * 50));
             }
             
             // BUILD GOOGLE ADS BRIDGE DATA
             const googleAdsResults: BridgeData[] = [];
+            let googleAdsKwResults: KeywordBridgeData[] = []; // Simplified
+            
             const allPaths = new Set([...Object.keys(gscUrlMap), ...Object.keys(googleAdsPaidMap)]);
             
             allPaths.forEach(path => {
@@ -883,7 +828,6 @@ const App: React.FC = () => {
                 
                 const organicSessions = ga4OrganicMap[path] || 0;
                 const organicClicks = gscData ? gscData.totalClicks : 0;
-                // User Request: Use Avg Rank instead of Best Rank
                 const organicRank = gscData && gscData.totalImpressions > 0 
                     ? gscData.weightedRankSum / gscData.totalImpressions 
                     : (gscData ? gscData.bestRank : null);
@@ -920,148 +864,83 @@ const App: React.FC = () => {
                     gscTopQueries: topQueriesList
                 });
             });
-            
-            setBridgeDataGoogleAds(googleAdsResults.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
-            
-            // BUILD GOOGLE ADS KEYWORD DATA (GRANULAR: URL + KW MATCH)
-            const googleAdsKwResults: KeywordBridgeData[] = [];
-            
-            // 1. NUEVA LÓGICA: Process granularCompositeMap usando datos específicos de URL+KW
-            const processedCompositeKeys = new Set<string>();
-            Object.values(granularCompositeMap).forEach(item => {
-                const compositeKey = getCompositeKey(item.url, item.keyword);
-                processedCompositeKeys.add(compositeKey);
-                const paidData = googleAdsKeywordUrlMap[compositeKey]; // ✅ Ahora usa datos específicos por URL+KW
-                
-                if (!paidData && item.organicClicks === 0) return;
-                
-                const paidVol = paidData ? paidData.clicksOrSessions : 0; 
-                const paidCost = paidData ? paidData.cost : 0;
-                const paidConv = paidData ? paidData.conversions : 0;
-                const orgVol = item.organicClicks;
-                
-                const cvr = paidVol > 0 ? (paidConv / paidVol) * 100 : 0;
-                let avgCpc = paidVol > 0 ? paidCost / paidVol : 0;
 
-                // FALLBACK FOR ALL ACCOUNTS: Use Global Avg CPC for organic value calculation
-                if (isAllAccounts && avgCpc === 0 && globalAvgCpc > 0) {
-                    avgCpc = globalAvgCpc;
+            // NEW: Build the Keyword Bridge Data (Global Aggregate for Exact Match View)
+            const globalKwBridgeMap: Record<string, any> = {};
+            
+            allPaths.forEach(path => {
+                const gscData = gscUrlMap[path];
+                if (gscData) {
+                    gscData.queries.forEach(q => {
+                        const cleanKw = q.query.toLowerCase().trim();
+                        const paidKwData = googleAdsGlobalKeywordMap[cleanKw];
+                        
+                        if (!globalKwBridgeMap[cleanKw]) {
+                            const paidVol = paidKwData ? paidKwData.clicks : 0;
+                            const paidCost = paidKwData ? paidKwData.cost : 0;
+                            const paidConv = paidKwData ? paidKwData.conversions : 0;
+                            const cvr = paidVol > 0 ? (paidConv / paidVol) * 100 : 0;
+                            let avgCpc = paidVol > 0 ? paidCost / paidVol : 0;
+                            if (avgCpc === 0 && globalAvgCpc > 0) avgCpc = globalAvgCpc;
+
+                            globalKwBridgeMap[cleanKw] = {
+                                keyword: q.query,
+                                organicClicks: 0,
+                                organicRankSum: 0,
+                                organicRankCount: 0,
+                                paidSessions: paidVol,
+                                ppcCost: paidCost,
+                                paidCvr: cvr,
+                                avgCpc: avgCpc,
+                                actionLabel: "MAINTAIN",
+                                dataSource: 'GOOGLE_ADS'
+                            };
+                        }
+                        
+                        globalKwBridgeMap[cleanKw].organicClicks += q.clicks;
+                        globalKwBridgeMap[cleanKw].organicRankSum += q.rank;
+                        globalKwBridgeMap[cleanKw].organicRankCount += 1;
+                    });
                 }
-                
-                let action = "MAINTAIN";
-                const avgRank = item.totalImpressions > 0 
-                    ? item.weightedRankSum / item.totalImpressions 
-                    : (item.bestRank < 999 ? item.bestRank : null);
-
-                if (avgRank !== null && avgRank <= 3 && paidVol > 50) action = "CRITICAL (Cannibalization)";
-                else if (avgRank !== null && avgRank > 10 && paidVol === 0) action = "OPPORTUNITY (Growth)";
-                
-                googleAdsKwResults.push({
-                    keyword: item.keyword, 
-                    url: item.url,
-                    organicRank: avgRank, 
-                    organicClicks: orgVol,
-                    paidSessions: paidVol,
-                    paidCvr: cvr, 
-                    ppcCost: paidCost, 
-                    avgCpc: avgCpc,
-                    actionLabel: action, 
-                    dataSource: 'GOOGLE_ADS'
-                });
             });
 
-            // 2. Add Google Ads keywords that are NOT in granularCompositeMap
-            Object.keys(googleAdsKeywordUrlMap).forEach(compositeKey => {
-                if (!processedCompositeKeys.has(compositeKey)) {
-                    const paidData = googleAdsKeywordUrlMap[compositeKey];
-                    // compositeKey is url||keyword
-                    const parts = compositeKey.split('||');
-                    const url = parts[0];
-                    const keyword = parts[1] || '';
-                    
-                    const paidVol = paidData.clicksOrSessions;
+            // Convert map to array and finalize metrics
+            googleAdsKwResults = Object.values(globalKwBridgeMap).map(item => {
+                const avgRank = item.organicRankCount > 0 ? item.organicRankSum / item.organicRankCount : null;
+                return {
+                    ...item,
+                    organicRank: avgRank,
+                    actionLabel: avgRank !== null && avgRank <= 3 && item.paidSessions > 0 ? "REVIEW" : "MAINTAIN"
+                };
+            });
+
+            // Also add keywords that are ONLY in Paid (not in GSC)
+            Object.keys(googleAdsGlobalKeywordMap).forEach(kw => {
+                if (!globalKwBridgeMap[kw]) {
+                    const paidData = googleAdsGlobalKeywordMap[kw];
+                    const paidVol = paidData.clicks;
                     const paidCost = paidData.cost;
                     const paidConv = paidData.conversions;
                     const cvr = paidVol > 0 ? (paidConv / paidVol) * 100 : 0;
                     let avgCpc = paidVol > 0 ? paidCost / paidVol : 0;
-
-                    if (isAllAccounts && avgCpc === 0 && globalAvgCpc > 0) {
-                        avgCpc = globalAvgCpc;
-                    }
+                    if (avgCpc === 0 && globalAvgCpc > 0) avgCpc = globalAvgCpc;
 
                     googleAdsKwResults.push({
-                        keyword: keyword,
-                        url: url,
-                        organicRank: null,
+                        keyword: kw,
                         organicClicks: 0,
+                        organicRank: null,
                         paidSessions: paidVol,
-                        paidCvr: cvr,
                         ppcCost: paidCost,
+                        paidCvr: cvr,
                         avgCpc: avgCpc,
-                        actionLabel: "MAINTAIN",
-                        dataSource: 'GOOGLE_ADS'
-                    });
-                }
-            });
-
-            // IF ALL ACCOUNTS: Add a summary row to ensure Total Paid Cost is correct in Scorecards
-            if (isAllAccounts && globalMetrics.totalCost > 0) {
-                googleAdsKwResults.push({
-                    keyword: "Total Paid Search (Overview)",
-                    url: "All Accounts Aggregated",
-                    organicRank: null,
-                    organicClicks: 0,
-                    paidSessions: globalMetrics.totalClicks,
-                    paidCvr: 0,
-                    ppcCost: globalMetrics.totalCost,
-                    avgCpc: globalAvgCpc,
-                    actionLabel: "MONITOR",
-                    dataSource: 'GOOGLE_ADS'
-                });
-            }
-            
-            setKeywordBridgeDataGoogleAds(googleAdsKwResults.sort((a,b) => b.paidSessions - a.paidSessions));
-
-            // 3. Add "Unaccounted" URL-level traffic (PMax / Other)
-            // This ensures that URLs with traffic from PMax or other non-keyword campaigns show up in Search Efficiency
-            Object.keys(googleAdsPaidMap).forEach(urlPath => {
-                const totalUrlPaid = googleAdsPaidMap[urlPath];
-                
-                // Sum up all keywords for this URL that were already accounted for
-                let accountedClicks = 0;
-                let accountedCost = 0;
-                let accountedConversions = 0;
-                
-                Object.keys(googleAdsKeywordUrlMap).forEach(compositeKey => {
-                    if (compositeKey.startsWith(urlPath + '||')) {
-                        accountedClicks += googleAdsKeywordUrlMap[compositeKey].clicksOrSessions;
-                        accountedCost += googleAdsKeywordUrlMap[compositeKey].cost;
-                        accountedConversions += googleAdsKeywordUrlMap[compositeKey].conversions;
-                    }
-                });
-                
-                const diffClicks = totalUrlPaid.clicksOrSessions - accountedClicks;
-                const diffCost = totalUrlPaid.cost - accountedCost;
-                const diffConversions = totalUrlPaid.conversions - accountedConversions;
-                
-                // If there's a significant difference, add a row for it
-                if (diffClicks > 1 || diffCost > 0.01) {
-                    googleAdsKwResults.push({
-                        keyword: "(PMax / Other Campaigns)",
-                        url: urlPath,
-                        organicRank: null,
-                        organicClicks: 0,
-                        paidSessions: Math.max(0, diffClicks),
-                        paidCvr: diffClicks > 0 ? (diffConversions / diffClicks) * 100 : 0,
-                        ppcCost: Math.max(0, diffCost),
-                        avgCpc: diffClicks > 0 ? diffCost / diffClicks : globalAvgCpc,
-                        actionLabel: "MONITOR",
+                        actionLabel: "PAID ONLY",
                         dataSource: 'GOOGLE_ADS'
                     });
                 }
             });
             
-            setKeywordBridgeDataGoogleAds(googleAdsKwResults.sort((a,b) => b.paidSessions - a.paidSessions));
+            setBridgeDataGoogleAds(googleAdsResults.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
+            setKeywordBridgeDataGoogleAds(googleAdsKwResults.sort((a, b) => b.paidSessions - a.paidSessions));
          } catch (err: any) {
              console.error("Error fetching Google Ads data:", err);
              setError(err.message || "Failed to fetch Google Ads data");
