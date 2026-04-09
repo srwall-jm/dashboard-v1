@@ -96,6 +96,7 @@ export interface BridgeData {
   ppcCpa: number;
   ppcSessions: number; // Value depends on dataSource (GA4=Sessions, GoogleAds=Clicks)
   ppcImpressions: number;
+  searchImpressionShare: number | null;
   blendedCostRatio: number;
   actionLabel: string;
   status?: string;

@@ -666,7 +666,8 @@ const App: React.FC = () => {
               metrics.cost_micros, 
               metrics.clicks, 
               metrics.impressions, 
-              metrics.conversions 
+              metrics.conversions,
+              metrics.search_impression_share
             FROM customer
             WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
          `;
@@ -775,7 +776,7 @@ const App: React.FC = () => {
             }
             
             // 1. Process URLs for Bridge Data (source of truth for URL-level metrics)
-            const googleAdsPaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
+            const googleAdsPaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, searchImpressionShare: number | null, campaigns: Set<string> }> = {};
             
             // Measure 1 & 2: Parallelization and Filtering
             const chunkSize = 5; 
@@ -790,13 +791,27 @@ const App: React.FC = () => {
                         const path = normalizeUrl(url);
                         if (path) {
                             if (!googleAdsPaidMap[path]) {
-                                googleAdsPaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set(['Google Ads']) };
+                                googleAdsPaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, searchImpressionShare: null, campaigns: new Set(['Google Ads']) };
                             }
                             const metrics = row.metrics;
                             googleAdsPaidMap[path].clicksOrSessions += parseInt(metrics?.clicks) || 0;
                             googleAdsPaidMap[path].conversions += parseFloat(metrics?.conversions) || 0;
                             googleAdsPaidMap[path].impressions += parseInt(metrics?.impressions) || 0;
                             googleAdsPaidMap[path].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
+                            
+                            // Impression Share is a percentage (0.0 to 1.0)
+                            // If we have multiple rows for the same path, we should ideally weight it by impressions
+                            if (metrics?.searchImpressionShare !== undefined && metrics?.searchImpressionShare !== null) {
+                                const currentIS = googleAdsPaidMap[path].searchImpressionShare || 0;
+                                const currentImps = googleAdsPaidMap[path].impressions - (parseInt(metrics?.impressions) || 0);
+                                const newImps = parseInt(metrics?.impressions) || 0;
+                                
+                                if (currentImps + newImps > 0) {
+                                    googleAdsPaidMap[path].searchImpressionShare = ((currentIS * currentImps) + (metrics.searchImpressionShare * newImps)) / (currentImps + newImps);
+                                } else {
+                                    googleAdsPaidMap[path].searchImpressionShare = metrics.searchImpressionShare;
+                                }
+                            }
                         }
                     });
                 });
@@ -853,6 +868,7 @@ const App: React.FC = () => {
                     ppcCpa: paidStats?.conversions ? paidStats.cost / paidStats.conversions : 0,
                     ppcSessions: paidVolume, 
                     ppcImpressions: paidStats?.impressions || 0, 
+                    searchImpressionShare: paidStats?.searchImpressionShare !== undefined ? paidStats.searchImpressionShare : null,
                     blendedCostRatio: paidShare, 
                     actionLabel: action, 
                     dataSource: 'GOOGLE_ADS',

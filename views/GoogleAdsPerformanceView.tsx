@@ -89,6 +89,9 @@ export const GoogleAdsPerformanceView: React.FC<{
             } else if (sortConfig.key === 'cpa') {
                 aVal = a.ppcConversions > 0 ? a.ppcCost / a.ppcConversions : 0;
                 bVal = b.ppcConversions > 0 ? b.ppcCost / b.ppcConversions : 0;
+            } else if (sortConfig.key === 'searchImpressionShare') {
+                aVal = a.searchImpressionShare || 0;
+                bVal = b.searchImpressionShare || 0;
             }
 
             // String Sort
@@ -288,6 +291,7 @@ export const GoogleAdsPerformanceView: React.FC<{
                         <SortableHeader label="Clicks" sortKey="ppcSessions" />
                         <SortableHeader label="CPC" sortKey="cpc" />
                         <SortableHeader label="CTR" sortKey="ctr" />
+                        <SortableHeader label="Imp. Share" sortKey="searchImpressionShare" />
                         <SortableHeader label="Conversions" sortKey="ppcConversions" width="100px" />
                         <SortableHeader label="CPA" sortKey="cpa" />
                     </tr>
@@ -320,6 +324,11 @@ export const GoogleAdsPerformanceView: React.FC<{
                             </td>
                             <td className="py-3 px-4 text-right">
                                 <span className="text-[10px] font-bold text-slate-600">{row.ppcImpressions > 0 ? `${((row.ppcSessions / row.ppcImpressions) * 100).toFixed(2)}%` : '-'}</span>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                                <span className="text-[10px] font-bold text-slate-600">
+                                    {row.searchImpressionShare !== null ? `${(row.searchImpressionShare * 100).toFixed(1)}%` : '-'}
+                                </span>
                             </td>
                             <td className="py-3 px-4 text-right">
                                 <div className="flex flex-col items-end gap-1">
