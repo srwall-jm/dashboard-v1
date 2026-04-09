@@ -114,6 +114,11 @@ export interface KeywordBridgeData {
   paidCvr: number;
   ppcCost: number; // Added for Efficiency View
   avgCpc: number;  // Added for Efficiency View
+  paidClicks: number; // Added
+  paidCtr: number; // Added
+  searchImpressionShare: number | null; // Added
+  paidConversions: number; // Added
+  paidCta: number; // Added
   actionLabel: string;
   dataSource: 'GA4' | 'GOOGLE_ADS'; 
 }

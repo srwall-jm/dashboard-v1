@@ -80,6 +80,7 @@ const App: React.FC = () => {
   
   const [googleAdsGlobalMetrics, setGoogleAdsGlobalMetrics] = useState<GoogleAdsGlobalMetrics | null>(null);
   const [bridgeDataGA4, setBridgeDataGA4] = useState<BridgeData[]>([]); 
+  const [googleAdsUrlKeywordMap, setGoogleAdsUrlKeywordMap] = useState<Record<string, Record<string, { clicks: number, conversions: number, cost: number, impressions: number, searchImpressionShare: number, ctr: number }>>>({});
   const [bridgeDataGoogleAds, setBridgeDataGoogleAds] = useState<BridgeData[]>([]); 
   const [keywordBridgeDataGA4, setKeywordBridgeDataGA4] = useState<KeywordBridgeData[]>([]);
   const [keywordBridgeDataGoogleAds, setKeywordBridgeDataGoogleAds] = useState<KeywordBridgeData[]>([]);
@@ -654,7 +655,9 @@ const App: React.FC = () => {
               ad_group.resource_name,
               metrics.cost_micros, 
               metrics.clicks, 
-              metrics.conversions 
+              metrics.conversions,
+              metrics.search_impression_share,
+              metrics.ctr
             FROM keyword_view
             WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
             AND metrics.clicks > 0
@@ -1082,7 +1085,7 @@ const App: React.FC = () => {
     
     setIsGoogleAdsKeywordsLoading(true);
     const allAccountIds = availableGoogleAdsSubAccounts.map(acc => acc.id);
-    const googleAdsGlobalKeywordMap: Record<string, { clicks: number, conversions: number, cost: number, impressions: number }> = {};
+    const googleAdsUrlKeywordMap: Record<string, Record<string, { clicks: number, conversions: number, cost: number, impressions: number, searchImpressionShare: number, ctr: number }>> = {};
     
     const googleAdsKwQuery = `
         SELECT 
@@ -1137,18 +1140,29 @@ const App: React.FC = () => {
                     const kw = row.adGroupCriterion?.keyword?.text;
                     if (!kw) return;
                     const cleanKw = kw.toLowerCase().trim();
+                    const finalUrls = row.adGroupCriterion?.finalUrls;
+                    const url = finalUrls && finalUrls.length > 0 ? normalizeUrl(finalUrls[0]) : 'unknown';
+                    if (!url) return;
+
                     const metrics = row.metrics;
-                    if (!googleAdsGlobalKeywordMap[cleanKw]) {
-                        googleAdsGlobalKeywordMap[cleanKw] = { clicks: 0, conversions: 0, cost: 0, impressions: 0 };
+                    if (!googleAdsUrlKeywordMap[url]) {
+                        googleAdsUrlKeywordMap[url] = {};
                     }
-                    googleAdsGlobalKeywordMap[cleanKw].clicks += parseInt(metrics?.clicks) || 0;
-                    googleAdsGlobalKeywordMap[cleanKw].conversions += parseFloat(metrics?.conversions) || 0;
-                    googleAdsGlobalKeywordMap[cleanKw].impressions += parseInt(metrics?.impressions) || 0;
-                    googleAdsGlobalKeywordMap[cleanKw].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
+                    if (!googleAdsUrlKeywordMap[url][cleanKw]) {
+                        googleAdsUrlKeywordMap[url][cleanKw] = { clicks: 0, conversions: 0, cost: 0, impressions: 0, searchImpressionShare: 0, ctr: 0 };
+                    }
+                    googleAdsUrlKeywordMap[url][cleanKw].clicks += parseInt(metrics?.clicks) || 0;
+                    googleAdsUrlKeywordMap[url][cleanKw].conversions += parseFloat(metrics?.conversions) || 0;
+                    googleAdsUrlKeywordMap[url][cleanKw].impressions += parseInt(metrics?.impressions) || 0;
+                    googleAdsUrlKeywordMap[url][cleanKw].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
+                    googleAdsUrlKeywordMap[url][cleanKw].searchImpressionShare += parseFloat(metrics?.searchImpressionShare) || 0;
+                    googleAdsUrlKeywordMap[url][cleanKw].ctr += parseFloat(metrics?.ctr) || 0;
                 });
             });
         }
 
+        setGoogleAdsUrlKeywordMap(googleAdsUrlKeywordMap);
+        
         // Now update the bridge data with the keywords
         setBridgeDataGoogleAds(prev => prev.map(item => {
             if (!item.gscTopQueries) return item;

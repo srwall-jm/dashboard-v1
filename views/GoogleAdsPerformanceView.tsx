@@ -20,9 +20,11 @@ export const GoogleAdsPerformanceView: React.FC<{
   data: BridgeData[]; 
   currencySymbol: string; 
   globalMetrics: GoogleAdsGlobalMetrics | null;
-}> = ({ data, currencySymbol, globalMetrics }) => {
+  urlKeywordMap: Record<string, Record<string, { clicks: number, conversions: number, cost: number, impressions: number, searchImpressionShare: number, ctr: number }>>;
+}> = ({ data, currencySymbol, globalMetrics, urlKeywordMap }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ppcCost', direction: 'desc' });
+  const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
 
   // 1. Aggregation Logic (Fallback if globalMetrics is null)
   const stats = useMemo(() => {
@@ -285,6 +287,7 @@ export const GoogleAdsPerformanceView: React.FC<{
             <table className="w-full text-left border-collapse">
                 <thead>
                     <tr className="border-b border-slate-100 bg-slate-50/50">
+                        <th className="py-3 px-4 w-10"></th>
                         <SortableHeader label="Landing Page" sortKey="url" align="left" width="300px" />
                         <SortableHeader label="Campaign" sortKey="ppcCampaign" align="left" />
                         <SortableHeader label="Cost" sortKey="ppcCost" width="120px" />
@@ -298,7 +301,13 @@ export const GoogleAdsPerformanceView: React.FC<{
                 </thead>
                 <tbody>
                     {tableData.length > 0 ? tableData.slice(0, 50).map((row, idx) => (
-                        <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                        <React.Fragment key={idx}>
+                        <tr className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                            <td className="py-3 px-4">
+                                <button onClick={() => setExpandedUrl(expandedUrl === row.url ? null : row.url)}>
+                                    {expandedUrl === row.url ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                </button>
+                            </td>
                             <td className="py-3 px-4">
                                 <div className="flex items-center gap-2">
                                     <ExternalLink size={10} className="text-slate-300 flex-shrink-0" />
@@ -346,8 +355,45 @@ export const GoogleAdsPerformanceView: React.FC<{
                                 </span>
                             </td>
                         </tr>
+                        {expandedUrl === row.url && (
+                            <tr className="bg-slate-50">
+                                <td colSpan={10} className="p-4">
+                                    <div className="text-[10px] font-bold text-slate-600 mb-2">Top 10 Paid Keywords</div>
+                                    <table className="w-full text-left">
+                                        <thead>
+                                            <tr className="border-b border-slate-200">
+                                                <th className="py-2 px-2">Keyword</th>
+                                                <th className="py-2 px-2 text-right">Cost</th>
+                                                <th className="py-2 px-2 text-right">Clicks</th>
+                                                <th className="py-2 px-2 text-right">CPC</th>
+                                                <th className="py-2 px-2 text-right">CTR</th>
+                                                <th className="py-2 px-2 text-right">Imp. Share</th>
+                                                <th className="py-2 px-2 text-right">Conversions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {urlKeywordMap[row.url] && Object.entries(urlKeywordMap[row.url])
+                                                .sort((a, b) => b[1].clicks - a[1].clicks)
+                                                .slice(0, 10)
+                                                .map(([kw, data], i) => (
+                                                    <tr key={i} className="border-b border-slate-100">
+                                                        <td className="py-2 px-2">{kw}</td>
+                                                        <td className="py-2 px-2 text-right">{currencySymbol}{data.cost.toFixed(2)}</td>
+                                                        <td className="py-2 px-2 text-right">{data.clicks}</td>
+                                                        <td className="py-2 px-2 text-right">{data.clicks > 0 ? `${currencySymbol}${(data.cost / data.clicks).toFixed(2)}` : '-'}</td>
+                                                        <td className="py-2 px-2 text-right">{data.impressions > 0 ? `${((data.clicks / data.impressions) * 100).toFixed(2)}%` : '-'}</td>
+                                                        <td className="py-2 px-2 text-right">{data.searchImpressionShare > 0 ? `${(data.searchImpressionShare * 100).toFixed(1)}%` : '-'}</td>
+                                                        <td className="py-2 px-2 text-right">{data.conversions.toFixed(2)}</td>
+                                                    </tr>
+                                                ))}
+                                        </tbody>
+                                    </table>
+                                </td>
+                            </tr>
+                        )}
+                        </React.Fragment>
                     )) : (
-                        <tr><td colSpan={8} className="py-12"><EmptyState text="No Google Ads Data Found. Please check settings." /></td></tr>
+                        <tr><td colSpan={10} className="py-12"><EmptyState text="No Google Ads Data Found. Please check settings." /></td></tr>
                     )}
                 </tbody>
             </table>
