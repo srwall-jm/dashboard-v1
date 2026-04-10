@@ -7,7 +7,7 @@ import {
   DollarSign, MousePointerClick, Percent, Search, FileText, Target, ExternalLink, Zap, ChevronUp, ChevronDown
 } from 'lucide-react';
 import { BridgeData, GoogleAdsGlobalMetrics, GoogleAdsCustomer } from '../types';
-import { exportToCSV } from '../utils';
+import { exportToCSV, extractPath } from '../utils';
 import { KpiCard } from '../components/KpiCard';
 import { EmptyState } from '../components/EmptyState';
 
@@ -372,7 +372,7 @@ export const GoogleAdsPerformanceView: React.FC<{
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {urlKeywordMap[row.url] && Object.entries(urlKeywordMap[row.url])
+                                            {urlKeywordMap && urlKeywordMap[extractPath(row.url)] && Object.entries(urlKeywordMap[extractPath(row.url)])
                                                 .sort((a, b) => b[1].clicks - a[1].clicks)
                                                 .slice(0, 10)
                                                 .map(([kw, data], i) => (

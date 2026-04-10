@@ -1963,6 +1963,7 @@ const App: React.FC = () => {
                   data={bridgeDataGoogleAds} 
                   currencySymbol={currencySymbol} 
                   globalMetrics={googleAdsGlobalMetrics}
+                  urlKeywordMap={googleAdsUrlKeywordMap}
               />
           )}
           
