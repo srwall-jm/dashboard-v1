@@ -1141,7 +1141,7 @@ const App: React.FC = () => {
                     if (!kw) return;
                     const cleanKw = kw.toLowerCase().trim();
                     const finalUrls = row.adGroupCriterion?.finalUrls;
-                    const url = finalUrls && finalUrls.length > 0 ? normalizeUrl(finalUrls[0]) : 'unknown';
+                    const url = finalUrls && finalUrls.length > 0 ? extractPath(finalUrls[0]) : 'unknown';
                     if (!url) return;
 
                     const metrics = row.metrics;
@@ -1166,11 +1166,12 @@ const App: React.FC = () => {
         // Now update the bridge data with the keywords
         setBridgeDataGoogleAds(prev => prev.map(item => {
             if (!item.gscTopQueries) return item;
+            const url = extractPath(item.url);
             return {
                 ...item,
                 gscTopQueries: item.gscTopQueries.map(q => {
                     const cleanKw = q.query.toLowerCase().trim();
-                    const paidKwData = googleAdsGlobalKeywordMap[cleanKw];
+                    const paidKwData = googleAdsUrlKeywordMap[url]?.[cleanKw];
                     return {
                         ...q,
                         paidClicks: paidKwData?.clicks || 0,
@@ -1187,7 +1188,7 @@ const App: React.FC = () => {
             if (!item.gscTopQueries) return;
             item.gscTopQueries.forEach(q => {
                 const cleanKw = q.query.toLowerCase().trim();
-                const paidKwData = googleAdsGlobalKeywordMap[cleanKw];
+                const paidKwData = googleAdsUrlKeywordMap[extractPath(item.url)]?.[cleanKw];
                 if (paidKwData || q.clicks > 0) {
                     const paidVol = paidKwData ? paidKwData.clicks : 0;
                     const paidCost = paidKwData ? paidKwData.cost : 0;
@@ -1199,7 +1200,11 @@ const App: React.FC = () => {
                         keyword: q.query,
                         organicClicks: q.clicks,
                         organicRank: q.rank,
-                        paidSessions: paidVol,
+                        paidClicks: paidVol,
+                        paidCtr: paidKwData ? (paidKwData.ctr * 100) : 0,
+                        searchImpressionShare: paidKwData ? paidKwData.searchImpressionShare : null,
+                        paidConversions: paidKwData ? paidKwData.conversions : 0,
+                        paidCta: cvr,
                         ppcCost: paidCost,
                         paidCvr: cvr,
                         avgCpc: avgCpc,
