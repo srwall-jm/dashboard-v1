@@ -8,7 +8,7 @@ import {
 import { KeywordBridgeData, GoogleAdsGlobalMetrics } from '../types';
 import { KpiCard } from '../components/KpiCard';
 import { EmptyState } from '../components/EmptyState';
-import { exportToCSV } from '../utils';
+import { exportToCSV, extractPath } from '../utils';
 
 interface UrlEfficiencyRow {
   url: string;
@@ -54,7 +54,7 @@ export const SearchEfficiencyView: React.FC<{
     // 1. Initialize with precise URL-level data
     for (let i = 0; i < urlData.length; i++) {
         const row = urlData[i];
-        const url = row.url || '(not set)';
+        const url = extractPath(row.url || '');
         
         urlMap.set(url, {
             url,
@@ -77,7 +77,7 @@ export const SearchEfficiencyView: React.FC<{
     // 2. Attach keyword data for breakdown and rank calculation
     for (let i = 0; i < keywordData.length; i++) {
         const row = keywordData[i];
-        const url = row.url || '(not set)';
+        const url = extractPath(row.url || '');
         
         let urlEntry = urlMap.get(url);
         if (!urlEntry) {
@@ -510,10 +510,10 @@ export const SearchEfficiencyView: React.FC<{
                                                       </tr>
                                                   </thead>
                                                   <tbody>
-                                                      {row.queries.slice(0, 10).map((q, qIdx) => (
+                                                      {row.queries && row.queries.slice(0, 10).map((q, qIdx) => (
                                                           <tr key={qIdx} className="border-t border-slate-100 hover:bg-slate-50">
                                                               <td className="py-2 px-4 text-xs font-bold text-slate-700">{q.keyword}</td>
-                                                              <td className="py-2 px-4 text-xs text-center text-slate-600">{q.organicRank ? `#${q.organicRank.toFixed(1)}` : '-'}</td>
+                                                              <td className="py-2 px-4 text-xs text-center text-slate-600">{q.organicRank !== null ? `#${q.organicRank.toFixed(1)}` : '-'}</td>
                                                               <td className="py-2 px-4 text-xs text-right text-slate-600">{formatNumber(q.organicClicks)}</td>
                                                               <td className="py-2 px-4 text-xs text-right text-slate-600">{formatNumber(q.paidSessions)}</td>
                                                               <td className="py-2 px-4 text-xs text-right text-slate-600">{currencySymbol}{formatCurrency(q.ppcCost)}</td>
