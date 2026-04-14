@@ -517,8 +517,8 @@ export const SearchEfficiencyView: React.FC<{
                                                               <td className="py-2 px-4 text-xs font-bold text-slate-700">{q.keyword}</td>
                                                               <td className="py-2 px-4 text-xs text-center text-slate-600">{q.organicRank !== null ? `#${q.organicRank.toFixed(1)}` : '-'}</td>
                                                               <td className="py-2 px-4 text-xs text-right text-slate-600">{formatNumber(q.organicClicks)}</td>
-                                                              <td className="py-2 px-4 text-xs text-right text-slate-600">{formatNumber(q.paidSessions)}</td>
-                                                              <td className="py-2 px-4 text-xs text-right text-slate-600">{currencySymbol}{formatCurrency(q.ppcCost)}</td>
+                                                              <td className="py-2 px-4 text-xs text-right text-slate-600">{formatNumber(q.paidClicks || q.paidSessions || 0)}</td>
+                                                              <td className="py-2 px-4 text-xs text-right text-slate-600">{currencySymbol}{formatCurrency(q.ppcCost || 0)}</td>
                                                           </tr>
                                                       ))}
                                                   </tbody>

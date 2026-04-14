@@ -373,20 +373,26 @@ export const GoogleAdsPerformanceView: React.FC<{
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {urlKeywordMap && urlKeywordMap[extractPath(row.url)] && Object.entries(urlKeywordMap[extractPath(row.url)])
-                                                .sort((a, b) => b[1].clicks - a[1].clicks)
-                                                .slice(0, 10)
-                                                .map(([kw, data], i) => (
-                                                    <tr key={i} className="border-b border-slate-100">
-                                                        <td className="py-2 px-2">{kw}</td>
-                                                        <td className="py-2 px-2 text-right">{currencySymbol}{data.cost.toFixed(2)}</td>
-                                                        <td className="py-2 px-2 text-right">{data.clicks}</td>
-                                                        <td className="py-2 px-2 text-right">{data.clicks > 0 ? `${currencySymbol}${(data.cost / data.clicks).toFixed(2)}` : '-'}</td>
-                                                        <td className="py-2 px-2 text-right">{data.impressions > 0 ? `${((data.clicks / data.impressions) * 100).toFixed(2)}%` : '-'}</td>
-                                                        <td className="py-2 px-2 text-right">{data.searchImpressionShare > 0 ? `${(data.searchImpressionShare * 100).toFixed(1)}%` : '-'}</td>
-                                                        <td className="py-2 px-2 text-right">{data.conversions.toFixed(2)}</td>
-                                                    </tr>
-                                                ))}
+                                            {(() => {
+                                                const path = extractPath(row.url);
+                                                const kwData = urlKeywordMap ? urlKeywordMap[path] : null;
+                                                console.log('Debug URL:', row.url, 'Path:', path, 'KWData:', kwData, 'MapKeys:', urlKeywordMap ? Object.keys(urlKeywordMap) : []);
+                                                if (!kwData) return <tr><td colSpan={7} className="py-4 text-center text-xs text-slate-500">No keyword data found for this URL.</td></tr>;
+                                                return Object.entries(kwData)
+                                                    .sort((a, b) => b[1].clicks - a[1].clicks)
+                                                    .slice(0, 10)
+                                                    .map(([kw, data], i) => (
+                                                        <tr key={i} className="border-b border-slate-100">
+                                                            <td className="py-2 px-2">{kw}</td>
+                                                            <td className="py-2 px-2 text-right">{currencySymbol}{data.cost.toFixed(2)}</td>
+                                                            <td className="py-2 px-2 text-right">{data.clicks}</td>
+                                                            <td className="py-2 px-2 text-right">{data.clicks > 0 ? `${currencySymbol}${(data.cost / data.clicks).toFixed(2)}` : '-'}</td>
+                                                            <td className="py-2 px-2 text-right">{data.impressions > 0 ? `${((data.clicks / data.impressions) * 100).toFixed(2)}%` : '-'}</td>
+                                                            <td className="py-2 px-2 text-right">{data.searchImpressionShare > 0 ? `${(data.searchImpressionShare * 100).toFixed(1)}%` : '-'}</td>
+                                                            <td className="py-2 px-2 text-right">{data.conversions.toFixed(2)}</td>
+                                                        </tr>
+                                                    ));
+                                            })()}
                                         </tbody>
                                     </table>
                                 </td>
