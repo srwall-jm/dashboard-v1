@@ -58,17 +58,18 @@ export const GoogleAdsPerformanceView: React.FC<{
   const tableData = useMemo(() => {
     const map: Record<string, BridgeData> = {};
     stats.items.forEach(item => {
+        const path = extractPath(item.url);
         // Group logic if duplicates exist, otherwise simple pass through
-        if (!map[item.url]) {
-            map[item.url] = item;
+        if (!map[path]) {
+            map[path] = { ...item, url: path };
         } else {
             // Simple accumulation for display purposes if rows are split
-            map[item.url] = {
-                ...map[item.url],
-                ppcCost: map[item.url].ppcCost + item.ppcCost,
-                ppcSessions: map[item.url].ppcSessions + item.ppcSessions,
-                ppcConversions: map[item.url].ppcConversions + item.ppcConversions,
-                ppcImpressions: map[item.url].ppcImpressions + item.ppcImpressions
+            map[path] = {
+                ...map[path],
+                ppcCost: map[path].ppcCost + item.ppcCost,
+                ppcSessions: map[path].ppcSessions + item.ppcSessions,
+                ppcConversions: map[path].ppcConversions + item.ppcConversions,
+                ppcImpressions: map[path].ppcImpressions + item.ppcImpressions
             }
         }
     });
