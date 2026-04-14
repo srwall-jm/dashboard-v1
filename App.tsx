@@ -746,26 +746,17 @@ const App: React.FC = () => {
                 avgCpa: 0
             };
 
-            if (allAccountIds.length > 0) {
-                const chunkSize = 3; // Smaller chunks to prevent memory spikes
-                for (let i = 0; i < allAccountIds.length; i += chunkSize) {
-                    const chunk = allAccountIds.slice(i, i + chunkSize);
-                    const customerPromises = chunk.map(id => fetchGoogleAds(googleAdsCustomerQuery, id));
-                    const customerResults = await Promise.all(customerPromises);
+            if (selectedGoogleAdsCustomer) {
+                const mccId = selectedGoogleAdsCustomer.id.toString().replace(/-/g, '');
+                const customerResults = await fetchGoogleAds(googleAdsCustomerQuery, mccId);
                     
-                    customerResults.forEach(res => {
-                        if (Array.isArray(res)) {
-                            for (const row of res) {
-                                const metrics = row.metrics;
-                                globalMetrics.totalCost += (parseInt(metrics?.costMicros) || 0) / 1000000;
-                                globalMetrics.totalClicks += parseInt(metrics?.clicks) || 0;
-                                globalMetrics.totalConversions += parseFloat(metrics?.conversions) || 0;
-                                globalMetrics.totalImpressions += parseInt(metrics?.impressions) || 0;
-                            }
-                        }
-                    });
-                    setLoadingProgress(Math.round(((i + chunk.length) / (allAccountIds.length * 2)) * 100));
-                }
+                customerResults.forEach(res => {
+                    const metrics = res.metrics;
+                    globalMetrics.totalCost += (parseInt(metrics?.costMicros) || 0) / 1000000;
+                    globalMetrics.totalClicks += parseInt(metrics?.clicks) || 0;
+                    globalMetrics.totalConversions += parseFloat(metrics?.conversions) || 0;
+                    globalMetrics.totalImpressions += parseInt(metrics?.impressions) || 0;
+                });
 
                 if (globalMetrics.totalClicks > 0) {
                     globalMetrics.avgCpc = globalMetrics.totalCost / globalMetrics.totalClicks;
@@ -1081,7 +1072,9 @@ const App: React.FC = () => {
   }, [googleAdsAuth]);
 
   const fetchGoogleAdsKeywords = async () => {
-    if (!googleAdsAuth?.token || isGoogleAdsKeywordsLoading || isGoogleAdsKeywordsLoaded || availableGoogleAdsSubAccounts.length === 0) return;
+    if (!googleAdsAuth?.token || isGoogleAdsKeywordsLoading || isGoogleAdsKeywordsLoaded || !selectedGoogleAdsCustomer) return;
+    
+    console.log('Selected Customer:', selectedGoogleAdsCustomer);
     
     setIsGoogleAdsKeywordsLoading(true);
     const mccId = selectedGoogleAdsCustomer.id.toString().replace(/-/g, '');
