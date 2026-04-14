@@ -236,11 +236,13 @@ export const SearchEfficiencyView: React.FC<{
     exportToCSV(csv, "Optimization_Savings_Report");
   };
 
-  const formatCurrency = (val: number, decimals: number = 2) => {
+  const formatCurrency = (val: number | undefined | null, decimals: number = 2) => {
+    if (val === undefined || val === null) return '0.00';
     return val.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   };
   
-  const formatNumber = (val: number) => {
+  const formatNumber = (val: number | undefined | null) => {
+    if (val === undefined || val === null) return '0';
     return val.toLocaleString('en-US');
   };
 
