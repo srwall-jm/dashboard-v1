@@ -1084,7 +1084,7 @@ const App: React.FC = () => {
     if (!googleAdsAuth?.token || isGoogleAdsKeywordsLoading || isGoogleAdsKeywordsLoaded || availableGoogleAdsSubAccounts.length === 0) return;
     
     setIsGoogleAdsKeywordsLoading(true);
-    const allAccountIds = availableGoogleAdsSubAccounts.map(acc => acc.id);
+    const mccId = selectedGoogleAdsCustomer.id.toString().replace(/-/g, '');
     const googleAdsUrlKeywordMap: Record<string, Record<string, { clicks: number, conversions: number, cost: number, impressions: number, searchImpressionShare: number, ctr: number }>> = {};
     
     const googleAdsKwQuery = `
@@ -1130,36 +1130,31 @@ const App: React.FC = () => {
     };
 
     try {
-        const chunkSize = 5; 
-        for (let i = 0; i < allAccountIds.length; i += chunkSize) {
-            const chunk = allAccountIds.slice(i, i + chunkSize);
-            const results = await Promise.all(chunk.map(id => fetchGoogleAds(googleAdsKwQuery, id)));
-            
-            results.forEach((accountKwRows) => {
-                accountKwRows.forEach((row: any) => {
-                    const kw = row.adGroupCriterion?.keyword?.text;
-                    if (!kw) return;
-                    const cleanKw = kw.toLowerCase().trim();
-                    const finalUrls = row.adGroupCriterion?.finalUrls;
-                    const url = finalUrls && finalUrls.length > 0 ? extractPath(finalUrls[0]) : 'unknown';
-                    if (!url) return;
+        const accountKwRows = await fetchGoogleAds(googleAdsKwQuery, mccId);
+        
+        accountKwRows.forEach((row: any) => {
+            const kw = row.adGroupCriterion?.keyword?.text;
+            if (!kw) return;
+            const cleanKw = kw.toLowerCase().trim();
+            const finalUrls = row.adGroupCriterion?.finalUrls;
+            const url = finalUrls && finalUrls.length > 0 ? extractPath(finalUrls[0]) : 'unknown';
+            if (!url) return;
 
-                    const metrics = row.metrics;
-                    if (!googleAdsUrlKeywordMap[url]) {
-                        googleAdsUrlKeywordMap[url] = {};
-                    }
-                    if (!googleAdsUrlKeywordMap[url][cleanKw]) {
-                        googleAdsUrlKeywordMap[url][cleanKw] = { clicks: 0, conversions: 0, cost: 0, impressions: 0, searchImpressionShare: 0, ctr: 0 };
-                    }
-                    googleAdsUrlKeywordMap[url][cleanKw].clicks += parseInt(metrics?.clicks) || 0;
-                    googleAdsUrlKeywordMap[url][cleanKw].conversions += parseFloat(metrics?.conversions) || 0;
-                    googleAdsUrlKeywordMap[url][cleanKw].impressions += parseInt(metrics?.impressions) || 0;
-                    googleAdsUrlKeywordMap[url][cleanKw].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
-                    googleAdsUrlKeywordMap[url][cleanKw].searchImpressionShare += parseFloat(metrics?.searchImpressionShare) || 0;
-                    googleAdsUrlKeywordMap[url][cleanKw].ctr += parseFloat(metrics?.ctr) || 0;
-                });
-            });
-        }
+            const metrics = row.metrics;
+            if (!googleAdsUrlKeywordMap[url]) {
+                googleAdsUrlKeywordMap[url] = {};
+            }
+            if (!googleAdsUrlKeywordMap[url][cleanKw]) {
+                googleAdsUrlKeywordMap[url][cleanKw] = { clicks: 0, conversions: 0, cost: 0, impressions: 0, searchImpressionShare: 0, ctr: 0 };
+            }
+            googleAdsUrlKeywordMap[url][cleanKw].clicks += parseInt(metrics?.clicks) || 0;
+            googleAdsUrlKeywordMap[url][cleanKw].conversions += parseFloat(metrics?.conversions) || 0;
+            googleAdsUrlKeywordMap[url][cleanKw].impressions += parseInt(metrics?.impressions) || 0;
+            googleAdsUrlKeywordMap[url][cleanKw].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
+            googleAdsUrlKeywordMap[url][cleanKw].searchImpressionShare += parseFloat(metrics?.searchImpressionShare) || 0;
+            googleAdsUrlKeywordMap[url][cleanKw].ctr += parseFloat(metrics?.ctr) || 0;
+        });
+
 
         setGoogleAdsUrlKeywordMap(googleAdsUrlKeywordMap);
         
