@@ -41,43 +41,52 @@ export const normalizeCountry = (val: string): string => {
 };
 
 // "The Master Key" Normalizer
-// 1. Removes Protocol & Domain
-// 2. Removes Query Parameters (?gclid=...)
-// 3. Removes Trailing Slash
-// 4. Lowercases
+// 1. Decodes URI
+// 2. Removes Protocol & Domain
+// 3. Removes Query Parameters
+// 4. Removes Fragment
+// 5. Removes Google Ads ValueTrack parameters
+// 6. Removes Trailing Slash
+// 7. Ensures Leading Slash
+// 8. Lowercases
 export const extractPath = (url: string): string => {
+  if (!url || url === '(not set)') return '(not set)';
   try {
-    let path = url;
+    let path = decodeURIComponent(url);
 
     // 1. Remove Protocol & Domain (if absolute URL)
-    if (url.startsWith('http')) {
+    if (path.startsWith('http')) {
       try {
-        const urlObj = new URL(url);
+        const urlObj = new URL(path);
         path = urlObj.pathname; 
       } catch {
         // Fallback regex if URL constructor fails
-        path = url.replace(/^https?:\/\/[^\/]+/, '');
+        path = path.replace(/^https?:\/\/[^\/]+/, '');
       }
     }
 
-    // 2. Remove Query Parameters (The GA4 Fix)
-    // Equivalent to REGEXP_REPLACE(Page path, "\\?.*", "")
+    // 2. Remove Query Parameters
     path = path.split('?')[0];
 
-    // 3. Remove Trailing Slash (The Consistency Fix)
-    // Equivalent to REGEXP_REPLACE(..., "/$", "")
+    // 3. Remove Fragment
+    path = path.split('#')[0];
+
+    // 4. Remove Google Ads ValueTrack parameters like {ignore}
+    path = path.replace(/\{[^}]*\}/g, '');
+
+    // 5. Remove Trailing Slash
     if (path.endsWith('/') && path.length > 1) {
       path = path.slice(0, -1);
     }
 
-    // 4. Ensure Leading Slash (Standardization)
+    // 6. Ensure Leading Slash
     if (!path.startsWith('/')) {
         path = '/' + path;
     }
 
     return path.toLowerCase().trim();
   } catch (e) {
-    return url;
+    return url.toLowerCase().trim();
   }
 };
 

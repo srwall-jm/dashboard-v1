@@ -557,20 +557,6 @@ const App: React.FC = () => {
         return;
     }
     
-    const normalizeUrl = (url: string) => {
-      if (!url || url === '(not set)') return '(not set)';
-      try { url = decodeURIComponent(url); } catch (e) {}
-      let path = url.toLowerCase().trim();
-      path = path.replace(/^https?:\/\/[^\/]+/, '');
-      path = path.split('?')[0];
-      path = path.split('#')[0];
-      // Remove Google Ads ValueTrack parameters like {ignore}
-      path = path.replace(/\{[^}]*\}/g, '');
-      if (path.endsWith('/') && path.length > 1) { path = path.slice(0, -1); }
-      if (!path.startsWith('/')) { path = '/' + path; }
-      return path;
-    };
-    
     // 0. FETCH GA4 ORGANIC SESSIONS (Per URL)
     const ga4OrganicMap: Record<string, number> = {};
     if (ga4Auth?.property && ga4Auth.token) {
@@ -593,7 +579,7 @@ const App: React.FC = () => {
             });
             const ga4OrgData = await ga4OrgResp.json();
             (ga4OrgData.rows || []).forEach((row: any) => {
-                const path = normalizeUrl(row.dimensionValues[0].value);
+                const path = extractPath(row.dimensionValues[0].value);
                 const sessions = parseInt(row.metricValues[0].value) || 0;
                 ga4OrganicMap[path] = (ga4OrganicMap[path] || 0) + sessions;
             });
@@ -647,7 +633,7 @@ const App: React.FC = () => {
                     const clicks = row.clicks;
                     const impressions = row.impressions;
                     const rank = row.position;
-                    const cleanPath = normalizeUrl(fullUrl);
+                    const cleanPath = extractPath(fullUrl);
                     
                     // 1. Fill URL Map (Bridge Data)
                     if (!gscUrlMap[cleanPath]) {
@@ -738,7 +724,7 @@ const App: React.FC = () => {
                     rows.forEach((row: any) => {
                         const url = row.landingPageView?.unexpandedFinalUrl;
                         if (!url) return;
-                        const path = normalizeUrl(url);
+                        const path = extractPath(url);
                         if (path) {
                             if (!googleAdsPaidMap[path]) {
                                 googleAdsPaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, searchImpressionShare: null, campaigns: new Set(['Google Ads']) };
@@ -848,7 +834,7 @@ const App: React.FC = () => {
                 const channelGroup = row.dimensionValues[1].value.toLowerCase();
                 const campaignName = row.dimensionValues[2].value;
                 const sessions = parseInt(row.metricValues[0].value) || 0;
-                const path = normalizeUrl(rawUrl);
+                const path = extractPath(rawUrl);
                 
                 if ((channelGroup.includes('paid') || channelGroup.includes('cpc') || channelGroup.includes('ppc'))) {
                     if (!ga4PaidMap[path]) ga4PaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set() };
@@ -883,7 +869,7 @@ const App: React.FC = () => {
                  if (kw === '(not set)' || !kw) return; 
                  
                  const cleanKw = kw.toLowerCase().trim();
-                 const cleanPath = normalizeUrl(rawUrl);
+                 const cleanPath = extractPath(rawUrl);
                  
                  const sessions = parseInt(row.metricValues[0].value) || 0;
                  const rate = parseFloat(row.metricValues[1].value) || 0;
