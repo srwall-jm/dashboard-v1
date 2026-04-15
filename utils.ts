@@ -51,9 +51,15 @@ export const normalizeCountry = (val: string): string => {
 // 8. Lowercases
 export const extractPath = (url: string): string => {
   if (!url || url === '(not set)') return '(not set)';
+  
+  let path = url;
   try {
-    let path = decodeURIComponent(url);
+    path = decodeURIComponent(url);
+  } catch (e) {
+    // keep original if decode fails
+  }
 
+  try {
     // 1. Remove Protocol & Domain (if absolute URL)
     if (path.startsWith('http')) {
       try {
@@ -86,7 +92,7 @@ export const extractPath = (url: string): string => {
 
     return path.toLowerCase().trim();
   } catch (e) {
-    return url.toLowerCase().trim();
+    return path.toLowerCase().trim();
   }
 };
 

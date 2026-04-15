@@ -1131,8 +1131,29 @@ const App: React.FC = () => {
 
         // Build Keyword Results for Search Efficiency
         const googleAdsKwResults: KeywordBridgeData[] = [];
-        // We use bridgeDataGoogleAds as the source of URLs
-        bridgeDataGoogleAds.forEach(item => {
+        // We use the updated bridgeDataGoogleAds as the source of URLs
+        // We need to use the functional update pattern or get the latest state
+        // Since we are inside an async function, we need to ensure we have the latest data.
+        // Actually, setBridgeDataGoogleAds is asynchronous.
+        // Let's use a local variable for the updated data.
+        const updatedBridgeData = prevBridgeData.map(item => {
+            if (!item.gscTopQueries) return item;
+            const url = extractPath(item.url);
+            return {
+                ...item,
+                gscTopQueries: item.gscTopQueries.map(q => {
+                    const cleanKw = q.query.toLowerCase().trim();
+                    const paidKwData = nextGoogleAdsUrlKeywordMap[url]?.[cleanKw];
+                    return {
+                        ...q,
+                        paidClicks: paidKwData?.clicks || 0,
+                        paidCost: paidKwData?.cost || 0
+                    };
+                })
+            };
+        });
+        
+        updatedBridgeData.forEach(item => {
             if (!item.gscTopQueries) return;
             item.gscTopQueries.forEach(q => {
                 const cleanKw = q.query.toLowerCase().trim();
