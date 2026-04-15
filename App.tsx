@@ -700,18 +700,12 @@ const App: React.FC = () => {
     }
     
     // 2. TRY GOOGLE ADS FETCH (If Available & Selected)
-    if (googleAdsAuth?.token && availableGoogleAdsSubAccounts.length > 0) {
-         const googleAdsPaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
+    if (googleAdsAuth?.token && selectedGoogleAdsCustomer) {
+         const googleAdsPaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, searchImpressionShare: number | null, campaigns: Set<string> }> = {};
          
-         // NUEVA: Mapa granular con clave URL||KEYWORD para coste específico por URL
-         const googleAdsKeywordUrlMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number }> = {};
-
-         // Query 1: URL-level metrics from landing_page_view (supports all campaign types including PMax)
          const googleAdsUrlQuery = `
            SELECT 
              landing_page_view.unexpanded_final_url,
-             campaign.resource_name,
-             ad_group.resource_name,
              metrics.cost_micros, 
              metrics.clicks, 
              metrics.impressions, 
@@ -719,166 +713,43 @@ const App: React.FC = () => {
            FROM landing_page_view 
            WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
            AND metrics.clicks > 0
-         `;
-         
-         // Query 2: Keyword-level metrics using keyword_view (supports metrics + criterion fields)
-         const googleAdsKwQuery = `
-            SELECT 
-              ad_group_criterion.keyword.text,
-              ad_group_criterion.final_urls,
-              campaign.resource_name,
-              ad_group.resource_name,
-              metrics.cost_micros, 
-              metrics.clicks, 
-              metrics.conversions,
-              metrics.search_impression_share,
-              metrics.ctr
-            FROM keyword_view
-            WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
-            AND metrics.clicks > 0
-         `;
+         `.trim();
 
-         // Query 3: Customer-level metrics (The most accurate "Overview" total)
-         const googleAdsCustomerQuery = `
-            SELECT 
-              metrics.cost_micros, 
-              metrics.clicks, 
-              metrics.impressions, 
-              metrics.conversions,
-              metrics.search_impression_share
-            FROM customer
-            WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
-         `;
-         
-         const fetchGoogleAds = async (query: string, targetId: string) => {
-            if (!googleAdsAuth?.token) {
-                throw new Error("Google Ads token is missing");
-            }
-            
-            const headers: any = { 
-                Authorization: `Bearer ${googleAdsAuth.token}`, 
-                'Content-Type': 'application/json',
-                'developer-token': DEVELOPER_TOKEN
-            };
-            
-            if (selectedGoogleAdsCustomer) {
-                headers['login-customer-id'] = selectedGoogleAdsCustomer.id.toString().replace(/-/g, '');
-            }
-            
-            const cleanTargetId = targetId.toString().replace(/-/g, '');
-            const allResults: any[] = [];
-            let nextPageToken: string | undefined = undefined;
-
-            try {
-                do {
-                    const body: any = { query };
-                    if (nextPageToken) {
-                        body.pageToken = nextPageToken;
-                    }
-
-                    const res = await fetch(`/api/googleads/v21/customers/${cleanTargetId}/googleAds:search`, {
-                        method: 'POST',
-                        headers: headers,
-                        body: JSON.stringify(body)
-                    });
-                    
-                    if (!res.ok) {
-                        const text = await res.text();
-                        console.error(`Google Ads API Error for ${targetId}:`, text);
-                        break;
-                    }
-                    
-                    const json = await res.json();
-                    if (json.results && Array.isArray(json.results)) {
-                        for (const item of json.results) {
-                            allResults.push(item);
-                        }
-                    }
-                    nextPageToken = json.nextPageToken;
-                } while (nextPageToken);
-            } catch (err) {
-                console.error(`Fetch error for ${targetId}:`, err);
-            }
-
-            return allResults;
-         };
-         
          try {
-            let accountsToFetch: string[] = [];
-            let globalAvgCpc = 0;
-            const isAllAccounts = true; // Always true since we removed sub-account selection
+            // Step 1: Discover active client accounts
+            const activeClientIds = await fetchEnabledClientAccountIds(googleAdsAuth.token);
             
-            // 1. ALWAYS FETCH GLOBAL TOTALS (Customer Level)
-            // This ensures scorecards always show "Overall" data regardless of selection
-            const allAccountIds = availableGoogleAdsSubAccounts.map(acc => acc.id);
+            // Step 2: Controlled concurrency
+            const accountChunks = chunkArray(activeClientIds, GOOGLE_ADS_KEYWORD_FETCH_CONCURRENCY);
 
-            let globalMetrics: GoogleAdsGlobalMetrics = {
-                totalCost: 0,
-                totalClicks: 0,
-                totalConversions: 0,
-                totalImpressions: 0,
-                avgCpc: 0,
-                avgCpa: 0
-            };
-
-            if (selectedGoogleAdsCustomer) {
-                const mccId = selectedGoogleAdsCustomer.id.toString().replace(/-/g, '');
-                const customerResults = await fetchGoogleAds(googleAdsCustomerQuery, mccId);
-                    
-                customerResults.forEach(res => {
-                    const metrics = res.metrics;
-                    globalMetrics.totalCost += (parseInt(metrics?.costMicros) || 0) / 1000000;
-                    globalMetrics.totalClicks += parseInt(metrics?.clicks) || 0;
-                    globalMetrics.totalConversions += parseFloat(metrics?.conversions) || 0;
-                    globalMetrics.totalImpressions += parseInt(metrics?.impressions) || 0;
-                });
-
-                if (globalMetrics.totalClicks > 0) {
-                    globalMetrics.avgCpc = globalMetrics.totalCost / globalMetrics.totalClicks;
-                }
-                if (globalMetrics.totalConversions > 0) {
-                    globalMetrics.avgCpa = globalMetrics.totalCost / globalMetrics.totalConversions;
-                }
-                
-                setGoogleAdsGlobalMetrics(globalMetrics);
-                globalAvgCpc = globalMetrics.avgCpc; // Used for fallback
-            }
-            
-            // 1. Process URLs for Bridge Data (source of truth for URL-level metrics)
-            const googleAdsPaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, searchImpressionShare: number | null, campaigns: Set<string> }> = {};
-            
-            // Measure 1 & 2: Parallelization and Filtering
-            if (selectedGoogleAdsCustomer) {
-                const mccId = selectedGoogleAdsCustomer.id.toString().replace(/-/g, '');
-                const results = await fetchGoogleAds(googleAdsUrlQuery, mccId);
-                
-                results.forEach((row: any) => {
-                    const url = row.landingPageView?.unexpandedFinalUrl;
-                    if (!url) return;
-                    const path = normalizeUrl(url);
-                    if (path) {
-                        if (!googleAdsPaidMap[path]) {
-                            googleAdsPaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, searchImpressionShare: null, campaigns: new Set(['Google Ads']) };
-                        }
-                        const metrics = row.metrics;
-                        googleAdsPaidMap[path].clicksOrSessions += parseInt(metrics?.clicks) || 0;
-                        googleAdsPaidMap[path].conversions += parseFloat(metrics?.conversions) || 0;
-                        googleAdsPaidMap[path].impressions += parseInt(metrics?.impressions) || 0;
-                        googleAdsPaidMap[path].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
-                        
-                        // Impression Share is a percentage (0.0 to 1.0)
-                        if (metrics?.searchImpressionShare !== undefined && metrics?.searchImpressionShare !== null) {
-                            const currentIS = googleAdsPaidMap[path].searchImpressionShare || 0;
-                            const currentImps = googleAdsPaidMap[path].impressions - (parseInt(metrics?.impressions) || 0);
-                            const newImps = parseInt(metrics?.impressions) || 0;
-                            
-                            if (currentImps + newImps > 0) {
-                                googleAdsPaidMap[path].searchImpressionShare = ((currentIS * currentImps) + (metrics.searchImpressionShare * newImps)) / (currentImps + newImps);
-                            } else {
-                                googleAdsPaidMap[path].searchImpressionShare = metrics.searchImpressionShare;
-                            }
-                        }
+            for (const accountChunk of accountChunks) {
+                const accountRows = await Promise.all(accountChunk.map(async (clientId) => {
+                    try {
+                        // Step 3: Query each active client account directly.
+                        return await fetchGoogleAdsSearchResults(googleAdsAuth.token, clientId, googleAdsUrlQuery);
+                    } catch (accountError) {
+                        console.warn(`Google Ads URL fetch skipped for customer ${clientId}:`, accountError);
+                        return [];
                     }
+                }));
+
+                // Step 4: Aggregate results
+                accountRows.forEach((rows) => {
+                    rows.forEach((row: any) => {
+                        const url = row.landingPageView?.unexpandedFinalUrl;
+                        if (!url) return;
+                        const path = normalizeUrl(url);
+                        if (path) {
+                            if (!googleAdsPaidMap[path]) {
+                                googleAdsPaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, searchImpressionShare: null, campaigns: new Set(['Google Ads']) };
+                            }
+                            const metrics = row.metrics;
+                            googleAdsPaidMap[path].clicksOrSessions += parseInt(metrics?.clicks) || 0;
+                            googleAdsPaidMap[path].conversions += parseFloat(metrics?.conversions) || 0;
+                            googleAdsPaidMap[path].impressions += parseInt(metrics?.impressions) || 0;
+                            googleAdsPaidMap[path].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
+                        }
+                    });
                 });
             }
             
