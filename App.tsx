@@ -24,6 +24,8 @@ const DEVELOPER_TOKEN = import.meta.env.VITE_GOOGLE_ADS_DEVELOPER_TOKEN || "oZ5E
 const SCOPE_GA4 = "https://www.googleapis.com/auth/analytics.readonly";
 const SCOPE_GSC = "https://www.googleapis.com/auth/webmasters.readonly";
 const SCOPE_GOOGLE_ADS = "https://www.googleapis.com/auth/adwords";
+const GOOGLE_ADS_LOGIN_CUSTOMER_ID = "4795886728";
+const GOOGLE_ADS_KEYWORD_FETCH_CONCURRENCY = 4;
 
 const PRIORITY_DIMENSIONS = [
   'sessionDefaultChannelGroup',
@@ -404,6 +406,79 @@ const App: React.FC = () => {
     if (customer && googleAdsAuth?.token) {
         fetchGoogleAdsSubAccounts(googleAdsAuth.token, customer.id);
     }
+  };
+
+  const buildGoogleAdsHeaders = (token: string) => ({
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    'developer-token': DEVELOPER_TOKEN,
+    'login-customer-id': GOOGLE_ADS_LOGIN_CUSTOMER_ID
+  });
+
+  const fetchGoogleAdsSearchResults = async (token: string, customerId: string, query: string) => {
+    const cleanCustomerId = customerId.toString().replace(/-/g, '');
+    const allResults: any[] = [];
+    let nextPageToken: string | undefined = undefined;
+
+    do {
+      const requestBody: Record<string, string> = { query };
+      if (nextPageToken) {
+        requestBody.pageToken = nextPageToken;
+      }
+
+      const response = await fetch(`/api/googleads/v21/customers/${cleanCustomerId}/googleAds:search`, {
+        method: 'POST',
+        headers: buildGoogleAdsHeaders(token),
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Google Ads search failed for customer ${cleanCustomerId}: ${response.status} ${errorText}`);
+      }
+
+      const payload = await response.json();
+      if (Array.isArray(payload.results)) {
+        allResults.push(...payload.results);
+      }
+      nextPageToken = payload.nextPageToken;
+    } while (nextPageToken);
+
+    return allResults;
+  };
+
+  const fetchEnabledClientAccountIds = async (token: string) => {
+    const activeClientQuery = `
+      SELECT customer_client.id
+      FROM customer_client
+      WHERE customer_client.status = 'ENABLED'
+      AND customer_client.manager = FALSE
+    `.trim();
+
+    const rows = await fetchGoogleAdsSearchResults(token, GOOGLE_ADS_LOGIN_CUSTOMER_ID, activeClientQuery);
+    const clientIds = new Set<string>();
+
+    rows.forEach((row: any) => {
+      const clientId = row.customerClient?.id;
+      if (clientId) {
+        clientIds.add(String(clientId).replace(/-/g, ''));
+      }
+    });
+
+    return Array.from(clientIds);
+  };
+
+  const chunkArray = <T,>(items: T[], chunkSize: number): T[][] => {
+    if (chunkSize <= 0) {
+      return [items];
+    }
+
+    const chunks: T[][] = [];
+    for (let i = 0; i < items.length; i += chunkSize) {
+      chunks.push(items.slice(i, i + chunkSize));
+    }
+
+    return chunks;
   };
   
   const fetchAiTrafficData = async () => {
@@ -1067,86 +1142,119 @@ const App: React.FC = () => {
   }, [googleAdsAuth]);
 
   const fetchGoogleAdsKeywords = async () => {
-    if (!googleAdsAuth?.token || isGoogleAdsKeywordsLoading || isGoogleAdsKeywordsLoaded || !selectedGoogleAdsCustomer) return;
-    
-    console.log('Selected Customer:', selectedGoogleAdsCustomer);
+    if (!googleAdsAuth?.token || isGoogleAdsKeywordsLoading || isGoogleAdsKeywordsLoaded) return;
     
     setIsGoogleAdsKeywordsLoading(true);
-    const mccId = selectedGoogleAdsCustomer.id.toString().replace(/-/g, '');
-    const googleAdsUrlKeywordMap: Record<string, Record<string, { clicks: number, conversions: number, cost: number, impressions: number, searchImpressionShare: number, ctr: number }>> = {};
+    const nextGoogleAdsUrlKeywordMap: Record<string, Record<string, { clicks: number, conversions: number, cost: number, impressions: number, searchImpressionShare: number, ctr: number }>> = {};
     
     const googleAdsKwQuery = `
         SELECT 
           ad_group_criterion.keyword.text,
-          metrics.cost_micros, 
-          metrics.clicks, 
+          ad_group_criterion.final_urls,
+          metrics.clicks,
           metrics.conversions,
-          metrics.impressions
-        FROM keyword_view
-        WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
+          metrics.impressions,
+          metrics.cost_micros,
+          metrics.search_impression_share,
+          metrics.ctr
+        FROM ad_group_criterion
+        WHERE ad_group_criterion.type = 'KEYWORD'
+        AND ad_group_criterion.status = 'ENABLED'
+        AND campaign.status = 'ENABLED'
         AND metrics.clicks > 0
-    `;
-
-    const fetchGoogleAds = async (query: string, targetId: string) => {
-        const headers: any = { 
-            Authorization: `Bearer ${googleAdsAuth.token}`, 
-            'Content-Type': 'application/json',
-            'developer-token': DEVELOPER_TOKEN
-        };
-        if (selectedGoogleAdsCustomer) {
-            headers['login-customer-id'] = selectedGoogleAdsCustomer.id.toString().replace(/-/g, '');
-        }
-        const cleanTargetId = targetId.toString().replace(/-/g, '');
-        const allResults: any[] = [];
-        let nextPageToken: string | undefined = undefined;
-        try {
-            do {
-                const body: any = { query };
-                if (nextPageToken) body.pageToken = nextPageToken;
-                const res = await fetch(`/api/googleads/v21/customers/${cleanTargetId}/googleAds:search`, {
-                    method: 'POST',
-                    headers: headers,
-                    body: JSON.stringify(body)
-                });
-                if (!res.ok) break;
-                const json = await res.json();
-                if (json.results) allResults.push(...json.results);
-                nextPageToken = json.nextPageToken;
-            } while (nextPageToken);
-        } catch (err) {}
-        return allResults;
-    };
+        AND segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
+    `.trim();
 
     try {
-        const accountKwRows = await fetchGoogleAds(googleAdsKwQuery, mccId);
-        
-        accountKwRows.forEach((row: any) => {
-            const kw = row.adGroupCriterion?.keyword?.text;
-            if (!kw) return;
-            const cleanKw = kw.toLowerCase().trim();
-            const finalUrls = row.adGroupCriterion?.finalUrls;
-            const url = finalUrls && finalUrls.length > 0 ? extractPath(finalUrls[0]) : 'unknown';
-            if (!url) return;
+        // Step 1: Discover only active client accounts from MCC to avoid 403 on disabled/cancelled accounts.
+        const activeClientIds = await fetchEnabledClientAccountIds(googleAdsAuth.token);
 
-            const metrics = row.metrics;
-            if (!googleAdsUrlKeywordMap[url]) {
-                googleAdsUrlKeywordMap[url] = {};
-            }
-            if (!googleAdsUrlKeywordMap[url][cleanKw]) {
-                googleAdsUrlKeywordMap[url][cleanKw] = { clicks: 0, conversions: 0, cost: 0, impressions: 0, searchImpressionShare: 0, ctr: 0 };
-            }
-            googleAdsUrlKeywordMap[url][cleanKw].clicks += parseInt(metrics?.clicks) || 0;
-            googleAdsUrlKeywordMap[url][cleanKw].conversions += parseFloat(metrics?.conversions) || 0;
-            googleAdsUrlKeywordMap[url][cleanKw].impressions += parseInt(metrics?.impressions) || 0;
-            googleAdsUrlKeywordMap[url][cleanKw].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
-            googleAdsUrlKeywordMap[url][cleanKw].searchImpressionShare += parseFloat(metrics?.searchImpressionShare) || 0;
-            googleAdsUrlKeywordMap[url][cleanKw].ctr += parseFloat(metrics?.ctr) || 0;
-        });
+        if (activeClientIds.length === 0) {
+            setGoogleAdsUrlKeywordMap({});
+            setKeywordBridgeDataGoogleAds([]);
+            setGlobalKeywordBridgeDataGoogleAds([]);
+            setIsGoogleAdsKeywordsLoaded(true);
+            return;
+        }
 
+        // Step 2: Controlled concurrency (4 requests max in parallel).
+        const accountChunks = chunkArray(activeClientIds, GOOGLE_ADS_KEYWORD_FETCH_CONCURRENCY);
 
-        setGoogleAdsUrlKeywordMap(googleAdsUrlKeywordMap);
-        
-        // Now update the bridge data with the keywords
+        for (const accountChunk of accountChunks) {
+            const accountRows = await Promise.all(accountChunk.map(async (clientId) => {
+                try {
+                    // Step 3: Query each active client account directly.
+                    return await fetchGoogleAdsSearchResults(googleAdsAuth.token, clientId, googleAdsKwQuery);
+                } catch (accountError) {
+                    console.warn(`Google Ads keyword fetch skipped for customer ${clientId}:`, accountError);
+                    return [];
+                }
+            }));
+
+            accountRows.forEach((rows) => {
+                rows.forEach((row: any) => {
+                    const keyword = row.adGroupCriterion?.keyword?.text;
+                    if (!keyword) return;
+
+                    const finalUrls = row.adGroupCriterion?.finalUrls;
+                    const landingUrl = finalUrls && finalUrls.length > 0 ? extractPath(finalUrls[0]) : 'unknown';
+                    if (!landingUrl) return;
+
+                    const metrics = row.metrics;
+                    const clicks = Number(metrics?.clicks) || 0;
+                    const conversions = Number(metrics?.conversions) || 0;
+                    const impressions = Number(metrics?.impressions) || 0;
+                    const cost = (Number(metrics?.costMicros) || 0) / 1000000; // Step 4: convert micros to real currency.
+                    const rowSearchImpressionShare = metrics?.searchImpressionShare !== undefined && metrics?.searchImpressionShare !== null
+                        ? Number(metrics.searchImpressionShare)
+                        : null;
+                    const rowCtr = metrics?.ctr !== undefined && metrics?.ctr !== null
+                        ? Number(metrics.ctr)
+                        : null;
+
+                    const cleanKeyword = keyword.toLowerCase().trim();
+                    if (!nextGoogleAdsUrlKeywordMap[landingUrl]) {
+                        nextGoogleAdsUrlKeywordMap[landingUrl] = {};
+                    }
+                    if (!nextGoogleAdsUrlKeywordMap[landingUrl][cleanKeyword]) {
+                        nextGoogleAdsUrlKeywordMap[landingUrl][cleanKeyword] = {
+                            clicks: 0,
+                            conversions: 0,
+                            cost: 0,
+                            impressions: 0,
+                            searchImpressionShare: 0,
+                            ctr: 0
+                        };
+                    }
+
+                    const agg = nextGoogleAdsUrlKeywordMap[landingUrl][cleanKeyword];
+                    const previousImpressions = agg.impressions;
+
+                    agg.clicks += clicks;
+                    agg.conversions += conversions;
+                    agg.cost += cost;
+                    agg.impressions += impressions;
+
+                    if (rowSearchImpressionShare !== null && impressions > 0) {
+                        const totalImpressions = previousImpressions + impressions;
+                        agg.searchImpressionShare = totalImpressions > 0
+                            ? ((agg.searchImpressionShare * previousImpressions) + (rowSearchImpressionShare * impressions)) / totalImpressions
+                            : rowSearchImpressionShare;
+                    }
+
+                    if (rowCtr !== null && impressions > 0) {
+                        const totalImpressions = previousImpressions + impressions;
+                        agg.ctr = totalImpressions > 0
+                            ? ((agg.ctr * previousImpressions) + (rowCtr * impressions)) / totalImpressions
+                            : rowCtr;
+                    }
+                });
+            });
+        }
+
+        setGoogleAdsUrlKeywordMap(nextGoogleAdsUrlKeywordMap);
+
+        // Update URL-level query cards with paid metrics from Google Ads keywords.
         setBridgeDataGoogleAds(prev => prev.map(item => {
             if (!item.gscTopQueries) return item;
             const url = extractPath(item.url);
@@ -1154,7 +1262,7 @@ const App: React.FC = () => {
                 ...item,
                 gscTopQueries: item.gscTopQueries.map(q => {
                     const cleanKw = q.query.toLowerCase().trim();
-                    const paidKwData = googleAdsUrlKeywordMap[url]?.[cleanKw];
+                    const paidKwData = nextGoogleAdsUrlKeywordMap[url]?.[cleanKw];
                     return {
                         ...q,
                         paidClicks: paidKwData?.clicks || 0,
@@ -1171,7 +1279,7 @@ const App: React.FC = () => {
             if (!item.gscTopQueries) return;
             item.gscTopQueries.forEach(q => {
                 const cleanKw = q.query.toLowerCase().trim();
-                const paidKwData = googleAdsUrlKeywordMap[extractPath(item.url)]?.[cleanKw];
+                const paidKwData = nextGoogleAdsUrlKeywordMap[extractPath(item.url)]?.[cleanKw];
                 if (paidKwData || q.clicks > 0) {
                     const paidVol = paidKwData ? paidKwData.clicks : 0;
                     const paidCost = paidKwData ? paidKwData.cost : 0;
@@ -1321,11 +1429,10 @@ const App: React.FC = () => {
     if ((activeTab === DashboardTab.PPC_SEO_BRIDGE || activeTab === DashboardTab.SEARCH_EFFICIENCY || activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE) && 
         googleAdsAuth?.token && 
         !isGoogleAdsKeywordsLoaded && 
-        !isGoogleAdsKeywordsLoading &&
-        availableGoogleAdsSubAccounts.length > 0) {
+        !isGoogleAdsKeywordsLoading) {
       fetchGoogleAdsKeywords();
     }
-  }, [activeTab, isGoogleAdsKeywordsLoaded, isGoogleAdsKeywordsLoading, googleAdsAuth, availableGoogleAdsSubAccounts]);
+  }, [activeTab, isGoogleAdsKeywordsLoaded, isGoogleAdsKeywordsLoading, googleAdsAuth]);
 
   const fetchGscData = async () => {
     if (!gscAuth?.site || !gscAuth.token) return;
