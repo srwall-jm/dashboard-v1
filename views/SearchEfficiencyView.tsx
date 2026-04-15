@@ -8,7 +8,7 @@ import {
 import { KeywordBridgeData, GoogleAdsGlobalMetrics } from '../types';
 import { KpiCard } from '../components/KpiCard';
 import { EmptyState } from '../components/EmptyState';
-import { exportToCSV, extractPath } from '../utils';
+import { exportToCSV } from '../utils';
 
 interface UrlEfficiencyRow {
   url: string;
@@ -54,30 +54,30 @@ export const SearchEfficiencyView: React.FC<{
     // 1. Initialize with precise URL-level data
     for (let i = 0; i < urlData.length; i++) {
         const row = urlData[i];
-        const url = extractPath(row.url || '');
+        const url = row.url || '(not set)';
         
         urlMap.set(url, {
             url,
             cluster: 'Other',
             organicClicks: row.organicClicks || 0,
-            paidSessions: row.ppcSessions || 0,
+            paidSessions: row.paidSessions || 0,
             paidShare: 0,
-            ppcCost: row.ppcCost || 0,
-            avgCpc: row.ppcSessions > 0 ? (row.ppcCost || 0) / row.ppcSessions : 0,
+            ppcCost: row.paidCost || 0,
+            avgCpc: row.paidSessions > 0 ? (row.paidCost || 0) / row.paidSessions : 0,
             queries: [],
             avgOrganicRank: null
         });
 
         // Global metrics from precise URL data
-        totalCost += row.ppcCost || 0;
+        totalCost += row.paidCost || 0;
         totalOrganicClicks += row.organicClicks || 0;
-        totalPaidSessions += row.ppcSessions || 0;
+        totalPaidSessions += row.paidSessions || 0;
     }
 
     // 2. Attach keyword data for breakdown and rank calculation
     for (let i = 0; i < keywordData.length; i++) {
         const row = keywordData[i];
-        const url = extractPath(row.url || '');
+        const url = row.url || '(not set)';
         
         let urlEntry = urlMap.get(url);
         if (!urlEntry) {
@@ -87,14 +87,14 @@ export const SearchEfficiencyView: React.FC<{
                 organicClicks: row.organicClicks || 0,
                 paidSessions: row.paidSessions || 0,
                 paidShare: 0,
-                ppcCost: row.ppcCost || 0,
-                avgCpc: row.paidSessions > 0 ? (row.ppcCost || 0) / row.paidSessions : 0,
+                ppcCost: row.paidCost || 0,
+                avgCpc: row.paidSessions > 0 ? (row.paidCost || 0) / row.paidSessions : 0,
                 queries: [],
                 avgOrganicRank: null
             };
             urlMap.set(url, urlEntry);
             
-            totalCost += row.ppcCost || 0;
+            totalCost += row.paidCost || 0;
             totalOrganicClicks += row.organicClicks || 0;
             totalPaidSessions += row.paidSessions || 0;
         }
@@ -236,13 +236,11 @@ export const SearchEfficiencyView: React.FC<{
     exportToCSV(csv, "Optimization_Savings_Report");
   };
 
-  const formatCurrency = (val: number | undefined | null, decimals: number = 2) => {
-    if (val === undefined || val === null) return '0.00';
+  const formatCurrency = (val: number, decimals: number = 2) => {
     return val.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   };
   
-  const formatNumber = (val: number | undefined | null) => {
-    if (val === undefined || val === null) return '0';
+  const formatNumber = (val: number) => {
     return val.toLocaleString('en-US');
   };
 
@@ -512,13 +510,13 @@ export const SearchEfficiencyView: React.FC<{
                                                       </tr>
                                                   </thead>
                                                   <tbody>
-                                                      {row.queries && row.queries.slice(0, 10).map((q, qIdx) => (
+                                                      {row.queries.slice(0, 10).map((q, qIdx) => (
                                                           <tr key={qIdx} className="border-t border-slate-100 hover:bg-slate-50">
                                                               <td className="py-2 px-4 text-xs font-bold text-slate-700">{q.keyword}</td>
-                                                              <td className="py-2 px-4 text-xs text-center text-slate-600">{q.organicRank !== null ? `#${q.organicRank.toFixed(1)}` : '-'}</td>
+                                                              <td className="py-2 px-4 text-xs text-center text-slate-600">{q.organicRank ? `#${q.organicRank.toFixed(1)}` : '-'}</td>
                                                               <td className="py-2 px-4 text-xs text-right text-slate-600">{formatNumber(q.organicClicks)}</td>
-                                                              <td className="py-2 px-4 text-xs text-right text-slate-600">{formatNumber(q.paidClicks || q.paidSessions || 0)}</td>
-                                                              <td className="py-2 px-4 text-xs text-right text-slate-600">{currencySymbol}{formatCurrency(q.ppcCost || 0)}</td>
+                                                              <td className="py-2 px-4 text-xs text-right text-slate-600">{formatNumber(q.paidSessions)}</td>
+                                                              <td className="py-2 px-4 text-xs text-right text-slate-600">{currencySymbol}{formatCurrency(q.ppcCost)}</td>
                                                           </tr>
                                                       ))}
                                                   </tbody>

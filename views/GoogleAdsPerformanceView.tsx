@@ -7,7 +7,7 @@ import {
   DollarSign, MousePointerClick, Percent, Search, FileText, Target, ExternalLink, Zap, ChevronUp, ChevronDown
 } from 'lucide-react';
 import { BridgeData, GoogleAdsGlobalMetrics, GoogleAdsCustomer } from '../types';
-import { exportToCSV, extractPath } from '../utils';
+import { exportToCSV } from '../utils';
 import { KpiCard } from '../components/KpiCard';
 import { EmptyState } from '../components/EmptyState';
 
@@ -20,11 +20,9 @@ export const GoogleAdsPerformanceView: React.FC<{
   data: BridgeData[]; 
   currencySymbol: string; 
   globalMetrics: GoogleAdsGlobalMetrics | null;
-  urlKeywordMap: Record<string, Record<string, { clicks: number, conversions: number, cost: number, impressions: number, searchImpressionShare: number, ctr: number }>>;
-}> = ({ data, currencySymbol, globalMetrics, urlKeywordMap }) => {
+}> = ({ data, currencySymbol, globalMetrics }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ppcCost', direction: 'desc' });
-  const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
 
   // 1. Aggregation Logic (Fallback if globalMetrics is null)
   const stats = useMemo(() => {
@@ -58,18 +56,17 @@ export const GoogleAdsPerformanceView: React.FC<{
   const tableData = useMemo(() => {
     const map: Record<string, BridgeData> = {};
     stats.items.forEach(item => {
-        const path = extractPath(item.url);
         // Group logic if duplicates exist, otherwise simple pass through
-        if (!map[path]) {
-            map[path] = { ...item, url: path };
+        if (!map[item.url]) {
+            map[item.url] = item;
         } else {
             // Simple accumulation for display purposes if rows are split
-            map[path] = {
-                ...map[path],
-                ppcCost: map[path].ppcCost + item.ppcCost,
-                ppcSessions: map[path].ppcSessions + item.ppcSessions,
-                ppcConversions: map[path].ppcConversions + item.ppcConversions,
-                ppcImpressions: map[path].ppcImpressions + item.ppcImpressions
+            map[item.url] = {
+                ...map[item.url],
+                ppcCost: map[item.url].ppcCost + item.ppcCost,
+                ppcSessions: map[item.url].ppcSessions + item.ppcSessions,
+                ppcConversions: map[item.url].ppcConversions + item.ppcConversions,
+                ppcImpressions: map[item.url].ppcImpressions + item.ppcImpressions
             }
         }
     });
@@ -92,9 +89,6 @@ export const GoogleAdsPerformanceView: React.FC<{
             } else if (sortConfig.key === 'cpa') {
                 aVal = a.ppcConversions > 0 ? a.ppcCost / a.ppcConversions : 0;
                 bVal = b.ppcConversions > 0 ? b.ppcCost / b.ppcConversions : 0;
-            } else if (sortConfig.key === 'searchImpressionShare') {
-                aVal = a.searchImpressionShare || 0;
-                bVal = b.searchImpressionShare || 0;
             }
 
             // String Sort
@@ -288,27 +282,19 @@ export const GoogleAdsPerformanceView: React.FC<{
             <table className="w-full text-left border-collapse">
                 <thead>
                     <tr className="border-b border-slate-100 bg-slate-50/50">
-                        <th className="py-3 px-4 w-10"></th>
                         <SortableHeader label="Landing Page" sortKey="url" align="left" width="300px" />
                         <SortableHeader label="Campaign" sortKey="ppcCampaign" align="left" />
                         <SortableHeader label="Cost" sortKey="ppcCost" width="120px" />
                         <SortableHeader label="Clicks" sortKey="ppcSessions" />
                         <SortableHeader label="CPC" sortKey="cpc" />
                         <SortableHeader label="CTR" sortKey="ctr" />
-                        <SortableHeader label="Imp. Share" sortKey="searchImpressionShare" />
                         <SortableHeader label="Conversions" sortKey="ppcConversions" width="100px" />
                         <SortableHeader label="CPA" sortKey="cpa" />
                     </tr>
                 </thead>
                 <tbody>
                     {tableData.length > 0 ? tableData.slice(0, 50).map((row, idx) => (
-                        <React.Fragment key={idx}>
-                        <tr className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                            <td className="py-3 px-4">
-                                <button onClick={() => setExpandedUrl(expandedUrl === row.url ? null : row.url)}>
-                                    {expandedUrl === row.url ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                                </button>
-                            </td>
+                        <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                             <td className="py-3 px-4">
                                 <div className="flex items-center gap-2">
                                     <ExternalLink size={10} className="text-slate-300 flex-shrink-0" />
@@ -336,11 +322,6 @@ export const GoogleAdsPerformanceView: React.FC<{
                                 <span className="text-[10px] font-bold text-slate-600">{row.ppcImpressions > 0 ? `${((row.ppcSessions / row.ppcImpressions) * 100).toFixed(2)}%` : '-'}</span>
                             </td>
                             <td className="py-3 px-4 text-right">
-                                <span className="text-[10px] font-bold text-slate-600">
-                                    {row.searchImpressionShare !== null ? `${(row.searchImpressionShare * 100).toFixed(1)}%` : '-'}
-                                </span>
-                            </td>
-                            <td className="py-3 px-4 text-right">
                                 <div className="flex flex-col items-end gap-1">
                                     <span className={`text-[10px] font-black ${row.ppcConversions > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{row.ppcConversions.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                     {row.ppcConversions > 0 && (
@@ -356,51 +337,8 @@ export const GoogleAdsPerformanceView: React.FC<{
                                 </span>
                             </td>
                         </tr>
-                        {expandedUrl === row.url && (
-                            <tr className="bg-slate-50">
-                                <td colSpan={10} className="p-4">
-                                    <div className="text-[10px] font-bold text-slate-600 mb-2">Top 10 Paid Keywords</div>
-                                    <table className="w-full text-left">
-                                        <thead>
-                                            <tr className="border-b border-slate-200">
-                                                <th className="py-2 px-2">Keyword</th>
-                                                <th className="py-2 px-2 text-right">Cost</th>
-                                                <th className="py-2 px-2 text-right">Clicks</th>
-                                                <th className="py-2 px-2 text-right">CPC</th>
-                                                <th className="py-2 px-2 text-right">CTR</th>
-                                                <th className="py-2 px-2 text-right">Imp. Share</th>
-                                                <th className="py-2 px-2 text-right">Conversions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {(() => {
-                                                const path = extractPath(row.url);
-                                                const kwData = urlKeywordMap ? urlKeywordMap[path] : null;
-                                                console.log('Debug URL:', row.url, 'Path:', path, 'KWData:', kwData, 'MapKeys:', urlKeywordMap ? Object.keys(urlKeywordMap) : []);
-                                                if (!kwData) return <tr><td colSpan={7} className="py-4 text-center text-xs text-slate-500">No keyword data found for this URL.</td></tr>;
-                                                return Object.entries(kwData)
-                                                    .sort((a, b) => b[1].clicks - a[1].clicks)
-                                                    .slice(0, 10)
-                                                    .map(([kw, data], i) => (
-                                                        <tr key={i} className="border-b border-slate-100">
-                                                            <td className="py-2 px-2">{kw}</td>
-                                                            <td className="py-2 px-2 text-right">{currencySymbol}{data.cost.toFixed(2)}</td>
-                                                            <td className="py-2 px-2 text-right">{data.clicks}</td>
-                                                            <td className="py-2 px-2 text-right">{data.clicks > 0 ? `${currencySymbol}${(data.cost / data.clicks).toFixed(2)}` : '-'}</td>
-                                                            <td className="py-2 px-2 text-right">{data.impressions > 0 ? `${((data.clicks / data.impressions) * 100).toFixed(2)}%` : '-'}</td>
-                                                            <td className="py-2 px-2 text-right">{data.searchImpressionShare > 0 ? `${(data.searchImpressionShare * 100).toFixed(1)}%` : '-'}</td>
-                                                            <td className="py-2 px-2 text-right">{data.conversions.toFixed(2)}</td>
-                                                        </tr>
-                                                    ));
-                                            })()}
-                                        </tbody>
-                                    </table>
-                                </td>
-                            </tr>
-                        )}
-                        </React.Fragment>
                     )) : (
-                        <tr><td colSpan={10} className="py-12"><EmptyState text="No Google Ads Data Found. Please check settings." /></td></tr>
+                        <tr><td colSpan={8} className="py-12"><EmptyState text="No Google Ads Data Found. Please check settings." /></td></tr>
                     )}
                 </tbody>
             </table>
@@ -410,5 +348,3 @@ export const GoogleAdsPerformanceView: React.FC<{
     </div>
   );
 };
-
-

@@ -24,8 +24,6 @@ const DEVELOPER_TOKEN = import.meta.env.VITE_GOOGLE_ADS_DEVELOPER_TOKEN || "oZ5E
 const SCOPE_GA4 = "https://www.googleapis.com/auth/analytics.readonly";
 const SCOPE_GSC = "https://www.googleapis.com/auth/webmasters.readonly";
 const SCOPE_GOOGLE_ADS = "https://www.googleapis.com/auth/adwords";
-const GOOGLE_ADS_LOGIN_CUSTOMER_ID = "4795886728";
-const GOOGLE_ADS_KEYWORD_FETCH_CONCURRENCY = 4;
 
 const PRIORITY_DIMENSIONS = [
   'sessionDefaultChannelGroup',
@@ -82,7 +80,6 @@ const App: React.FC = () => {
   
   const [googleAdsGlobalMetrics, setGoogleAdsGlobalMetrics] = useState<GoogleAdsGlobalMetrics | null>(null);
   const [bridgeDataGA4, setBridgeDataGA4] = useState<BridgeData[]>([]); 
-  const [googleAdsUrlKeywordMap, setGoogleAdsUrlKeywordMap] = useState<Record<string, Record<string, { clicks: number, conversions: number, cost: number, impressions: number, searchImpressionShare: number, ctr: number }>>>({});
   const [bridgeDataGoogleAds, setBridgeDataGoogleAds] = useState<BridgeData[]>([]); 
   const [keywordBridgeDataGA4, setKeywordBridgeDataGA4] = useState<KeywordBridgeData[]>([]);
   const [keywordBridgeDataGoogleAds, setKeywordBridgeDataGoogleAds] = useState<KeywordBridgeData[]>([]);
@@ -407,79 +404,6 @@ const App: React.FC = () => {
         fetchGoogleAdsSubAccounts(googleAdsAuth.token, customer.id);
     }
   };
-
-  const buildGoogleAdsHeaders = (token: string) => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-    'developer-token': DEVELOPER_TOKEN,
-    'login-customer-id': GOOGLE_ADS_LOGIN_CUSTOMER_ID
-  });
-
-  const fetchGoogleAdsSearchResults = async (token: string, customerId: string, query: string) => {
-    const cleanCustomerId = customerId.toString().replace(/-/g, '');
-    const allResults: any[] = [];
-    let nextPageToken: string | undefined = undefined;
-
-    do {
-      const requestBody: Record<string, string> = { query };
-      if (nextPageToken) {
-        requestBody.pageToken = nextPageToken;
-      }
-
-      const response = await fetch(`/api/googleads/v21/customers/${cleanCustomerId}/googleAds:search`, {
-        method: 'POST',
-        headers: buildGoogleAdsHeaders(token),
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Google Ads search failed for customer ${cleanCustomerId}: ${response.status} ${errorText}`);
-      }
-
-      const payload = await response.json();
-      if (Array.isArray(payload.results)) {
-        allResults.push(...payload.results);
-      }
-      nextPageToken = payload.nextPageToken;
-    } while (nextPageToken);
-
-    return allResults;
-  };
-
-  const fetchEnabledClientAccountIds = async (token: string) => {
-    const activeClientQuery = `
-      SELECT customer_client.id
-      FROM customer_client
-      WHERE customer_client.status = 'ENABLED'
-      AND customer_client.manager = FALSE
-    `.trim();
-
-    const rows = await fetchGoogleAdsSearchResults(token, GOOGLE_ADS_LOGIN_CUSTOMER_ID, activeClientQuery);
-    const clientIds = new Set<string>();
-
-    rows.forEach((row: any) => {
-      const clientId = row.customerClient?.id;
-      if (clientId) {
-        clientIds.add(String(clientId).replace(/-/g, ''));
-      }
-    });
-
-    return Array.from(clientIds);
-  };
-
-  const chunkArray = <T,>(items: T[], chunkSize: number): T[][] => {
-    if (chunkSize <= 0) {
-      return [items];
-    }
-
-    const chunks: T[][] = [];
-    for (let i = 0; i < items.length; i += chunkSize) {
-      chunks.push(items.slice(i, i + chunkSize));
-    }
-
-    return chunks;
-  };
   
   const fetchAiTrafficData = async () => {
     if (!ga4Auth?.property || !ga4Auth.token) {
@@ -557,6 +481,20 @@ const App: React.FC = () => {
         return;
     }
     
+    const normalizeUrl = (url: string) => {
+      if (!url || url === '(not set)') return '(not set)';
+      try { url = decodeURIComponent(url); } catch (e) {}
+      let path = url.toLowerCase().trim();
+      path = path.replace(/^https?:\/\/[^\/]+/, '');
+      path = path.split('?')[0];
+      path = path.split('#')[0];
+      // Remove Google Ads ValueTrack parameters like {ignore}
+      path = path.replace(/\{[^}]*\}/g, '');
+      if (path.endsWith('/') && path.length > 1) { path = path.slice(0, -1); }
+      if (!path.startsWith('/')) { path = '/' + path; }
+      return path;
+    };
+    
     // 0. FETCH GA4 ORGANIC SESSIONS (Per URL)
     const ga4OrganicMap: Record<string, number> = {};
     if (ga4Auth?.property && ga4Auth.token) {
@@ -579,7 +517,7 @@ const App: React.FC = () => {
             });
             const ga4OrgData = await ga4OrgResp.json();
             (ga4OrgData.rows || []).forEach((row: any) => {
-                const path = extractPath(row.dimensionValues[0].value);
+                const path = normalizeUrl(row.dimensionValues[0].value);
                 const sessions = parseInt(row.metricValues[0].value) || 0;
                 ga4OrganicMap[path] = (ga4OrganicMap[path] || 0) + sessions;
             });
@@ -633,7 +571,7 @@ const App: React.FC = () => {
                     const clicks = row.clicks;
                     const impressions = row.impressions;
                     const rank = row.position;
-                    const cleanPath = extractPath(fullUrl);
+                    const cleanPath = normalizeUrl(fullUrl);
                     
                     // 1. Fill URL Map (Bridge Data)
                     if (!gscUrlMap[cleanPath]) {
@@ -686,47 +624,173 @@ const App: React.FC = () => {
     }
     
     // 2. TRY GOOGLE ADS FETCH (If Available & Selected)
-    if (googleAdsAuth?.token && selectedGoogleAdsCustomer) {
-         const googleAdsPaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, searchImpressionShare: number | null, campaigns: Set<string> }> = {};
+    if (googleAdsAuth?.token && availableGoogleAdsSubAccounts.length > 0) {
+         const googleAdsPaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
          
+         // NUEVA: Mapa granular con clave URL||KEYWORD para coste específico por URL
+         const googleAdsKeywordUrlMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number }> = {};
+
+         // Query 1: URL-level metrics from landing_page_view (supports all campaign types including PMax)
          const googleAdsUrlQuery = `
            SELECT 
              landing_page_view.unexpanded_final_url,
+             campaign.resource_name,
+             ad_group.resource_name,
              metrics.cost_micros, 
              metrics.clicks, 
              metrics.impressions, 
              metrics.conversions 
            FROM landing_page_view 
            WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
-         `.trim();
+           AND metrics.clicks > 0
+         `;
+         
+         // Query 2: Keyword-level metrics using keyword_view (supports metrics + criterion fields)
+         const googleAdsKwQuery = `
+            SELECT 
+              ad_group_criterion.keyword.text,
+              ad_group_criterion.final_urls,
+              campaign.resource_name,
+              ad_group.resource_name,
+              metrics.cost_micros, 
+              metrics.clicks, 
+              metrics.conversions 
+            FROM keyword_view
+            WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
+            AND metrics.clicks > 0
+         `;
 
-         try {
-            // Step 1: Discover active client accounts
-            const activeClientIds = await fetchEnabledClientAccountIds(googleAdsAuth.token);
+         // Query 3: Customer-level metrics (The most accurate "Overview" total)
+         const googleAdsCustomerQuery = `
+            SELECT 
+              metrics.cost_micros, 
+              metrics.clicks, 
+              metrics.impressions, 
+              metrics.conversions 
+            FROM customer
+            WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
+         `;
+         
+         const fetchGoogleAds = async (query: string, targetId: string) => {
+            if (!googleAdsAuth?.token) {
+                throw new Error("Google Ads token is missing");
+            }
             
-            // Step 2: Controlled concurrency
-            const accountChunks = chunkArray(activeClientIds, GOOGLE_ADS_KEYWORD_FETCH_CONCURRENCY);
+            const headers: any = { 
+                Authorization: `Bearer ${googleAdsAuth.token}`, 
+                'Content-Type': 'application/json',
+                'developer-token': DEVELOPER_TOKEN
+            };
+            
+            if (selectedGoogleAdsCustomer) {
+                headers['login-customer-id'] = selectedGoogleAdsCustomer.id.toString().replace(/-/g, '');
+            }
+            
+            const cleanTargetId = targetId.toString().replace(/-/g, '');
+            const allResults: any[] = [];
+            let nextPageToken: string | undefined = undefined;
 
-            for (const accountChunk of accountChunks) {
-                const accountRows = await Promise.all(accountChunk.map(async (clientId) => {
-                    try {
-                        // Step 3: Query each active client account directly.
-                        return await fetchGoogleAdsSearchResults(googleAdsAuth.token, clientId, googleAdsUrlQuery);
-                    } catch (accountError) {
-                        console.warn(`Google Ads URL fetch skipped for customer ${clientId}:`, accountError);
-                        return [];
+            try {
+                do {
+                    const body: any = { query };
+                    if (nextPageToken) {
+                        body.pageToken = nextPageToken;
                     }
-                }));
 
-                // Step 4: Aggregate results
-                accountRows.forEach((rows) => {
-                    rows.forEach((row: any) => {
+                    const res = await fetch(`/api/googleads/v21/customers/${cleanTargetId}/googleAds:search`, {
+                        method: 'POST',
+                        headers: headers,
+                        body: JSON.stringify(body)
+                    });
+                    
+                    if (!res.ok) {
+                        const text = await res.text();
+                        console.error(`Google Ads API Error for ${targetId}:`, text);
+                        break;
+                    }
+                    
+                    const json = await res.json();
+                    if (json.results && Array.isArray(json.results)) {
+                        for (const item of json.results) {
+                            allResults.push(item);
+                        }
+                    }
+                    nextPageToken = json.nextPageToken;
+                } while (nextPageToken);
+            } catch (err) {
+                console.error(`Fetch error for ${targetId}:`, err);
+            }
+
+            return allResults;
+         };
+         
+         try {
+            let accountsToFetch: string[] = [];
+            let globalAvgCpc = 0;
+            const isAllAccounts = true; // Always true since we removed sub-account selection
+            
+            // 1. ALWAYS FETCH GLOBAL TOTALS (Customer Level)
+            // This ensures scorecards always show "Overall" data regardless of selection
+            const allAccountIds = availableGoogleAdsSubAccounts.map(acc => acc.id);
+
+            let globalMetrics: GoogleAdsGlobalMetrics = {
+                totalCost: 0,
+                totalClicks: 0,
+                totalConversions: 0,
+                totalImpressions: 0,
+                avgCpc: 0,
+                avgCpa: 0
+            };
+
+            if (allAccountIds.length > 0) {
+                const chunkSize = 3; // Smaller chunks to prevent memory spikes
+                for (let i = 0; i < allAccountIds.length; i += chunkSize) {
+                    const chunk = allAccountIds.slice(i, i + chunkSize);
+                    const customerPromises = chunk.map(id => fetchGoogleAds(googleAdsCustomerQuery, id));
+                    const customerResults = await Promise.all(customerPromises);
+                    
+                    customerResults.forEach(res => {
+                        if (Array.isArray(res)) {
+                            for (const row of res) {
+                                const metrics = row.metrics;
+                                globalMetrics.totalCost += (parseInt(metrics?.costMicros) || 0) / 1000000;
+                                globalMetrics.totalClicks += parseInt(metrics?.clicks) || 0;
+                                globalMetrics.totalConversions += parseFloat(metrics?.conversions) || 0;
+                                globalMetrics.totalImpressions += parseInt(metrics?.impressions) || 0;
+                            }
+                        }
+                    });
+                    setLoadingProgress(Math.round(((i + chunk.length) / (allAccountIds.length * 2)) * 100));
+                }
+
+                if (globalMetrics.totalClicks > 0) {
+                    globalMetrics.avgCpc = globalMetrics.totalCost / globalMetrics.totalClicks;
+                }
+                if (globalMetrics.totalConversions > 0) {
+                    globalMetrics.avgCpa = globalMetrics.totalCost / globalMetrics.totalConversions;
+                }
+                
+                setGoogleAdsGlobalMetrics(globalMetrics);
+                globalAvgCpc = globalMetrics.avgCpc; // Used for fallback
+            }
+            
+            // 1. Process URLs for Bridge Data (source of truth for URL-level metrics)
+            const googleAdsPaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
+            
+            // Measure 1 & 2: Parallelization and Filtering
+            const chunkSize = 5; 
+            for (let i = 0; i < allAccountIds.length; i += chunkSize) {
+                const chunk = allAccountIds.slice(i, i + chunkSize);
+                const results = await Promise.all(chunk.map(id => fetchGoogleAds(googleAdsUrlQuery, id)));
+                
+                results.forEach((accountUrlRows) => {
+                    accountUrlRows.forEach((row: any) => {
                         const url = row.landingPageView?.unexpandedFinalUrl;
                         if (!url) return;
-                        const path = extractPath(url);
+                        const path = normalizeUrl(url);
                         if (path) {
                             if (!googleAdsPaidMap[path]) {
-                                googleAdsPaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, searchImpressionShare: null, campaigns: new Set(['Google Ads']) };
+                                googleAdsPaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set(['Google Ads']) };
                             }
                             const metrics = row.metrics;
                             googleAdsPaidMap[path].clicksOrSessions += parseInt(metrics?.clicks) || 0;
@@ -736,6 +800,7 @@ const App: React.FC = () => {
                         }
                     });
                 });
+                setLoadingProgress(50 + Math.round(((i + chunk.length) / allAccountIds.length) * 50));
             }
             
             // BUILD GOOGLE ADS BRIDGE DATA
@@ -788,7 +853,6 @@ const App: React.FC = () => {
                     ppcCpa: paidStats?.conversions ? paidStats.cost / paidStats.conversions : 0,
                     ppcSessions: paidVolume, 
                     ppcImpressions: paidStats?.impressions || 0, 
-                    searchImpressionShare: paidStats?.searchImpressionShare !== undefined ? paidStats.searchImpressionShare : null,
                     blendedCostRatio: paidShare, 
                     actionLabel: action, 
                     dataSource: 'GOOGLE_ADS',
@@ -833,7 +897,7 @@ const App: React.FC = () => {
                 const channelGroup = row.dimensionValues[1].value.toLowerCase();
                 const campaignName = row.dimensionValues[2].value;
                 const sessions = parseInt(row.metricValues[0].value) || 0;
-                const path = extractPath(rawUrl);
+                const path = normalizeUrl(rawUrl);
                 
                 if ((channelGroup.includes('paid') || channelGroup.includes('cpc') || channelGroup.includes('ppc'))) {
                     if (!ga4PaidMap[path]) ga4PaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set() };
@@ -868,7 +932,7 @@ const App: React.FC = () => {
                  if (kw === '(not set)' || !kw) return; 
                  
                  const cleanKw = kw.toLowerCase().trim();
-                 const cleanPath = extractPath(rawUrl);
+                 const cleanPath = normalizeUrl(rawUrl);
                  
                  const sessions = parseInt(row.metricValues[0].value) || 0;
                  const rate = parseFloat(row.metricValues[1].value) || 0;
@@ -998,203 +1062,153 @@ const App: React.FC = () => {
   }, [googleAdsAuth]);
 
   const fetchGoogleAdsKeywords = async () => {
-    if (!googleAdsAuth?.token || isGoogleAdsKeywordsLoading || isGoogleAdsKeywordsLoaded) return;
+    if (!googleAdsAuth?.token || isGoogleAdsKeywordsLoading || isGoogleAdsKeywordsLoaded || availableGoogleAdsSubAccounts.length === 0) return;
     
     setIsGoogleAdsKeywordsLoading(true);
-    const nextGoogleAdsUrlKeywordMap: Record<string, Record<string, { clicks: number, conversions: number, cost: number, impressions: number, searchImpressionShare: number, ctr: number }>> = {};
+    const allAccountIds = availableGoogleAdsSubAccounts.map(acc => acc.id);
+    const googleAdsGlobalKeywordMap: Record<string, { clicks: number, conversions: number, cost: number, impressions: number }> = {};
     
     const googleAdsKwQuery = `
         SELECT 
           ad_group_criterion.keyword.text,
-          ad_group_criterion.final_urls,
-          metrics.clicks,
+          metrics.cost_micros, 
+          metrics.clicks, 
           metrics.conversions,
-          metrics.impressions,
-          metrics.cost_micros,
-          metrics.search_impression_share,
-          metrics.ctr
-        FROM ad_group_criterion
-        WHERE ad_group_criterion.type = 'KEYWORD'
-        AND ad_group_criterion.status = 'ENABLED'
-        AND campaign.status = 'ENABLED'
+          metrics.impressions
+        FROM keyword_view
+        WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
         AND metrics.clicks > 0
-        AND segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
-    `.trim();
+    `;
+
+    const fetchGoogleAds = async (query: string, targetId: string) => {
+        const headers: any = { 
+            Authorization: `Bearer ${googleAdsAuth.token}`, 
+            'Content-Type': 'application/json',
+            'developer-token': DEVELOPER_TOKEN
+        };
+        if (selectedGoogleAdsCustomer) {
+            headers['login-customer-id'] = selectedGoogleAdsCustomer.id.toString().replace(/-/g, '');
+        }
+        const cleanTargetId = targetId.toString().replace(/-/g, '');
+        const allResults: any[] = [];
+        let nextPageToken: string | undefined = undefined;
+        try {
+            do {
+                const body: any = { query };
+                if (nextPageToken) body.pageToken = nextPageToken;
+                const res = await fetch(`/api/googleads/v21/customers/${cleanTargetId}/googleAds:search`, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(body)
+                });
+                if (!res.ok) break;
+                const json = await res.json();
+                if (json.results) allResults.push(...json.results);
+                nextPageToken = json.nextPageToken;
+            } while (nextPageToken);
+        } catch (err) {}
+        return allResults;
+    };
 
     try {
-        // Step 1: Discover only active client accounts from MCC to avoid 403 on disabled/cancelled accounts.
-        const activeClientIds = await fetchEnabledClientAccountIds(googleAdsAuth.token);
-
-        if (activeClientIds.length === 0) {
-            setGoogleAdsUrlKeywordMap({});
-            setKeywordBridgeDataGoogleAds([]);
-            setGlobalKeywordBridgeDataGoogleAds([]);
-            setIsGoogleAdsKeywordsLoaded(true);
-            return;
-        }
-
-        // Step 2: Controlled concurrency (4 requests max in parallel).
-        const accountChunks = chunkArray(activeClientIds, GOOGLE_ADS_KEYWORD_FETCH_CONCURRENCY);
-
-        for (const accountChunk of accountChunks) {
-            const accountRows = await Promise.all(accountChunk.map(async (clientId) => {
-                try {
-                    // Step 3: Query each active client account directly.
-                    return await fetchGoogleAdsSearchResults(googleAdsAuth.token, clientId, googleAdsKwQuery);
-                } catch (accountError) {
-                    console.warn(`Google Ads keyword fetch skipped for customer ${clientId}:`, accountError);
-                    return [];
-                }
-            }));
-
-            accountRows.forEach((rows) => {
-                rows.forEach((row: any) => {
-                    const keyword = row.adGroupCriterion?.keyword?.text;
-                    if (!keyword) return;
-
-                    const finalUrls = row.adGroupCriterion?.finalUrls;
-                    const landingUrl = finalUrls && finalUrls.length > 0 ? extractPath(finalUrls[0]) : 'unknown';
-                    if (!landingUrl) return;
-
+        const chunkSize = 5; 
+        for (let i = 0; i < allAccountIds.length; i += chunkSize) {
+            const chunk = allAccountIds.slice(i, i + chunkSize);
+            const results = await Promise.all(chunk.map(id => fetchGoogleAds(googleAdsKwQuery, id)));
+            
+            results.forEach((accountKwRows) => {
+                accountKwRows.forEach((row: any) => {
+                    const kw = row.adGroupCriterion?.keyword?.text;
+                    if (!kw) return;
+                    const cleanKw = kw.toLowerCase().trim();
                     const metrics = row.metrics;
-                    const clicks = Number(metrics?.clicks) || 0;
-                    const conversions = Number(metrics?.conversions) || 0;
-                    const impressions = Number(metrics?.impressions) || 0;
-                    const cost = (Number(metrics?.costMicros) || 0) / 1000000; // Step 4: convert micros to real currency.
-                    const rowSearchImpressionShare = metrics?.searchImpressionShare !== undefined && metrics?.searchImpressionShare !== null
-                        ? Number(metrics.searchImpressionShare)
-                        : null;
-                    const rowCtr = metrics?.ctr !== undefined && metrics?.ctr !== null
-                        ? Number(metrics.ctr)
-                        : null;
-
-                    const cleanKeyword = keyword.toLowerCase().trim();
-                    if (!nextGoogleAdsUrlKeywordMap[landingUrl]) {
-                        nextGoogleAdsUrlKeywordMap[landingUrl] = {};
+                    if (!googleAdsGlobalKeywordMap[cleanKw]) {
+                        googleAdsGlobalKeywordMap[cleanKw] = { clicks: 0, conversions: 0, cost: 0, impressions: 0 };
                     }
-                    if (!nextGoogleAdsUrlKeywordMap[landingUrl][cleanKeyword]) {
-                        nextGoogleAdsUrlKeywordMap[landingUrl][cleanKeyword] = {
-                            clicks: 0,
-                            conversions: 0,
-                            cost: 0,
-                            impressions: 0,
-                            searchImpressionShare: 0,
-                            ctr: 0
-                        };
-                    }
-
-                    const agg = nextGoogleAdsUrlKeywordMap[landingUrl][cleanKeyword];
-                    const previousImpressions = agg.impressions;
-
-                    agg.clicks += clicks;
-                    agg.conversions += conversions;
-                    agg.cost += cost;
-                    agg.impressions += impressions;
-
-                    if (rowSearchImpressionShare !== null && impressions > 0) {
-                        const totalImpressions = previousImpressions + impressions;
-                        agg.searchImpressionShare = totalImpressions > 0
-                            ? ((agg.searchImpressionShare * previousImpressions) + (rowSearchImpressionShare * impressions)) / totalImpressions
-                            : rowSearchImpressionShare;
-                    }
-
-                    if (rowCtr !== null && impressions > 0) {
-                        const totalImpressions = previousImpressions + impressions;
-                        agg.ctr = totalImpressions > 0
-                            ? ((agg.ctr * previousImpressions) + (rowCtr * impressions)) / totalImpressions
-                            : rowCtr;
-                    }
+                    googleAdsGlobalKeywordMap[cleanKw].clicks += parseInt(metrics?.clicks) || 0;
+                    googleAdsGlobalKeywordMap[cleanKw].conversions += parseFloat(metrics?.conversions) || 0;
+                    googleAdsGlobalKeywordMap[cleanKw].impressions += parseInt(metrics?.impressions) || 0;
+                    googleAdsGlobalKeywordMap[cleanKw].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
                 });
             });
         }
 
-        setGoogleAdsUrlKeywordMap(nextGoogleAdsUrlKeywordMap);
-
-        // Update URL-level query cards with paid metrics from Google Ads keywords.
-        setBridgeDataGoogleAds(prev => {
-            const updatedBridgeData = prev.map(item => {
-                if (!item.gscTopQueries) return item;
-                const url = extractPath(item.url);
-                return {
-                    ...item,
-                    gscTopQueries: item.gscTopQueries.map(q => {
-                        const cleanKw = q.query.toLowerCase().trim();
-                        const paidKwData = nextGoogleAdsUrlKeywordMap[url]?.[cleanKw];
-                        return {
-                            ...q,
-                            paidClicks: paidKwData?.clicks || 0,
-                            paidCost: paidKwData?.cost || 0
-                        };
-                    })
-                };
-            });
-            
-            // Build Keyword Results for Search Efficiency
-            const googleAdsKwResults: KeywordBridgeData[] = [];
-            
-            updatedBridgeData.forEach(item => {
-                if (!item.gscTopQueries) return;
-                item.gscTopQueries.forEach(q => {
+        // Now update the bridge data with the keywords
+        setBridgeDataGoogleAds(prev => prev.map(item => {
+            if (!item.gscTopQueries) return item;
+            return {
+                ...item,
+                gscTopQueries: item.gscTopQueries.map(q => {
                     const cleanKw = q.query.toLowerCase().trim();
-                    const paidKwData = nextGoogleAdsUrlKeywordMap[extractPath(item.url)]?.[cleanKw];
-                    if (paidKwData || q.clicks > 0) {
-                        const paidVol = paidKwData ? paidKwData.clicks : 0;
-                        const paidCost = paidKwData ? paidKwData.cost : 0;
-                        const cvr = paidVol > 0 ? (paidKwData!.conversions / paidVol) * 100 : 0;
-                        const avgCpc = paidVol > 0 ? paidCost / paidVol : (googleAdsGlobalMetrics?.avgCpc || 0);
+                    const paidKwData = googleAdsGlobalKeywordMap[cleanKw];
+                    return {
+                        ...q,
+                        paidClicks: paidKwData?.clicks || 0,
+                        paidCost: paidKwData?.cost || 0
+                    };
+                })
+            };
+        }));
 
-                        googleAdsKwResults.push({
-                            url: item.url,
-                            keyword: q.query,
-                            organicClicks: q.clicks,
-                            organicRank: q.rank,
-                            paidClicks: paidVol,
-                            paidCtr: paidKwData ? (paidKwData.ctr * 100) : 0,
-                            searchImpressionShare: paidKwData ? paidKwData.searchImpressionShare : null,
-                            paidConversions: paidKwData ? paidKwData.conversions : 0,
-                            paidCta: cvr,
-                            ppcCost: paidCost,
-                            paidCvr: cvr,
-                            avgCpc: avgCpc,
-                            actionLabel: q.rank <= 3 && paidVol > 0 ? "REVIEW" : "MAINTAIN",
-                            dataSource: 'GOOGLE_ADS'
-                        });
-                    }
-                });
-            });
+        // Build Keyword Results for Search Efficiency
+        const googleAdsKwResults: KeywordBridgeData[] = [];
+        // We use bridgeDataGoogleAds as the source of URLs
+        bridgeDataGoogleAds.forEach(item => {
+            if (!item.gscTopQueries) return;
+            item.gscTopQueries.forEach(q => {
+                const cleanKw = q.query.toLowerCase().trim();
+                const paidKwData = googleAdsGlobalKeywordMap[cleanKw];
+                if (paidKwData || q.clicks > 0) {
+                    const paidVol = paidKwData ? paidKwData.clicks : 0;
+                    const paidCost = paidKwData ? paidKwData.cost : 0;
+                    const cvr = paidVol > 0 ? (paidKwData!.conversions / paidVol) * 100 : 0;
+                    const avgCpc = paidVol > 0 ? paidCost / paidVol : (googleAdsGlobalMetrics?.avgCpc || 0);
 
-            // Build Global Aggregate for Exact Match View
-            const globalKwBridgeMap: Record<string, any> = {};
-            googleAdsKwResults.forEach(item => {
-                const cleanKw = item.keyword.toLowerCase().trim();
-                if (!globalKwBridgeMap[cleanKw]) {
-                    globalKwBridgeMap[cleanKw] = { ...item, organicRankSum: 0, organicRankCount: 0, organicClicks: 0, paidSessions: 0, ppcCost: 0 };
-                    delete globalKwBridgeMap[cleanKw].url;
-                }
-                globalKwBridgeMap[cleanKw].organicClicks += item.organicClicks;
-                globalKwBridgeMap[cleanKw].paidSessions = item.paidClicks; // Use paidClicks as sessions proxy
-                globalKwBridgeMap[cleanKw].ppcCost = item.ppcCost;
-                if (item.organicRank !== null) {
-                    globalKwBridgeMap[cleanKw].organicRankSum += item.organicRank;
-                    globalKwBridgeMap[cleanKw].organicRankCount += 1;
+                    googleAdsKwResults.push({
+                        url: item.url,
+                        keyword: q.query,
+                        organicClicks: q.clicks,
+                        organicRank: q.rank,
+                        paidSessions: paidVol,
+                        ppcCost: paidCost,
+                        paidCvr: cvr,
+                        avgCpc: avgCpc,
+                        actionLabel: q.rank <= 3 && paidVol > 0 ? "REVIEW" : "MAINTAIN",
+                        dataSource: 'GOOGLE_ADS'
+                    });
                 }
             });
-
-            const finalGlobalKwResults = Object.values(globalKwBridgeMap).map((item: any) => {
-                const avgRank = item.organicRankCount > 0 ? item.organicRankSum / item.organicRankCount : null;
-                return {
-                    ...item,
-                    organicRank: avgRank,
-                    actionLabel: avgRank !== null && avgRank <= 3 && item.paidSessions > 0 ? "REVIEW" : "MAINTAIN"
-                };
-            });
-
-            setKeywordBridgeDataGoogleAds(googleAdsKwResults.sort((a, b) => b.paidClicks - a.paidClicks));
-            setGlobalKeywordBridgeDataGoogleAds(finalGlobalKwResults.sort((a, b) => b.paidSessions - a.paidSessions));
-            setIsGoogleAdsKeywordsLoaded(true);
-
-            return updatedBridgeData;
         });
+
+        // Build Global Aggregate for Exact Match View
+        const globalKwBridgeMap: Record<string, any> = {};
+        googleAdsKwResults.forEach(item => {
+            const cleanKw = item.keyword.toLowerCase().trim();
+            if (!globalKwBridgeMap[cleanKw]) {
+                globalKwBridgeMap[cleanKw] = { ...item, organicRankSum: 0, organicRankCount: 0, organicClicks: 0, paidSessions: 0, ppcCost: 0 };
+                delete globalKwBridgeMap[cleanKw].url;
+            }
+            globalKwBridgeMap[cleanKw].organicClicks += item.organicClicks;
+            globalKwBridgeMap[cleanKw].paidSessions = item.paidSessions;
+            globalKwBridgeMap[cleanKw].ppcCost = item.ppcCost;
+            if (item.organicRank !== null) {
+                globalKwBridgeMap[cleanKw].organicRankSum += item.organicRank;
+                globalKwBridgeMap[cleanKw].organicRankCount += 1;
+            }
+        });
+
+        const finalGlobalKwResults = Object.values(globalKwBridgeMap).map((item: any) => {
+            const avgRank = item.organicRankCount > 0 ? item.organicRankSum / item.organicRankCount : null;
+            return {
+                ...item,
+                organicRank: avgRank,
+                actionLabel: avgRank !== null && avgRank <= 3 && item.paidSessions > 0 ? "REVIEW" : "MAINTAIN"
+            };
+        });
+
+        setKeywordBridgeDataGoogleAds(googleAdsKwResults.sort((a, b) => b.paidSessions - a.paidSessions));
+        setGlobalKeywordBridgeDataGoogleAds(finalGlobalKwResults.sort((a, b) => b.paidSessions - a.paidSessions));
+        setIsGoogleAdsKeywordsLoaded(true);
     } catch (err) {
         console.error("Error fetching Google Ads keywords:", err);
     } finally {
@@ -1289,10 +1303,11 @@ const App: React.FC = () => {
     if ((activeTab === DashboardTab.PPC_SEO_BRIDGE || activeTab === DashboardTab.SEARCH_EFFICIENCY || activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE) && 
         googleAdsAuth?.token && 
         !isGoogleAdsKeywordsLoaded && 
-        !isGoogleAdsKeywordsLoading) {
+        !isGoogleAdsKeywordsLoading &&
+        availableGoogleAdsSubAccounts.length > 0) {
       fetchGoogleAdsKeywords();
     }
-  }, [activeTab, isGoogleAdsKeywordsLoaded, isGoogleAdsKeywordsLoading, googleAdsAuth]);
+  }, [activeTab, isGoogleAdsKeywordsLoaded, isGoogleAdsKeywordsLoading, googleAdsAuth, availableGoogleAdsSubAccounts]);
 
   const fetchGscData = async () => {
     if (!gscAuth?.site || !gscAuth.token) return;
@@ -1913,7 +1928,6 @@ const App: React.FC = () => {
                   data={bridgeDataGoogleAds} 
                   currencySymbol={currencySymbol} 
                   globalMetrics={googleAdsGlobalMetrics}
-                  urlKeywordMap={googleAdsUrlKeywordMap}
               />
           )}
           
