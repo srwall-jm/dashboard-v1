@@ -698,7 +698,6 @@ const App: React.FC = () => {
              metrics.conversions 
            FROM landing_page_view 
            WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
-           AND metrics.clicks > 0
          `.trim();
 
          try {
