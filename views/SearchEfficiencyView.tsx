@@ -60,18 +60,18 @@ export const SearchEfficiencyView: React.FC<{
             url,
             cluster: 'Other',
             organicClicks: row.organicClicks || 0,
-            paidSessions: row.paidSessions || 0,
+            paidSessions: row.ppcSessions || 0,
             paidShare: 0,
-            ppcCost: row.paidCost || 0,
-            avgCpc: row.paidSessions > 0 ? (row.paidCost || 0) / row.paidSessions : 0,
+            ppcCost: row.ppcCost || 0,
+            avgCpc: row.ppcSessions > 0 ? (row.ppcCost || 0) / row.ppcSessions : 0,
             queries: [],
             avgOrganicRank: null
         });
 
         // Global metrics from precise URL data
-        totalCost += row.paidCost || 0;
+        totalCost += row.ppcCost || 0;
         totalOrganicClicks += row.organicClicks || 0;
-        totalPaidSessions += row.paidSessions || 0;
+        totalPaidSessions += row.ppcSessions || 0;
     }
 
     // 2. Attach keyword data for breakdown and rank calculation
@@ -87,14 +87,14 @@ export const SearchEfficiencyView: React.FC<{
                 organicClicks: row.organicClicks || 0,
                 paidSessions: row.paidSessions || 0,
                 paidShare: 0,
-                ppcCost: row.paidCost || 0,
-                avgCpc: row.paidSessions > 0 ? (row.paidCost || 0) / row.paidSessions : 0,
+                ppcCost: row.ppcCost || 0,
+                avgCpc: row.paidSessions > 0 ? (row.ppcCost || 0) / row.paidSessions : 0,
                 queries: [],
                 avgOrganicRank: null
             };
             urlMap.set(url, urlEntry);
             
-            totalCost += row.paidCost || 0;
+            totalCost += row.ppcCost || 0;
             totalOrganicClicks += row.organicClicks || 0;
             totalPaidSessions += row.paidSessions || 0;
         }
