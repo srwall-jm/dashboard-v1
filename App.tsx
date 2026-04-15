@@ -1112,107 +1112,90 @@ const App: React.FC = () => {
         setGoogleAdsUrlKeywordMap(nextGoogleAdsUrlKeywordMap);
 
         // Update URL-level query cards with paid metrics from Google Ads keywords.
-        setBridgeDataGoogleAds(prev => prev.map(item => {
-            if (!item.gscTopQueries) return item;
-            const url = extractPath(item.url);
-            return {
-                ...item,
-                gscTopQueries: item.gscTopQueries.map(q => {
+        setBridgeDataGoogleAds(prev => {
+            const updatedBridgeData = prev.map(item => {
+                if (!item.gscTopQueries) return item;
+                const url = extractPath(item.url);
+                return {
+                    ...item,
+                    gscTopQueries: item.gscTopQueries.map(q => {
+                        const cleanKw = q.query.toLowerCase().trim();
+                        const paidKwData = nextGoogleAdsUrlKeywordMap[url]?.[cleanKw];
+                        return {
+                            ...q,
+                            paidClicks: paidKwData?.clicks || 0,
+                            paidCost: paidKwData?.cost || 0
+                        };
+                    })
+                };
+            });
+            
+            // Build Keyword Results for Search Efficiency
+            const googleAdsKwResults: KeywordBridgeData[] = [];
+            
+            updatedBridgeData.forEach(item => {
+                if (!item.gscTopQueries) return;
+                item.gscTopQueries.forEach(q => {
                     const cleanKw = q.query.toLowerCase().trim();
-                    const paidKwData = nextGoogleAdsUrlKeywordMap[url]?.[cleanKw];
-                    return {
-                        ...q,
-                        paidClicks: paidKwData?.clicks || 0,
-                        paidCost: paidKwData?.cost || 0
-                    };
-                })
-            };
-        }));
+                    const paidKwData = nextGoogleAdsUrlKeywordMap[extractPath(item.url)]?.[cleanKw];
+                    if (paidKwData || q.clicks > 0) {
+                        const paidVol = paidKwData ? paidKwData.clicks : 0;
+                        const paidCost = paidKwData ? paidKwData.cost : 0;
+                        const cvr = paidVol > 0 ? (paidKwData!.conversions / paidVol) * 100 : 0;
+                        const avgCpc = paidVol > 0 ? paidCost / paidVol : (googleAdsGlobalMetrics?.avgCpc || 0);
 
-        // Build Keyword Results for Search Efficiency
-        const googleAdsKwResults: KeywordBridgeData[] = [];
-        // We use the updated bridgeDataGoogleAds as the source of URLs
-        // We need to use the functional update pattern or get the latest state
-        // Since we are inside an async function, we need to ensure we have the latest data.
-        // Actually, setBridgeDataGoogleAds is asynchronous.
-        // Let's use a local variable for the updated data.
-        const updatedBridgeData = prevBridgeData.map(item => {
-            if (!item.gscTopQueries) return item;
-            const url = extractPath(item.url);
-            return {
-                ...item,
-                gscTopQueries: item.gscTopQueries.map(q => {
-                    const cleanKw = q.query.toLowerCase().trim();
-                    const paidKwData = nextGoogleAdsUrlKeywordMap[url]?.[cleanKw];
-                    return {
-                        ...q,
-                        paidClicks: paidKwData?.clicks || 0,
-                        paidCost: paidKwData?.cost || 0
-                    };
-                })
-            };
-        });
-        
-        updatedBridgeData.forEach(item => {
-            if (!item.gscTopQueries) return;
-            item.gscTopQueries.forEach(q => {
-                const cleanKw = q.query.toLowerCase().trim();
-                const paidKwData = nextGoogleAdsUrlKeywordMap[extractPath(item.url)]?.[cleanKw];
-                if (paidKwData || q.clicks > 0) {
-                    const paidVol = paidKwData ? paidKwData.clicks : 0;
-                    const paidCost = paidKwData ? paidKwData.cost : 0;
-                    const cvr = paidVol > 0 ? (paidKwData!.conversions / paidVol) * 100 : 0;
-                    const avgCpc = paidVol > 0 ? paidCost / paidVol : (googleAdsGlobalMetrics?.avgCpc || 0);
+                        googleAdsKwResults.push({
+                            url: item.url,
+                            keyword: q.query,
+                            organicClicks: q.clicks,
+                            organicRank: q.rank,
+                            paidClicks: paidVol,
+                            paidCtr: paidKwData ? (paidKwData.ctr * 100) : 0,
+                            searchImpressionShare: paidKwData ? paidKwData.searchImpressionShare : null,
+                            paidConversions: paidKwData ? paidKwData.conversions : 0,
+                            paidCta: cvr,
+                            ppcCost: paidCost,
+                            paidCvr: cvr,
+                            avgCpc: avgCpc,
+                            actionLabel: q.rank <= 3 && paidVol > 0 ? "REVIEW" : "MAINTAIN",
+                            dataSource: 'GOOGLE_ADS'
+                        });
+                    }
+                });
+            });
 
-                    googleAdsKwResults.push({
-                        url: item.url,
-                        keyword: q.query,
-                        organicClicks: q.clicks,
-                        organicRank: q.rank,
-                        paidClicks: paidVol,
-                        paidCtr: paidKwData ? (paidKwData.ctr * 100) : 0,
-                        searchImpressionShare: paidKwData ? paidKwData.searchImpressionShare : null,
-                        paidConversions: paidKwData ? paidKwData.conversions : 0,
-                        paidCta: cvr,
-                        ppcCost: paidCost,
-                        paidCvr: cvr,
-                        avgCpc: avgCpc,
-                        actionLabel: q.rank <= 3 && paidVol > 0 ? "REVIEW" : "MAINTAIN",
-                        dataSource: 'GOOGLE_ADS'
-                    });
+            // Build Global Aggregate for Exact Match View
+            const globalKwBridgeMap: Record<string, any> = {};
+            googleAdsKwResults.forEach(item => {
+                const cleanKw = item.keyword.toLowerCase().trim();
+                if (!globalKwBridgeMap[cleanKw]) {
+                    globalKwBridgeMap[cleanKw] = { ...item, organicRankSum: 0, organicRankCount: 0, organicClicks: 0, paidSessions: 0, ppcCost: 0 };
+                    delete globalKwBridgeMap[cleanKw].url;
+                }
+                globalKwBridgeMap[cleanKw].organicClicks += item.organicClicks;
+                globalKwBridgeMap[cleanKw].paidSessions = item.paidClicks; // Use paidClicks as sessions proxy
+                globalKwBridgeMap[cleanKw].ppcCost = item.ppcCost;
+                if (item.organicRank !== null) {
+                    globalKwBridgeMap[cleanKw].organicRankSum += item.organicRank;
+                    globalKwBridgeMap[cleanKw].organicRankCount += 1;
                 }
             });
-        });
 
-        // Build Global Aggregate for Exact Match View
-        const globalKwBridgeMap: Record<string, any> = {};
-        googleAdsKwResults.forEach(item => {
-            const cleanKw = item.keyword.toLowerCase().trim();
-            if (!globalKwBridgeMap[cleanKw]) {
-                globalKwBridgeMap[cleanKw] = { ...item, organicRankSum: 0, organicRankCount: 0, organicClicks: 0, paidSessions: 0, ppcCost: 0 };
-                delete globalKwBridgeMap[cleanKw].url;
-            }
-            globalKwBridgeMap[cleanKw].organicClicks += item.organicClicks;
-            globalKwBridgeMap[cleanKw].paidSessions = item.paidSessions;
-            globalKwBridgeMap[cleanKw].ppcCost = item.ppcCost;
-            if (item.organicRank !== null) {
-                globalKwBridgeMap[cleanKw].organicRankSum += item.organicRank;
-                globalKwBridgeMap[cleanKw].organicRankCount += 1;
-            }
-        });
+            const finalGlobalKwResults = Object.values(globalKwBridgeMap).map((item: any) => {
+                const avgRank = item.organicRankCount > 0 ? item.organicRankSum / item.organicRankCount : null;
+                return {
+                    ...item,
+                    organicRank: avgRank,
+                    actionLabel: avgRank !== null && avgRank <= 3 && item.paidSessions > 0 ? "REVIEW" : "MAINTAIN"
+                };
+            });
 
-        const finalGlobalKwResults = Object.values(globalKwBridgeMap).map((item: any) => {
-            const avgRank = item.organicRankCount > 0 ? item.organicRankSum / item.organicRankCount : null;
-            return {
-                ...item,
-                organicRank: avgRank,
-                actionLabel: avgRank !== null && avgRank <= 3 && item.paidSessions > 0 ? "REVIEW" : "MAINTAIN"
-            };
-        });
+            setKeywordBridgeDataGoogleAds(googleAdsKwResults.sort((a, b) => b.paidClicks - a.paidClicks));
+            setGlobalKeywordBridgeDataGoogleAds(finalGlobalKwResults.sort((a, b) => b.paidSessions - a.paidSessions));
+            setIsGoogleAdsKeywordsLoaded(true);
 
-        setKeywordBridgeDataGoogleAds(googleAdsKwResults.sort((a, b) => b.paidSessions - a.paidSessions));
-        setGlobalKeywordBridgeDataGoogleAds(finalGlobalKwResults.sort((a, b) => b.paidSessions - a.paidSessions));
-        setIsGoogleAdsKeywordsLoaded(true);
+            return updatedBridgeData;
+        });
     } catch (err) {
         console.error("Error fetching Google Ads keywords:", err);
     } finally {
