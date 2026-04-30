@@ -378,6 +378,56 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
 
   return (
     <div className="w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-6">
+      
+      {/* Global Share Analysis at Top */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 px-2">
+          <div className="w-7 h-7 bg-violet-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px] shadow-lg shadow-violet-600/20">
+            <PieIcon size={14} />
+          </div>
+          <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Global Search Share (Market Dominance)</h4>
+        </div>
+        <ShareOfSearchAnalysis stats={stats} currencySymbol={currencySymbol} />
+      </div>
+
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+          <div>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Global Search Share Trend (Time Overlay)</h4>
+            <p className="text-[11px] font-bold text-slate-600">Períodos superpuestos por posición relativa en el tiempo</p>
+          </div>
+          <div className="flex items-center gap-4">
+             <button 
+                onClick={() => exportToCSV(chartData, "Global_Share_Trend")} 
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+              >
+                <FileText size={12} /> Export CSV
+              </button>
+            <div className="flex bg-slate-100 p-1 rounded-xl">
+               <button onClick={() => setWeightMetric('sessions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'sessions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Sessions %</button>
+               <button onClick={() => setWeightMetric('revenue')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'revenue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Revenue %</button>
+            </div>
+          </div>
+        </div>
+        <div className="h-[350px]">
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${val.toFixed(1)}%`} />
+                <Tooltip content={<ComparisonTooltip percent />} />
+                <Legend verticalAlign="top" align="center" iconType="circle" />
+                <Line name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Cur)`} type="monotone" dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Cur)' : 'Search Share Revenue (Cur)'} stroke="#8b5cf6" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                {comparisonEnabled && (
+                  <Line name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Prev)`} type="monotone" dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Prev)' : 'Search Share Revenue (Prev)'} stroke="#8b5cf6" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          ) : <EmptyState text="No share data available to chart" />}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
         {[ {type: 'ORG', color: 'indigo', label: 'Organic', s: stats.organic}, {type: 'PAID', color: 'amber', label: 'Paid', s: stats.paid} ].map(ch => (
           <div key={ch.type} className="space-y-4">
@@ -495,53 +545,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
         <EcommerceFunnel title="Paid Search Funnel" data={paidFunnelData} color="amber" />
       </div>
 
-      <div className="mt-8 space-y-4">
-        <div className="flex items-center gap-3 px-2">
-          <div className="w-7 h-7 bg-violet-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px] shadow-lg shadow-violet-600/20">
-            <PieIcon size={14} />
-          </div>
-          <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Global Search Share (Market Dominance)</h4>
-        </div>
-        <ShareOfSearchAnalysis stats={stats} currencySymbol={currencySymbol} />
-      </div>
-
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm mt-8 overflow-hidden">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-          <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Global Search Share Trend (Time Overlay)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Períodos superpuestos por posición relativa en el tiempo</p>
-          </div>
-          <div className="flex items-center gap-4">
-             <button 
-                onClick={() => exportToCSV(chartData, "Global_Share_Trend")} 
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
-              >
-                <FileText size={12} /> Export CSV
-              </button>
-            <div className="flex bg-slate-100 p-1 rounded-xl">
-               <button onClick={() => setWeightMetric('sessions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'sessions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Sessions %</button>
-               <button onClick={() => setWeightMetric('revenue')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'revenue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Revenue %</button>
-            </div>
-          </div>
-        </div>
-        <div className="h-[350px]">
-          {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${val.toFixed(1)}%`} />
-                <Tooltip content={<ComparisonTooltip percent />} />
-                <Legend verticalAlign="top" align="center" iconType="circle" />
-                <Line name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Cur)`} type="monotone" dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Cur)' : 'Search Share Revenue (Cur)'} stroke="#8b5cf6" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
-                {comparisonEnabled && (
-                  <Line name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Prev)`} type="monotone" dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Prev)' : 'Search Share Revenue (Prev)'} stroke="#8b5cf6" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
-                )}
-              </LineChart>
-            </ResponsiveContainer>
-          ) : <EmptyState text="No share data available to chart" />}
-        </div>
-      </div>
+      {/* Organic / Paid Performance */}
     </div>
   );
 };

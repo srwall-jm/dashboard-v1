@@ -213,12 +213,12 @@ export const SearchEfficiencyView: React.FC<{
     {
       name: 'Current Spend',
       Spend: metrics.totalCost,
-      fill: '#f43f5e' // Rose
+      fill: '#64748b' // Slate 500
     },
     {
       name: 'Optimized Spend',
       Spend: metrics.optimizedSpend,
-      fill: '#10b981' // Emerald
+      fill: '#94a3b8' // Slate 400
     }
   ];
 
@@ -275,23 +275,23 @@ export const SearchEfficiencyView: React.FC<{
       
       {/* Section 1: Scorecards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-         <div className="bg-gradient-to-br from-rose-500 to-rose-600 p-6 rounded-[32px] text-white shadow-lg shadow-rose-500/20 relative overflow-hidden">
+         <div className="bg-gradient-to-br from-slate-600 to-slate-700 p-6 rounded-[32px] text-white shadow-lg shadow-slate-500/20 relative overflow-hidden">
              <div className="absolute top-0 right-0 p-6 opacity-20">
                  <DollarSign size={64} />
              </div>
-             <p className="text-rose-100 font-bold uppercase tracking-widest text-xs mb-2">Total Spend</p>
+             <p className="text-slate-100 font-bold uppercase tracking-widest text-xs mb-2">Total Spend</p>
              <h3 className="text-4xl font-black tracking-tight">{currencySymbol}{formatCurrency(metrics.totalCost, 0)}</h3>
          </div>
          
-         <div className="bg-gradient-to-br from-emerald-400 to-emerald-600 p-6 rounded-[32px] text-white shadow-lg shadow-emerald-500/20 relative overflow-hidden transform hover:scale-[1.02] transition-transform">
+         <div className="bg-gradient-to-br from-slate-400 to-slate-500 p-6 rounded-[32px] text-white shadow-lg shadow-slate-400/20 relative overflow-hidden transform hover:scale-[1.02] transition-transform">
              <div className="absolute top-0 right-0 p-6 opacity-20">
                  <PiggyBank size={64} />
              </div>
-             <p className="text-emerald-100 font-bold uppercase tracking-widest text-xs mb-2 flex items-center gap-2">
+             <p className="text-slate-100 font-bold uppercase tracking-widest text-xs mb-2 flex items-center gap-2">
                  <Zap size={14} /> Potential Monthly Savings
              </p>
              <h3 className="text-4xl font-black tracking-tight">{currencySymbol}{formatCurrency(metrics.potentialSavings, 0)}</h3>
-             <p className="text-emerald-100 text-sm mt-2 font-medium">From Cannibalization Risks</p>
+             <p className="text-slate-100 text-sm mt-2 font-medium">From Optimization</p>
          </div>
 
          <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 p-6 rounded-[32px] text-white shadow-lg shadow-indigo-500/20 relative overflow-hidden">

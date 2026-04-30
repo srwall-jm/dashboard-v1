@@ -57,12 +57,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             label="Local" 
           />
           <SidebarLink 
-            active={activeTab === DashboardTab.AI_TRAFFIC_MONITOR} 
-            onClick={() => setActiveTab(DashboardTab.AI_TRAFFIC_MONITOR)} 
-            icon={<Bot />} 
-            label="AI Traffic" 
-          />
-          <SidebarLink 
             active={activeTab === DashboardTab.SEARCH_EFFICIENCY} 
             onClick={() => setActiveTab(DashboardTab.SEARCH_EFFICIENCY)} 
             icon={<Zap />} 
@@ -73,6 +67,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Bottom Section */}
         <nav className="space-y-1 mt-auto border-t border-white/10 pt-2">
            <p className="text-[7px] text-slate-600 uppercase font-black text-center mb-1">Explorer</p>
+           <SidebarLink 
+            active={activeTab === DashboardTab.AI_TRAFFIC_MONITOR} 
+            onClick={() => setActiveTab(DashboardTab.AI_TRAFFIC_MONITOR)} 
+            icon={<Bot />} 
+            label="AI Traffic" 
+          />
            <SidebarLink 
             active={activeTab === DashboardTab.KEYWORD_DEEP_DIVE} 
             onClick={() => setActiveTab(DashboardTab.KEYWORD_DEEP_DIVE)} 
