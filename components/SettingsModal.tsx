@@ -1,11 +1,12 @@
 
 import React from 'react';
-import { X, Cpu, Settings2, Database, ExternalLink, Search, CornerDownRight } from 'lucide-react';
+import { X, Cpu, Settings2, Database, ExternalLink, Search, LogOut } from 'lucide-react';
 import { Ga4Property, GscSite, GoogleAdsCustomer } from '../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  handleLogout: () => void; // Add this
   aiProvider: 'gemini' | 'openai';
   setAiProvider: (p: 'gemini' | 'openai') => void;
   openaiKey: string;
@@ -38,7 +39,7 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
-  isOpen, onClose,
+  isOpen, onClose, handleLogout, // Add this
   aiProvider, setAiProvider, openaiKey, setOpenaiKey,
   brandRegexStr, setBrandRegexStr,
   ga4Auth, gscAuth, googleAdsAuth,
@@ -211,7 +212,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
         
         {/* Footer */}
-        <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end">
+        <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-between">
+            <button onClick={handleLogout} className="px-6 py-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2">
+                <LogOut size={14} /> Log Out
+            </button>
             <button onClick={onClose} className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg hover:shadow-xl">
                 Done
             </button>

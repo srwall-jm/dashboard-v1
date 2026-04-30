@@ -1749,6 +1749,7 @@ const App: React.FC = () => {
       <SettingsModal 
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+        handleLogout={handleLogout}
         aiProvider={aiProvider} 
         setAiProvider={setAiProvider}
         openaiKey={openaiKey} 

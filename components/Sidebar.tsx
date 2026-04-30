@@ -33,14 +33,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside className={`fixed inset-y-0 left-0 bg-slate-950 text-white flex flex-col z-50 shadow-2xl transition-all duration-300 ease-in-out transform 
       ${isOpen ? 'translate-x-0' : '-translate-x-full'} 
-      w-24
+      w-20 lg:w-24
     `}>
-      <div className={`flex-1 overflow-y-auto custom-scrollbar p-2 flex flex-col gap-2`}>
+      <div className={`flex-1 p-2 flex flex-col gap-2`}>
         <div className={`flex flex-col items-center mb-6 pt-4`}>
-            <div className={`w-12 h-12 bg-[#F8B133] rounded-xl flex items-center justify-center`}>
-              <Activity className="w-7 h-7 text-black" />
+            <div className={`w-10 h-10 lg:w-12 lg:h-12 bg-[#F8B133] rounded-xl flex items-center justify-center`}>
+              <Activity className="w-5 h-5 lg:w-7 lg:h-7 text-black" />
             </div>
-            <p className="text-[9px] font-black text-[#F8B133] uppercase tracking-widest mt-2">OneSearch</p>
+            <p className="text-[7px] lg:text-[9px] font-black text-[#F8B133] uppercase tracking-widest mt-2">OneSearch</p>
         </div>
 
         <nav className="space-y-1 flex-1">
