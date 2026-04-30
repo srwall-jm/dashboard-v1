@@ -377,7 +377,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
   ], [stats.paid.current]);
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
+    <div className="w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-6">
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
         {[ {type: 'ORG', color: 'indigo', label: 'Organic', s: stats.organic}, {type: 'PAID', color: 'amber', label: 'Paid', s: stats.paid} ].map(ch => (
           <div key={ch.type} className="space-y-4">

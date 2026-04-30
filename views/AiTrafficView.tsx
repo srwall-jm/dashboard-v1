@@ -78,7 +78,7 @@ export const AiTrafficView: React.FC<{
   const COLORS = ['#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#06b6d4'];
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
+    <div className="w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-6">
       
       {/* Section A: Global Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

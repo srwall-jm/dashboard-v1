@@ -82,7 +82,7 @@ export const SeoDeepDiveView: React.FC<{
   }, [keywords, searchTerm]);
 
 return (
-  <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
+  <div className="w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-6">
     <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
       
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">

@@ -103,7 +103,7 @@ const CountryShareAnalysis = ({ data, currencySymbol }: { data: any[], currencyS
   );
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
+    <div className="w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-6">
        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {renderDonut(sessionShare, 'Volume Contribution (Sessions)', 'Sessions')}
           {renderDonut(revenueShare, 'Value Contribution (Revenue)', 'Revenue', true)}
@@ -257,7 +257,7 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
   }, [data]);
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
+    <div className="w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-6">
 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-6 gap-4">        <KpiCard title="GSC Clicks" value={gscStats.current.clicks} comparison={comparisonEnabled ? gscStats.changes.clicks : undefined} icon={<MousePointer2 />} color="sky" />
         <KpiCard title="GSC Impressions" value={gscStats.current.impressions} comparison={comparisonEnabled ? gscStats.changes.impressions : undefined} icon={<Eye />} color="sky" />
         <KpiCard title="GSC Avg. CTR" value={`${gscStats.current.ctr.toFixed(2)}%`} comparison={comparisonEnabled ? gscStats.changes.ctr : undefined} icon={<Percent />} isPercent color="sky" />
