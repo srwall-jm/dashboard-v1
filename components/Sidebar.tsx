@@ -37,7 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     `}>
       <div className="flex-1 p-1 flex flex-col gap-1">
         <div className="flex flex-col items-center mb-4 pt-2">
-            <img src="/logo.png" alt="OneSearch Logo" className="w-8 h-8 lg:w-9 lg:h-9 rounded-xl object-cover" />
+            <img src="https://i.imgur.com/SX8wLdv.png" alt="OneSearch Logo" className="w-8 h-8 lg:w-9 lg:h-9 rounded-xl object-cover" />
             <p className="text-[6px] lg:text-[8px] font-black text-[#F8B133] uppercase tracking-widest mt-1">OneSearch</p>
         </div>
 

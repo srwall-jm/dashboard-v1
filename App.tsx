@@ -1785,7 +1785,7 @@ const App: React.FC = () => {
         <header className="flex flex-col gap-6 mb-10">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
-              <img src="/logo.png" alt="OneSearch Logo" className="w-8 h-8 rounded-xl object-cover" />
+              <img src="https://i.imgur.com/SX8wLdv.png" alt="OneSearch Logo" className="w-8 h-8 rounded-xl object-cover" />
               <h1 className="text-xl font-black text-slate-800 tracking-tighter">OneSearch</h1>
             </div>
             
