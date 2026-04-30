@@ -1707,8 +1707,8 @@ const App: React.FC = () => {
         {/* Right Side: Login Options */}
         <div className="flex-1 flex flex-col items-center justify-center p-8 bg-white">
           <div className="w-full max-w-sm space-y-8">
-            <div className="text-center md:text-left flex items-center gap-2 justify-center md:justify-start">
-               <div className="w-8 h-8 bg-black rounded-lg" />
+            <div className="text-center flex flex-col items-center gap-3">
+               <img src="https://i.imgur.com/SX8wLdv.png" alt="OneSearch Logo" className="w-16 h-16 rounded-2xl object-cover" />
                <span className="text-xl font-black tracking-tight">OneSearch™</span>
             </div>
             
