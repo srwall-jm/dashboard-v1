@@ -8,7 +8,7 @@ const SidebarLink: React.FC<{ active: boolean; onClick: () => void; icon: React.
     onClick={onClick}
     title={isCollapsed ? label : ''}
     className={`w-full flex items-center ${isCollapsed ? 'justify-center px-2 py-3' : 'gap-4 px-6 py-4'} rounded-2xl transition-all duration-200 group ${
-      active ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'
+      active ? 'bg-amber-800 text-white shadow-xl shadow-amber-900/40' : 'text-slate-400 hover:bg-white/5 hover:text-white'
     }`}
   >
     <div className={`p-1.5 rounded-lg transition-colors ${active ? 'bg-white/20' : 'bg-transparent group-hover:bg-white/10'}`}>
@@ -41,13 +41,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className={`flex-1 overflow-y-auto custom-scrollbar ${isCollapsed ? 'px-2 py-6' : 'p-8'}`}>
         <div className={`flex items-center ${isCollapsed ? 'justify-center mb-8' : 'justify-between mb-8'}`}>
           <div className="flex items-center gap-4">
-            <div className={`w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-xl shadow-indigo-500/20 flex-shrink-0 transition-all duration-300`}>
+            <div className={`w-10 h-10 bg-amber-800 rounded-xl flex items-center justify-center shadow-xl shadow-amber-900/20 flex-shrink-0 transition-all duration-300`}>
               <Activity className="w-6 h-6" />
             </div>
             {!isCollapsed && (
               <div className="transition-opacity duration-300">
                 <h1 className="text-lg font-black tracking-tight whitespace-nowrap">The OneSearch</h1>
-                <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Suite Pro</p>
+                <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Suite Pro</p>
               </div>
             )}
           </div>
@@ -78,14 +78,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
             active={activeTab === DashboardTab.ORGANIC_VS_PAID} 
             onClick={() => setActiveTab(DashboardTab.ORGANIC_VS_PAID)} 
             icon={<Layers />} 
-            label="Organic vs Paid" 
+            label="Activation" 
           />
+          <div className="h-px bg-white/10 my-4 mx-4"></div>
           <SidebarLink 
             isCollapsed={isCollapsed}
             active={activeTab === DashboardTab.SEO_BY_COUNTRY} 
             onClick={() => setActiveTab(DashboardTab.SEO_BY_COUNTRY)} 
             icon={<Globe />} 
-            label="Performance by Country" 
+            label="Brand" 
           />
           <SidebarLink 
             isCollapsed={isCollapsed}
@@ -129,7 +130,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
          <div className={`bg-white/5 rounded-2xl ${isCollapsed ? 'p-2 flex flex-col items-center gap-4' : 'p-4'}`}>
             <div className={`flex items-center ${isCollapsed ? 'justify-center flex-col gap-3' : 'justify-between mb-6'}`}>
                 <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
-                    <img src={user.picture} className="w-9 h-9 rounded-full border-2 border-indigo-500" alt="user" />
+                    <img src={user.picture} className="w-9 h-9 rounded-full border-2 border-amber-800" alt="user" />
                     {!isCollapsed && (
                         <div className="truncate max-w-[120px]">
                             <p className="text-[11px] font-black truncate">{user.name}</p>
@@ -139,7 +140,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
                 <button 
                     onClick={() => setIsSettingsOpen(true)}
-                    className={`p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-lg shadow-indigo-600/20 transition-all hover:scale-105 active:scale-95 ${isCollapsed ? 'w-full flex justify-center' : ''}`}
+                    className={`p-2 bg-amber-800 hover:bg-amber-700 text-white rounded-xl shadow-lg shadow-amber-900/20 transition-all hover:scale-105 active:scale-95 ${isCollapsed ? 'w-full flex justify-center' : ''}`}
                     title="Settings"
                 >
                     <Settings size={16} />
