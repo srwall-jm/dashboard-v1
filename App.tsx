@@ -1783,7 +1783,14 @@ const App: React.FC = () => {
       
       <main className={`flex-1 transition-all duration-300 ease-in-out p-5 md:p-8 xl:p-12 overflow-x-hidden ${isSidebarOpen ? 'ml-20 lg:ml-24' : 'ml-0'}`}>
         <header className="flex flex-col gap-6 mb-10">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <img src="/logo.png" alt="OneSearch Logo" className="w-8 h-8 rounded-xl object-cover" />
+              <h1 className="text-xl font-black text-slate-800 tracking-tighter">OneSearch</h1>
+            </div>
+            
+            <div className="h-6 w-px bg-slate-200" />                
+
             {!isSidebarOpen && (
               <button 
                 onClick={() => setIsSidebarOpen(true)} 
