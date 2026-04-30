@@ -1781,7 +1781,7 @@ const App: React.FC = () => {
         filteredGoogleAdsCustomers={filteredGoogleAdsCustomers}
       />
       
-      <main className={`flex-1 transition-all duration-300 ease-in-out p-5 md:p-8 xl:p-12 overflow-x-hidden ${isSidebarOpen ? 'xl:ml-80' : 'ml-0'}`}>
+      <main className={`flex-1 transition-all duration-300 ease-in-out p-5 md:p-8 xl:p-12 overflow-x-hidden ${isSidebarOpen ? 'ml-20 lg:ml-24' : 'ml-0'}`}>
         <header className="flex flex-col gap-6 mb-10">
           <div className="flex items-center gap-4">
             {!isSidebarOpen && (
