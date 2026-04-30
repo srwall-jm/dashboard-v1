@@ -271,7 +271,7 @@ export const SearchEfficiencyView: React.FC<{
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6" style={{ transform: 'scale(0.8)', transformOrigin: 'top' }}>
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6">
       
       {/* Section 1: Scorecards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

@@ -6,14 +6,14 @@ import { DashboardTab } from '../types';
 const SidebarLink: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string }> = ({ active, onClick, icon, label }) => (
   <button
     onClick={onClick}
-    className={`w-full flex flex-col items-center justify-center gap-1.5 px-2 py-4 rounded-xl transition-all duration-200 group ${
+    className={`w-full flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 rounded-xl transition-all duration-200 group ${
       active ? 'bg-[#F8B133] text-black shadow-lg' : 'text-slate-400 hover:bg-white/5 hover:text-white'
     }`}
   >
-    <div className={`p-1.5 rounded-lg transition-colors ${active ? 'bg-black/10' : 'bg-transparent group-hover:bg-white/10'}`}>
-      {React.cloneElement(icon as React.ReactElement<any>, { size: 22 })}
+    <div className={`p-1 rounded-lg transition-colors ${active ? 'bg-black/10' : 'bg-transparent group-hover:bg-white/10'}`}>
+      {React.cloneElement(icon as React.ReactElement<any>, { size: 18 })}
     </div>
-    <span className="text-[9px] font-black uppercase tracking-widest text-center whitespace-normal">{label}</span>
+    <span className="text-[8px] font-black uppercase tracking-widest text-center whitespace-normal">{label}</span>
   </button>
 );
 
@@ -35,12 +35,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ${isOpen ? 'translate-x-0' : '-translate-x-full'} 
       w-20 lg:w-24
     `}>
-      <div className={`flex-1 p-2 flex flex-col gap-2`}>
-        <div className={`flex flex-col items-center mb-6 pt-4`}>
-            <div className={`w-10 h-10 lg:w-12 lg:h-12 bg-[#F8B133] rounded-xl flex items-center justify-center`}>
-              <Activity className="w-5 h-5 lg:w-7 lg:h-7 text-black" />
+      <div className="flex-1 p-1 flex flex-col gap-1">
+        <div className="flex flex-col items-center mb-4 pt-2">
+            <div className="w-8 h-8 lg:w-9 lg:h-9 bg-[#F8B133] rounded-xl flex items-center justify-center">
+              <Activity className="w-4 h-4 lg:w-5 lg:h-5 text-black" />
             </div>
-            <p className="text-[7px] lg:text-[9px] font-black text-[#F8B133] uppercase tracking-widest mt-2">OneSearch</p>
+            <p className="text-[6px] lg:text-[8px] font-black text-[#F8B133] uppercase tracking-widest mt-1">OneSearch</p>
         </div>
 
         <nav className="space-y-1 flex-1">
