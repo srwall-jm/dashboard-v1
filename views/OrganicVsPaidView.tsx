@@ -180,7 +180,7 @@ const CountryPerformanceTable = ({ title, data, type, currencySymbol, comparison
       cr: item.current.sessions > 0 ? (item.current.sales / item.current.sessions) * 100 : 0,
       revenue: item.current.revenue,
       sales: item.current.sales,
-      // Cambios porcentuales para la comparación
+      // Percentage change for comparison
       changes: {
         sessions: getChange(item.current.sessions, item.previous.sessions),
         cr: getChange(
@@ -394,7 +394,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Global Search Share Trend (Time Overlay)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Períodos superpuestos por posición relativa en el tiempo</p>
+            <p className="text-[11px] font-bold text-slate-600">Overlapping periods by relative position in time</p>
           </div>
           <div className="flex items-center gap-4">
              <button 
@@ -446,7 +446,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
         <div className="flex justify-between items-center mb-8">
           <div>
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Sessions Performance (Time Overlay)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Períodos superpuestos por posición relativa en el tiempo</p>
+            <p className="text-[11px] font-bold text-slate-600">Overlapping periods by relative position in time</p>
           </div>
           <div className="flex items-center gap-4">
             <button 
@@ -489,7 +489,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
         <div className="flex justify-between items-center mb-8">
           <div>
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Revenue Evolution (Time Overlay)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Períodos superpuestos por posición relativa en el tiempo | Moneda: {currencySymbol}</p>
+            <p className="text-[11px] font-bold text-slate-600">Overlapping periods by relative position in time | Currency: {currencySymbol}</p>
           </div>
           <button 
             onClick={() => exportToCSV(chartData, "Revenue_Evolution_Overlay")} 
@@ -523,7 +523,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
         </div>
       </div>
 
-<div className="grid grid-cols-1 gap-8"> {/* Ahora ocuparán todo el ancho */}
+<div className="grid grid-cols-1 gap-8"> {/* They will now take up the full width */}
   <CountryPerformanceTable 
     title="Organic performance by country" 
     data={data} 

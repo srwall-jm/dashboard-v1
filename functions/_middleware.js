@@ -2,34 +2,34 @@
 export async function onRequest(context) {
   const url = new URL(context.request.url);
 
-  // Si la URL contiene nuestro prefijo de API
+  // If the URL contains our API prefix
   if (url.pathname.includes('/api/googleads/')) {
-    // 1. Extraemos la parte de Google (después de /api/googleads)
+    // 1. Extract the Google part (after /api/googleads)
     const parts = url.pathname.split('/api/googleads');
     const apiPath = parts[1]; 
     
     const targetUrl = `https://googleads.googleapis.com${apiPath}${url.search}`;
 
-    // 2. Filtramos cabeceras conflictivas
+    // 2. Filter conflicting headers
     const newHeaders = new Headers();
     for (const [key, value] of context.request.headers) {
-        // Excluimos cabeceras que pueden causar conflictos en el proxy
+        // Exclude headers that can cause conflicts in the proxy
         if (!['host', 'content-length', 'connection', 'accept-encoding'].includes(key.toLowerCase())) {
             newHeaders.set(key, value);
         }
     }
 
-    // 3. Creamos la petición limpia para Google
+    // 3. Create clean request for Google
     const newRequest = new Request(targetUrl, {
       method: context.request.method,
       headers: newHeaders,
       body: context.request.body,
     });
 
-    // 4. Devolvemos la respuesta de Google
+    // 4. Return the Google response
     return await fetch(newRequest);
   }
 
-  // Si no es la API, que la web cargue normal
+  // If it is not the API, let the web load normally
   return await context.next();
 }

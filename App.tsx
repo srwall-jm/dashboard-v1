@@ -384,7 +384,7 @@ const App: React.FC = () => {
       
     } catch (e) {
       console.error("Error fetching Google Ads recursive sub-accounts:", e);
-      setError("Error al obtener la jerarquía de cuentas. Usando cuenta principal.");
+      setError("Error retrieving account hierarchy. Using the main account.");
       setAvailableGoogleAdsSubAccounts([{
           id: managerId,
           descriptiveName: 'Selected Account',
@@ -467,7 +467,7 @@ const App: React.FC = () => {
   };
 
   // --- BRIDGE DATA: GA4 SESSIONS (ORGANIC vs PAID) ---
-  // UPDATED: Nueva lógica granular con URL+Keyword
+  // UPDATED: New granular logic with URL+Keyword
   const fetchBridgeData = async () => {
     setIsLoadingBridge(true);
     setLoadingProgress(0);
@@ -626,7 +626,7 @@ const App: React.FC = () => {
     if (googleAdsAuth?.token && availableGoogleAdsSubAccounts.length > 0) {
          const googleAdsPaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
          
-         // NUEVA: Mapa granular con clave URL||KEYWORD para coste específico por URL
+         // NEW: Granular map with URL||KEYWORD key for specific cost per URL
          const googleAdsKeywordUrlMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number }> = {};
 
          // Query 1: URL-level metrics from landing_page_view (supports all campaign types including PMax)
@@ -1795,7 +1795,7 @@ const App: React.FC = () => {
               <button 
                 onClick={() => setIsSidebarOpen(true)} 
                 className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-indigo-300 transition-all shadow-sm text-slate-600 hover:text-indigo-600 group" 
-                title="Abrir menú"
+                title="Open menu"
               >
                 <Menu size={20} className="group-hover:scale-110 transition-transform" />
               </button>
@@ -2015,8 +2015,8 @@ const App: React.FC = () => {
             <div className="space-y-2">
               <h3 className="text-xl font-bold text-gray-900">Sincronizando Datos</h3>
               <p className="text-gray-500 text-sm">
-                Estamos procesando tus {availableGoogleAdsSubAccounts.length > 0 ? availableGoogleAdsSubAccounts.length : '7000+'} campañas. 
-                Esta operación es masiva y se está realizando de forma segura para tu navegador.
+                We are processing your {availableGoogleAdsSubAccounts.length > 0 ? availableGoogleAdsSubAccounts.length : '7000+'} campaigns. 
+                This operation is massive and is being performed securely for your browser.
               </p>
             </div>
             <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
@@ -2025,7 +2025,7 @@ const App: React.FC = () => {
                 style={{ width: `${loadingProgress}%` }}
               ></div>
             </div>
-            <p className="text-xs text-gray-400 italic">Por favor, no cierres esta pestaña...</p>
+            <p className="text-xs text-gray-400 italic">Please, do not close this tab...</p>
           </div>
         </div>
       )}

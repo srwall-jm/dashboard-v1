@@ -112,7 +112,7 @@ const CountryShareAnalysis = ({ data, currencySymbol }: { data: any[], currencyS
           <div className="flex justify-between items-center mb-8">
             <div>
               <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Country Efficiency Leaderboard</h4>
-              <p className="text-[11px] font-bold text-slate-600">Ingreso promedio generado por cada sesión orgánica por país</p>
+              <p className="text-[11px] font-bold text-slate-600">Average revenue generated per organic session per country</p>
             </div>
             <div className="flex items-center gap-4">
               <button 
@@ -270,7 +270,7 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
         <div className="flex justify-between items-center mb-8">
           <div>
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Brand vs Generic Search (Time Overlay)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Períodos superpuestos por posición relativa en el tiempo</p>
+            <p className="text-[11px] font-bold text-slate-600">Overlapping periods by relative position in time</p>
           </div>
           <div className="flex items-center gap-4">
              <button 
