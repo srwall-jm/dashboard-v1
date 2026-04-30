@@ -1495,6 +1495,8 @@ const App: React.FC = () => {
       const newUser = { name: decoded.name, email: decoded.email, picture: decoded.picture };
       setUser(newUser);
       localStorage.setItem('seo_suite_user', JSON.stringify(newUser));
+      // Automatically open settings after successful login
+      setIsSettingsOpen(true);
     } catch (error) { 
       console.error("Error decoding token:", error); 
     }
@@ -1680,18 +1682,45 @@ const App: React.FC = () => {
   
   if (!user) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-white relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none">
-            <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-600 blur-[120px] rounded-full animate-pulse" />
-            <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-600 blur-[120px] rounded-full animate-pulse delay-1000" />
+      <div className="min-h-screen bg-white flex flex-col md:flex-row overflow-hidden">
+        {/* Left Side: Dark Background with Content */}
+        <div className="hidden md:flex flex-1 bg-black text-white p-16 flex-col justify-between">
+            <div className="space-y-6">
+                <h1 className="text-5xl font-black leading-tight tracking-tighter">
+                  One Search is a unified search methodology developed by Jellyfish that integrates Paid Search (PPC) and Organic Search (SEO) into a single, cohesive strategy.
+                </h1>
+            </div>
+            
+            <div className="space-y-8">
+              <div className="flex gap-6 items-center opacity-60">
+                {/* Simulated Logos/Icons as per image */}
+                <div className="text-2xl">G✦</div>
+                <div className="text-2xl">O</div>
+                <div className="text-2xl">✻</div>
+                <div className="text-2xl">✱</div>
+                <div className="text-2xl">✧</div>
+                <div className="text-2xl">Ⓜ</div>
+              </div>
+              <p className="text-slate-500 font-medium">© 2026 Jellyfish. All rights reserved.</p>
+            </div>
         </div>
-        <div className="w-full max-w-xl bg-white/5 backdrop-blur-xl border border-white/10 rounded-[48px] p-8 md:p-12 text-center z-10 shadow-2xl">
-          <div className="w-16 h-16 md:w-20 md:h-20 bg-indigo-600 rounded-[24px] md:rounded-[28px] flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-indigo-500/20 transform -rotate-6">
-            <Activity className="w-8 h-8 md:w-10 md:h-10 text-white" />
+
+        {/* Right Side: Login Options */}
+        <div className="flex-1 flex flex-col items-center justify-center p-8 bg-white">
+          <div className="w-full max-w-sm space-y-8">
+            <div className="text-center md:text-left flex items-center gap-2 justify-center md:justify-start">
+               <div className="w-8 h-8 bg-black rounded-lg" />
+               <span className="text-xl font-black tracking-tight">OneSearch™</span>
+            </div>
+            
+            <div className="space-y-3">
+              <div className="flex justify-center"><GoogleLogin onLoginSuccess={handleLoginSuccess} /></div>
+            </div>
+            
+            <p className="text-xs text-slate-500 text-center">
+                Don't have an account or trouble logging in? <a href="#" className="font-bold text-black underline">Contact</a>
+            </p>
           </div>
-          <h1 className="text-3xl md:text-4xl font-black mb-4 tracking-tighter">The OneSearch Engine</h1>
-          <p className="text-slate-400 font-medium mb-10 text-base md:text-lg">Sign in with Google to access your dashboard.</p>
-          <div className="flex justify-center w-full"><GoogleLogin onLoginSuccess={handleLoginSuccess} /></div>
         </div>
       </div>
     );
