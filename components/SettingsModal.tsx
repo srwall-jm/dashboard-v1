@@ -69,28 +69,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Content - Scrollable */}
-        <div className="overflow-y-auto p-8 space-y-8 custom-scrollbar">
+        <div className="overflow-y-auto p-8 space-y-8 custom-scrollbar bg-slate-50">
           
           {/* Section 1: Data Connectors */}
           <section>
             <div className="flex items-center gap-2 mb-4 text-slate-900">
-              <div className="p-2 bg-slate-100 rounded-lg"><Database size={16} className="text-indigo-600" /></div>
-              <h3 className="text-sm font-black uppercase tracking-widest">Data Connectors</h3>
+               <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Data Connectors</h3>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                {/* GA4 */}
-               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                  <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest block mb-2">Google Analytics 4</label>
+               <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider block mb-2">Google Analytics 4</label>
+                  </div>
                   {!ga4Auth?.token ? (
-                    <button onClick={handleConnectGa4} className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Connect GA4</button>
+                    <button onClick={handleConnectGa4} className="mt-4 w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Connect GA4</button>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-2 mt-2">
                       <div className="relative">
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
-                        <input type="text" placeholder="Search Property..." value={ga4Search} onChange={e => setGa4Search(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl text-[10px] pl-8 pr-2 py-2 outline-none focus:border-indigo-500" />
+                        <input type="text" placeholder="Search Property..." value={ga4Search} onChange={e => setGa4Search(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[10px] pl-8 pr-2 py-2 outline-none focus:border-indigo-500" />
                       </div>
-                      <select className="w-full bg-white border border-slate-200 rounded-xl text-[10px] p-2 outline-none cursor-pointer" value={ga4Auth?.property?.id || ''} onChange={e => setGa4Auth({...ga4Auth, property: availableProperties.find(p => p.id === e.target.value) || null})}>
+                      <select className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[10px] p-2 outline-none cursor-pointer" value={ga4Auth?.property?.id || ''} onChange={e => setGa4Auth({...ga4Auth, property: availableProperties.find(p => p.id === e.target.value) || null})}>
                         {filteredProperties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                       </select>
                       <div className="flex items-center gap-1.5 text-[9px] text-emerald-600 font-bold px-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> Connected</div>
@@ -99,17 +100,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                </div>
 
                {/* GSC */}
-               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                  <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest block mb-2">Search Console</label>
+               <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider block mb-2">Search Console</label>
+                  </div>
                   {!gscAuth?.token ? (
-                    <button onClick={handleConnectGsc} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Connect GSC</button>
+                    <button onClick={handleConnectGsc} className="mt-4 w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Connect GSC</button>
                   ) : (
-                    <div className="space-y-2">
-                      <div className="relative">
+                    <div className="space-y-2 mt-2">
+                       <div className="relative">
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
-                        <input type="text" placeholder="Search Site..." value={gscSearch} onChange={e => setGscSearch(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl text-[10px] pl-8 pr-2 py-2 outline-none focus:border-emerald-500" />
+                        <input type="text" placeholder="Search Site..." value={gscSearch} onChange={e => setGscSearch(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[10px] pl-8 pr-2 py-2 outline-none focus:border-emerald-500" />
                       </div>
-                      <select className="w-full bg-white border border-slate-200 rounded-xl text-[10px] p-2 outline-none cursor-pointer" value={gscAuth?.site?.siteUrl || ''} onChange={e => setGscAuth({...gscAuth, site: availableSites.find(s => s.siteUrl === e.target.value) || null})}>
+                      <select className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[10px] p-2 outline-none cursor-pointer" value={gscAuth?.site?.siteUrl || ''} onChange={e => setGscAuth({...gscAuth, site: availableSites.find(s => s.siteUrl === e.target.value) || null})}>
                         {filteredSites.map(s => <option key={s.siteUrl} value={s.siteUrl}>{s.siteUrl}</option>)}
                       </select>
                       <div className="flex items-center gap-1.5 text-[9px] text-emerald-600 font-bold px-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> Connected</div>
@@ -118,34 +121,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                </div>
 
                {/* Google Ads */}
-               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                  <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest block mb-2">Google Ads</label>
+               <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider block mb-2">Google Ads</label>
+                  </div>
                   {!googleAdsAuth?.token ? (
-                    <button onClick={handleConnectGoogleAds} className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Connect Google Ads</button>
+                    <button onClick={handleConnectGoogleAds} className="mt-4 w-full py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Connect Google Ads</button>
                   ) : (
-                    <div className="space-y-3">
-                      {/* Main Account Selection */}
-                      <div className="space-y-1">
-                        <label className="text-[8px] font-bold text-slate-500 uppercase">Main Account / Manager</label>
-                        <select 
-                            className="w-full bg-white border border-slate-200 rounded-xl text-[10px] p-2 outline-none cursor-pointer" 
-                            value={selectedGoogleAdsCustomer?.resourceName || ''} 
-                            onChange={e => {
-                                const cust = availableGoogleAdsCustomers.find(c => c.resourceName === e.target.value) || null;
-                                if (onGoogleAdsCustomerChange) onGoogleAdsCustomerChange(cust);
-                            }}
-                        >
-                            {filteredGoogleAdsCustomers.map(c => <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName} ({c.id})</option>)}
-                        </select>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[9px] text-emerald-600 font-bold px-1 pt-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> Connected</div>
+                    <div className="space-y-3 mt-2">
+                       <div className="space-y-1">
+                         <select 
+                             className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[10px] p-2 outline-none cursor-pointer" 
+                             value={selectedGoogleAdsCustomer?.resourceName || ''} 
+                             onChange={e => {
+                                 const cust = availableGoogleAdsCustomers.find(c => c.resourceName === e.target.value) || null;
+                                 if (onGoogleAdsCustomerChange) onGoogleAdsCustomerChange(cust);
+                             }}
+                         >
+                             {filteredGoogleAdsCustomers.map(c => <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName} ({c.id})</option>)}
+                         </select>
+                       </div>
+                       <div className="flex items-center gap-1.5 text-[9px] text-emerald-600 font-bold px-1 pt-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> Connected</div>
                     </div>
                   )}
                </div>
             </div>
           </section>
 
-          <div className="w-full h-px bg-slate-100" />
+          <div className="w-full h-px bg-slate-200" />
 
           {/* Section 2: AI Engines */}
           <section>
