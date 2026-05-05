@@ -523,7 +523,7 @@ const App: React.FC = () => {
             (ga4OrgData.rows || []).forEach((row: any) => {
                 const path = normalizeUrl(row.dimensionValues[0].value);
                 const sessions = parseInt(row.metricValues[0].value) || 0;
-                const cvr = parseFloat(row.metricValues[1].value) || 0;
+                const cvr = (parseFloat(row.metricValues[1].value) || 0) / 100;
                 if (!ga4OrganicMap[path]) {
                     ga4OrganicMap[path] = { sessions: 0, totalCvr: 0 };
                 }
@@ -948,7 +948,7 @@ const App: React.FC = () => {
                  const cleanPath = normalizeUrl(rawUrl);
                  
                  const sessions = parseInt(row.metricValues[0].value) || 0;
-                 const rate = parseFloat(row.metricValues[1].value) || 0;
+                 const rate = (parseFloat(row.metricValues[1].value) || 0) / 100;
                  const cost = parseFloat(row.metricValues[2].value) || 0;
                  
                  // NUEVA: FILL GRANULAR MAP (URL + KW) FROM GA4 SIDE

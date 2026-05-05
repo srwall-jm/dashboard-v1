@@ -255,16 +255,16 @@ export const SearchEfficiencyView: React.FC<{
 
   const SortableHeader = ({ label, sortKey, align = 'right', title }: { label: string, sortKey: keyof UrlEfficiencyRow, align?: 'left' | 'center' | 'right', title?: string }) => (
     <th 
-        className={`py-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 hover:bg-slate-50 transition-colors select-none text-${align}`}
+        className={`py-2 px-2 text-[9px] font-black text-slate-400 uppercase tracking-tight cursor-pointer hover:text-indigo-600 hover:bg-slate-50 transition-colors select-none text-${align}`}
         onClick={() => handleSort(sortKey)}
         title={title}
     >
         <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}>
-            {label}
-            {title && <Info size={10} className="text-slate-300" />}
+            <span className="whitespace-nowrap">{label}</span>
+            {title && <Info size={8} className="text-slate-300" />}
             <div className="flex flex-col">
-                <ChevronUp size={10} className={`${sortConfig.key === sortKey && sortConfig.direction === 'asc' ? 'text-indigo-600' : 'text-slate-300'}`} />
-                <ChevronDown size={10} className={`${sortConfig.key === sortKey && sortConfig.direction === 'desc' ? 'text-indigo-600' : 'text-slate-300'}`} />
+                <ChevronUp size={8} className={`${sortConfig.key === sortKey && sortConfig.direction === 'asc' ? 'text-indigo-600' : 'text-slate-300'}`} />
+                <ChevronDown size={8} className={`${sortConfig.key === sortKey && sortConfig.direction === 'desc' ? 'text-indigo-600' : 'text-slate-300'}`} />
             </div>
         </div>
     </th>
@@ -431,22 +431,22 @@ export const SearchEfficiencyView: React.FC<{
               <table className="w-full text-left border-collapse">
                   <thead>
                       <tr className="border-b border-slate-100 bg-slate-50/50">
-                          <th className="py-3 px-4 w-10"></th>
+                          <th className="py-2 px-2 w-8"></th>
                           <SortableHeader label="URL" sortKey="url" align="left" />
                           <SortableHeader label="Cluster" sortKey="cluster" align="center" />
-                          <SortableHeader label="Avg SEO Rank" sortKey="avgOrganicRank" align="center" />
+                          <SortableHeader label="SEO Rank" sortKey="avgOrganicRank" align="center" />
                           <SortableHeader label="Org. Clicks" sortKey="organicClicks" />
-                          <SortableHeader label="Google Ads Clicks" sortKey="paidSessions" />
+                          <SortableHeader label="Ads Clicks" sortKey="paidSessions" />
                           <SortableHeader 
-                              label="Paid Share" 
+                              label="Paid %" 
                               sortKey="paidShare" 
                               align="center" 
                               title="Percentage of traffic coming from Paid vs Organic for this URL"
                           />
-                          <SortableHeader label="Paid Cost" sortKey="ppcCost" />
-                          <SortableHeader label="Org. Cvr (%)" sortKey="convRateOrganic" align="right"/>
+                          <SortableHeader label="Spend" sortKey="ppcCost" />
+                          <SortableHeader label="Org Cvr" sortKey="convRateOrganic" align="right"/>
                           <SortableHeader label="Paid Cvr" sortKey="convRatePaid" align="right"/>
-                          <SortableHeader label="Paid CPA" sortKey="paidCpa" align="right"/>
+                          <SortableHeader label="CPA" sortKey="paidCpa" align="right"/>
                       </tr>
                   </thead>
                   <tbody>
@@ -456,38 +456,38 @@ export const SearchEfficiencyView: React.FC<{
                                   className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors cursor-pointer ${expandedUrl === row.url ? 'bg-slate-50/80' : ''}`}
                                   onClick={() => toggleRow(row.url)}
                               >
-                                  <td className="py-3 px-4 text-slate-400">
-                                      <ChevronRight size={16} className={`transition-transform ${expandedUrl === row.url ? 'rotate-90' : ''}`} />
+                                  <td className="py-2 px-2 text-slate-400">
+                                      <ChevronRight size={14} className={`transition-transform ${expandedUrl === row.url ? 'rotate-90' : ''}`} />
                                   </td>
-                                  <td className="py-3 px-4 max-w-[300px] truncate" title={row.url}>
-                                      <span className="text-sm font-bold text-slate-800">{row.url}</span>
+                                  <td className="py-2 px-2 max-w-[200px] truncate" title={row.url}>
+                                      <span className="text-[11px] font-bold text-slate-800">{row.url}</span>
                                   </td>
-                                  <td className="py-3 px-4 text-center">
-                                      <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg ${
+                                  <td className="py-2 px-2 text-center">
+                                      <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-lg whitespace-nowrap ${
                                           row.cluster === 'Cannibalization Risk' ? 'bg-rose-100 text-rose-700' :
                                           row.cluster === 'Paid Reliance' ? 'bg-amber-100 text-amber-700' :
                                           row.cluster === 'Paid Gap' ? 'bg-indigo-100 text-indigo-700' :
                                           'bg-slate-100 text-slate-500'
                                       }`}>
-                                          {row.cluster}
+                                          {row.cluster === 'Cannibalization Risk' ? 'RISK' : row.cluster === 'Paid Reliance' ? 'RELIANCE' : row.cluster === 'Paid Gap' ? 'GAP' : 'OTHER'}
                                       </span>
                                   </td>
-                                  <td className="py-3 px-4 text-center">
+                                  <td className="py-2 px-2 text-center">
                                       {row.avgOrganicRank ? (
-                                          <span className={`px-2 py-1 rounded-lg text-xs font-black ${row.avgOrganicRank <= 3 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                                          <span className={`px-1.5 py-0.5 rounded-lg text-[10px] font-black ${row.avgOrganicRank <= 3 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                                               #{row.avgOrganicRank.toFixed(1)}
                                           </span>
                                       ) : '-'}
                                   </td>
-                                  <td className="py-3 px-4 text-right">
-                                      <span className="text-sm font-bold text-slate-600">{formatNumber(row.organicClicks)}</span>
+                                  <td className="py-2 px-2 text-right">
+                                      <span className="text-[11px] font-bold text-slate-600">{formatNumber(row.organicClicks)}</span>
                                   </td>
-                                  <td className="py-3 px-4 text-right">
-                                      <span className="text-sm font-bold text-slate-600">{formatNumber(row.paidSessions)}</span>
+                                  <td className="py-2 px-2 text-right">
+                                      <span className="text-[11px] font-bold text-slate-600">{formatNumber(row.paidSessions)}</span>
                                   </td>
-                                  <td className="py-3 px-4">
-                                      <div className="flex flex-col items-center gap-1">
-                                          <div className="w-full max-w-[80px] h-1.5 bg-slate-100 rounded-full overflow-hidden flex">
+                                  <td className="py-2 px-2">
+                                      <div className="flex flex-col items-center gap-0.5">
+                                          <div className="w-full max-w-[60px] h-1 bg-slate-100 rounded-full overflow-hidden flex">
                                               <div 
                                                   className="h-full bg-amber-500" 
                                                   style={{ width: `${row.paidShare}%` }} 
@@ -497,26 +497,26 @@ export const SearchEfficiencyView: React.FC<{
                                                   style={{ width: `${100 - row.paidShare}%` }} 
                                               />
                                           </div>
-                                          <span className="text-[10px] font-black text-slate-500">{row.paidShare.toFixed(1)}% Paid</span>
+                                          <span className="text-[9px] font-black text-slate-500">{row.paidShare.toFixed(0)}%</span>
                                       </div>
                                   </td>
-                                  <td className="py-3 px-4 text-right">
-                                      <span className={`text-sm font-bold ${row.cluster === 'Cannibalization Risk' ? 'text-rose-600' : 'text-slate-800'}`}>
+                                  <td className="py-2 px-2 text-right">
+                                      <span className={`text-[11px] font-bold ${row.cluster === 'Cannibalization Risk' ? 'text-rose-600' : 'text-slate-800'}`}>
                                           {currencySymbol}{formatCurrency(row.ppcCost)}
                                       </span>
                                   </td>
-                                  <td className="py-3 px-4 text-right">
-                                      <span className="text-sm font-bold text-slate-600">
+                                  <td className="py-2 px-2 text-right">
+                                      <span className="text-[11px] font-bold text-slate-600">
                                           {row.convRateOrganic ? `${row.convRateOrganic.toFixed(2)}%` : '-'}
                                       </span>
                                   </td>
-                                  <td className="py-3 px-4 text-right">
-                                      <span className="text-sm font-bold text-slate-600">
+                                  <td className="py-2 px-2 text-right">
+                                      <span className="text-[11px] font-bold text-slate-600">
                                           {row.convRatePaid ? `${row.convRatePaid.toFixed(2)}%` : '-'}
                                       </span>
                                   </td>
-                                  <td className="py-3 px-4 text-right">
-                                      <span className="text-sm font-bold text-slate-600">
+                                  <td className="py-2 px-2 text-right">
+                                      <span className="text-[11px] font-bold text-slate-600">
                                           {row.paidCpa > 0 ? `${currencySymbol}${formatCurrency(row.paidCpa)}` : '-'}
                                       </span>
                                   </td>
