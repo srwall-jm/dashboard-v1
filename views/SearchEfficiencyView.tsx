@@ -18,6 +18,9 @@ interface UrlEfficiencyRow {
   paidShare: number;
   ppcCost: number;
   avgCpc: number;
+  convRateOrganic: number;
+  convRatePaid: number;
+  paidCpa: number;
   queries: KeywordBridgeData[];
   avgOrganicRank: number | null;
 }
@@ -64,6 +67,9 @@ export const SearchEfficiencyView: React.FC<{
             paidShare: 0,
             ppcCost: row.ppcCost || 0,
             avgCpc: row.ppcSessions > 0 ? (row.ppcCost || 0) / row.ppcSessions : 0,
+            convRateOrganic: 0, // Data not available
+            convRatePaid: row.ppcSessions > 0 ? ((row.ppcConversions || 0) / row.ppcSessions) * 100 : 0,
+            paidCpa: (row.ppcConversions || 0) > 0 ? (row.ppcCost || 0) / row.ppcConversions : 0,
             queries: [],
             avgOrganicRank: null
         });
@@ -435,6 +441,9 @@ export const SearchEfficiencyView: React.FC<{
                               title="Percentage of traffic coming from Paid vs Organic for this URL"
                           />
                           <SortableHeader label="Paid Cost" sortKey="ppcCost" />
+                          <SortableHeader label="Org. Cvr" sortKey="convRateOrganic" align="right"/>
+                          <SortableHeader label="Paid Cvr" sortKey="convRatePaid" align="right"/>
+                          <SortableHeader label="Paid CPA" sortKey="paidCpa" align="right"/>
                       </tr>
                   </thead>
                   <tbody>
