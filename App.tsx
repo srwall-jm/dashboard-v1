@@ -865,6 +865,7 @@ const App: React.FC = () => {
                     ppcCpa: paidStats?.conversions ? paidStats.cost / paidStats.conversions : 0,
                     ppcSessions: paidVolume, 
                     ppcImpressions: paidStats?.impressions || 0, 
+                    searchImpressionShare: 0,
                     blendedCostRatio: paidShare, 
                     actionLabel: action, 
                     dataSource: 'GOOGLE_ADS',
@@ -1018,6 +1019,7 @@ const App: React.FC = () => {
                     ppcCpa: 0,
                     ppcSessions: paidVolume, 
                     ppcImpressions: 0, 
+                    searchImpressionShare: 0,
                     blendedCostRatio: paidShare, 
                     actionLabel: action, 
                     dataSource: 'GA4',
@@ -1055,6 +1057,11 @@ const App: React.FC = () => {
                     paidCvr: cvr, 
                     ppcCost: item.paidCost, 
                     avgCpc: avgCpc,
+                    paidClicks: paidVol,
+                    paidCtr: 0,
+                    searchImpressionShare: 0,
+                    paidConversions: item.paidConversions,
+                    paidCta: item.paidConversions > 0 ? item.paidCost / item.paidConversions : 0,
                     actionLabel: action, 
                     dataSource: 'GA4'
                  });
@@ -1188,6 +1195,11 @@ const App: React.FC = () => {
                         ppcCost: paidCost,
                         paidCvr: cvr,
                         avgCpc: avgCpc,
+                        paidClicks: paidVol,
+                        paidCtr: 0,
+                        searchImpressionShare: 0,
+                        paidConversions: paidKwData?.conversions || 0,
+                        paidCta: (paidKwData?.conversions || 0) > 0 ? paidCost / (paidKwData?.conversions || 0) : 0,
                         actionLabel: q.rank <= 3 && paidVol > 0 ? "REVIEW" : "MAINTAIN",
                         dataSource: 'GOOGLE_ADS'
                     });

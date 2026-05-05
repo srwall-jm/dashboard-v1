@@ -175,6 +175,7 @@ export const generateMockBridgeData = (): BridgeData[] => {
       organicRank: rank,
       organicClicks: organicClicks,
       organicSessions: organicSessions, 
+      organicCvr: Math.random() * 0.05,
       ppcCampaign: campaigns[i % campaigns.length],
       ppcCost,
       ppcConversions,
@@ -182,6 +183,7 @@ export const generateMockBridgeData = (): BridgeData[] => {
       ppcSessions: ppcSessions, 
       ppcAvgCpc,
       ppcImpressions: Math.floor(ppcCost * 20),
+      searchImpressionShare: Math.random() * 0.8,
       blendedCostRatio,
       actionLabel: action,
       dataSource: 'GA4',
@@ -215,6 +217,8 @@ export const generateMockKeywordBridgeData = (): KeywordBridgeData[] => {
         else if (organicRank && organicRank > 10 && paidSessions === 0) action = "OPPORTUNITY (Growth)";
         else if (!organicRank && paidSessions > 0) action = "PAID ONLY";
 
+        const paidConversions = hasPaid ? Math.floor(Math.random() * 20) : 0;
+
         return {
             keyword: queries[i % queries.length],
             url: pages[i % pages.length],
@@ -224,6 +228,11 @@ export const generateMockKeywordBridgeData = (): KeywordBridgeData[] => {
             paidCvr: Math.random() * 5,
             ppcCost,
             avgCpc: paidSessions > 0 ? ppcCost / paidSessions : 0,
+            paidClicks: paidSessions,
+            paidCtr: Math.random() * 10,
+            searchImpressionShare: Math.random(),
+            paidConversions,
+            paidCta: paidConversions > 0 ? ppcCost / paidConversions : 0,
             actionLabel: action,
             dataSource: 'GA4'
         };
