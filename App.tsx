@@ -500,7 +500,7 @@ const App: React.FC = () => {
     };
     
     // 0. FETCH GA4 ORGANIC SESSIONS (Per URL)
-    const ga4OrganicMap: Record<string, number> = {};
+    const ga4OrganicMap: Record<string, { sessions: number, totalCvr: number }> = {};
     if (ga4Auth?.property && ga4Auth.token) {
         try {
             const ga4OrgResp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
@@ -509,7 +509,7 @@ const App: React.FC = () => {
                 body: JSON.stringify({
                     dateRanges: [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }],
                     dimensions: [{ name: 'landingPage' }],
-                    metrics: [{ name: 'sessions' }],
+                    metrics: [{ name: 'sessions' }, { name: 'sessionConversionRate' }],
                     dimensionFilter: {
                         filter: {
                             fieldName: 'sessionDefaultChannelGroup',
@@ -523,7 +523,12 @@ const App: React.FC = () => {
             (ga4OrgData.rows || []).forEach((row: any) => {
                 const path = normalizeUrl(row.dimensionValues[0].value);
                 const sessions = parseInt(row.metricValues[0].value) || 0;
-                ga4OrganicMap[path] = (ga4OrganicMap[path] || 0) + sessions;
+                const cvr = parseFloat(row.metricValues[1].value) || 0;
+                if (!ga4OrganicMap[path]) {
+                    ga4OrganicMap[path] = { sessions: 0, totalCvr: 0 };
+                }
+                ga4OrganicMap[path].sessions += sessions;
+                ga4OrganicMap[path].totalCvr += (sessions * cvr); // Weighted conversion rate sum
             });
         } catch (e) {
             console.error("Error fetching GA4 Organic Data:", e);
@@ -816,7 +821,9 @@ const App: React.FC = () => {
                 const gscData = gscUrlMap[path]; 
                 const paidStats = googleAdsPaidMap[path];
                 
-                const organicSessions = ga4OrganicMap[path] || 0;
+                const organicStats = ga4OrganicMap[path] || { sessions: 0, totalCvr: 0 };
+                const organicSessions = organicStats.sessions;
+                const organicCvr = organicSessions > 0 ? (organicStats.totalCvr / organicSessions) : 0;
                 const organicClicks = gscData ? gscData.totalClicks : 0;
                 const organicRank = gscData && gscData.totalImpressions > 0 
                     ? gscData.weightedRankSum / gscData.totalImpressions 
@@ -851,6 +858,7 @@ const App: React.FC = () => {
                     organicRank: organicRank, 
                     organicClicks: organicClicks, 
                     organicSessions: organicSessions, 
+                    organicCvr: organicCvr,
                     ppcCampaign: "Google Ads", 
                     ppcCost: paidStats?.cost || 0, 
                     ppcConversions: paidStats?.conversions || 0, 
@@ -971,7 +979,9 @@ const App: React.FC = () => {
                 const gscData = gscUrlMap[path];
                 const paidStats = ga4PaidMap[path];
                 
-                const organicSessions = ga4OrganicMap[path] || 0;
+                const organicStats = ga4OrganicMap[path] || { sessions: 0, totalCvr: 0 };
+                const organicSessions = organicStats.sessions;
+                const organicCvr = organicSessions > 0 ? (organicStats.totalCvr / organicSessions) : 0;
                 const organicClicks = gscData ? gscData.totalClicks : 0;
                 // User Request: Use Avg Rank instead of Best Rank
                 const organicRank = gscData && gscData.totalImpressions > 0 
@@ -1001,6 +1011,7 @@ const App: React.FC = () => {
                     organicRank: organicRank, 
                     organicClicks: organicClicks, 
                     organicSessions: organicSessions, 
+                    organicCvr: organicCvr,
                     ppcCampaign: campDisplay, 
                     ppcCost: 0, 
                     ppcConversions: paidStats?.conversions || 0, 

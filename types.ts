@@ -90,6 +90,7 @@ export interface BridgeData {
   organicRank: number | null;
   organicClicks: number; // GSC Clicks
   organicSessions: number; // GA4 Sessions (Primary Organic Metric)
+  organicCvr: number; // GA4 Organic Conversion Rate
   ppcCampaign: string;
   ppcCost: number;
   ppcConversions: number;

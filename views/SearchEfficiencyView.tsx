@@ -67,7 +67,7 @@ export const SearchEfficiencyView: React.FC<{
             paidShare: 0,
             ppcCost: row.ppcCost || 0,
             avgCpc: row.ppcSessions > 0 ? (row.ppcCost || 0) / row.ppcSessions : 0,
-            convRateOrganic: 0, // Data not available
+            convRateOrganic: (row.organicCvr || 0) * 100, 
             convRatePaid: row.ppcSessions > 0 ? ((row.ppcConversions || 0) / row.ppcSessions) * 100 : 0,
             paidCpa: (row.ppcConversions || 0) > 0 ? (row.ppcCost || 0) / row.ppcConversions : 0,
             queries: [],
