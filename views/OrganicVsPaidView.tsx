@@ -493,6 +493,10 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
         </div>
       </div>
 
+      <div className="grid grid-cols-1 gap-8">
+        <UnifiedFunnel title="Unified Search Funnel (Org + Paid)" data={unifiedFunnelData} />
+      </div>
+
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
         {[ {type: 'ORG', color: 'indigo', label: 'Organic', s: stats.organic}, {type: 'PAID', color: 'amber', label: 'Paid', s: stats.paid} ].map(ch => (
           <div key={ch.type} className="space-y-4">
@@ -604,10 +608,6 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
     comparisonEnabled={comparisonEnabled} 
   />
 </div>
-
-  <div className="grid grid-cols-1 gap-8">
-    <UnifiedFunnel title="Unified Search Funnel (Org + Paid)" data={unifiedFunnelData} />
-  </div>
 
   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
     <EcommerceFunnel title="Organic Search Funnel" data={organicFunnelData} color="indigo" />
