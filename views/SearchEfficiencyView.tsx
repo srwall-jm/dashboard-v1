@@ -45,6 +45,8 @@ export const SearchEfficiencyView: React.FC<{
 
   // 1. Data Processing Engine & Scorecard Calculations
   const { filteredData, metrics } = useMemo(() => {
+    console.log("Rendering SearchEfficiencyView with", urlData.length, "urlRows and", keywordData.length, "keywordRows");
+    if (urlData.length > 0) console.log("Sample URL Data:", urlData[0]);
     let totalCost = 0;
     let potentialSavings = 0;
     let totalOrganicClicks = 0;
@@ -444,7 +446,7 @@ export const SearchEfficiencyView: React.FC<{
                               title="Percentage of traffic coming from Paid vs Organic for this URL"
                           />
                           <SortableHeader label="Paid Cost" sortKey="ppcCost" />
-                          <SortableHeader label="Org. Cvr" sortKey="convRateOrganic" align="right"/>
+                          <SortableHeader label="Org. Cvr (%)" sortKey="convRateOrganic" align="right"/>
                           <SortableHeader label="Paid Cvr" sortKey="convRatePaid" align="right"/>
                           <SortableHeader label="Paid CPA" sortKey="paidCpa" align="right"/>
                       </tr>
@@ -508,7 +510,7 @@ export const SearchEfficiencyView: React.FC<{
                               </tr>
                               {expandedUrl === row.url && (
                                   <tr className="bg-slate-50/50 border-b border-slate-100">
-                                      <td colSpan={8} className="p-0">
+                                                                             <td colSpan={14} className="p-0">
                                           <div className="p-6 pl-14">
                                               <h5 className="text-xs font-black text-slate-800 mb-3 uppercase tracking-widest">Top 10 Queries for this URL</h5>
                                               <table className="w-full text-left bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
