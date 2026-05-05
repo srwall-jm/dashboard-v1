@@ -10,6 +10,64 @@ import { KpiCard } from '../components/KpiCard';
 import { ComparisonTooltip } from '../components/ComparisonTooltip';
 import { EmptyState } from '../components/EmptyState';
 
+const UnifiedFunnel = ({ title, data }: any) => {
+  return (
+    <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm h-full">
+      <div className="flex justify-between items-center mb-8">
+        <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{title}</h4>
+      </div>
+      <div className="space-y-8">
+        {data.map((stage: any, i: number) => {
+          const total = stage.organic + stage.paid;
+          const organicPercent = total > 0 ? (stage.organic / total) * 100 : 0;
+          const paidPercent = total > 0 ? (stage.paid / total) * 100 : 0;
+          
+          return (
+            <div key={stage.stage} className="relative">
+              <div className="flex justify-between items-end mb-2">
+                <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight">{stage.stage}</span>
+                <div className="flex flex-col items-end">
+                  <span className="text-[11px] font-black text-slate-900">{total.toLocaleString()} Total</span>
+                  <div className="flex gap-3 mt-1">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full" />
+                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">Org: <span className="text-slate-900">{stage.organic.toLocaleString()}</span> ({organicPercent.toFixed(1)}%)</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
+                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">Paid: <span className="text-slate-900">{stage.paid.toLocaleString()}</span> ({paidPercent.toFixed(1)}%)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="h-12 bg-slate-50 rounded-2xl overflow-hidden border border-slate-100 p-1 flex">
+                <div 
+                  className="h-full bg-indigo-600 rounded-l-xl transition-all duration-1000 ease-out flex items-center justify-center min-w-[1%]" 
+                  style={{ width: `${organicPercent}%` }}
+                >
+                  {organicPercent > 15 && <span className="text-[9px] font-black text-white whitespace-nowrap">ORGANIC</span>}
+                </div>
+                <div 
+                  className="h-full bg-amber-500 rounded-r-xl transition-all duration-1000 ease-out flex items-center justify-center min-w-[1%]" 
+                  style={{ width: `${paidPercent}%` }}
+                >
+                   {paidPercent > 15 && <span className="text-[9px] font-black text-white whitespace-nowrap">PAID</span>}
+                </div>
+              </div>
+              {i < data.length - 1 && (
+                <div className="absolute left-1/2 -bottom-5.5 -translate-x-1/2 z-10 flex flex-col items-center">
+                  <div className="w-[1.5px] h-4 bg-slate-200"></div>
+                  <ChevronDown className="w-4 h-4 text-slate-300 -mt-1" />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 const EcommerceFunnel = ({ title, data, color }: any) => {
   const max = data[0].value || 1;
   return (
@@ -362,6 +420,13 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
     });
   }, [data, grouping]);
 
+  const unifiedFunnelData = useMemo(() => [
+    { stage: 'Sessions', organic: stats.organic.current.sessions, paid: stats.paid.current.sessions },
+    { stage: 'Add to Basket', organic: stats.organic.current.addToCarts, paid: stats.paid.current.addToCarts },
+    { stage: 'Checkout', organic: stats.organic.current.checkouts, paid: stats.paid.current.checkouts },
+    { stage: 'Sale', organic: stats.organic.current.sales, paid: stats.paid.current.sales },
+  ], [stats.organic.current, stats.paid.current]);
+
   const organicFunnelData = useMemo(() => [
     { stage: 'Sessions', value: stats.organic.current.sessions },
     { stage: 'Add to Basket', value: stats.organic.current.addToCarts },
@@ -540,10 +605,14 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
   />
 </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <EcommerceFunnel title="Organic Search Funnel" data={organicFunnelData} color="indigo" />
-        <EcommerceFunnel title="Paid Search Funnel" data={paidFunnelData} color="amber" />
-      </div>
+  <div className="grid grid-cols-1 gap-8">
+    <UnifiedFunnel title="Unified Search Funnel (Org + Paid)" data={unifiedFunnelData} />
+  </div>
+
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+    <EcommerceFunnel title="Organic Search Funnel" data={organicFunnelData} color="indigo" />
+    <EcommerceFunnel title="Paid Search Funnel" data={paidFunnelData} color="amber" />
+  </div>
 
       {/* Organic / Paid Performance */}
     </div>
