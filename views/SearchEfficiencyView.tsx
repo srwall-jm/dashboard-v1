@@ -95,6 +95,9 @@ export const SearchEfficiencyView: React.FC<{
                 paidShare: 0,
                 ppcCost: row.ppcCost || 0,
                 avgCpc: row.paidSessions > 0 ? (row.ppcCost || 0) / row.paidSessions : 0,
+                convRateOrganic: 0,
+                convRatePaid: row.paidSessions > 0 ? (row.paidConversions / row.paidSessions) * 100 : 0,
+                paidCpa: row.paidConversions > 0 ? (row.ppcCost || 0) / row.paidConversions : 0,
                 queries: [],
                 avgOrganicRank: null
             };
