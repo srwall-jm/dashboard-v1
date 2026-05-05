@@ -41,9 +41,21 @@ export const DateRangeSelector: React.FC<{
     { label: 'Last year', getValue: () => { const d = new Date(); return { start: new Date(d.getFullYear() - 1, 0, 1), end: new Date(d.getFullYear() - 1, 11, 31) }; } },
   ];
 
+  const [localRange, setLocalRange] = useState(filters.dateRange);
+
+  useEffect(() => {
+    setLocalRange(filters.dateRange);
+  }, [filters.dateRange]);
+
   const handleRangeSelect = (range: any) => {
     const { start, end } = range.getValue();
     setFilters({ ...filters, dateRange: { start: formatDate(start), end: formatDate(end) } });
+    setIsOpen(false);
+  };
+  
+  const applyCustomRange = () => {
+    setFilters({ ...filters, dateRange: localRange });
+    setIsOpen(false);
   };
 
   return (
@@ -82,8 +94,8 @@ export const DateRangeSelector: React.FC<{
                   <label className="text-[8px] font-black text-slate-500 uppercase">Start Date</label>
                   <input 
                     type="date" 
-                    value={filters.dateRange.start} 
-                    onChange={e => setFilters({...filters, dateRange: {...filters.dateRange, start: e.target.value}})}
+                    value={localRange.start} 
+                    onChange={e => setLocalRange({...localRange, start: e.target.value})}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none focus:ring-1 ring-indigo-500"
                   />
                 </div>
@@ -91,8 +103,8 @@ export const DateRangeSelector: React.FC<{
                   <label className="text-[8px] font-black text-slate-500 uppercase">End Date</label>
                   <input 
                     type="date" 
-                    value={filters.dateRange.end} 
-                    onChange={e => setFilters({...filters, dateRange: {...filters.dateRange, end: e.target.value}})}
+                    value={localRange.end} 
+                    onChange={e => setLocalRange({...localRange, end: e.target.value})}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none focus:ring-1 ring-indigo-500"
                   />
                 </div>
@@ -126,7 +138,7 @@ export const DateRangeSelector: React.FC<{
               </div>
 
               <button 
-                onClick={() => setIsOpen(false)}
+                onClick={applyCustomRange}
                 className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-colors shadow-lg"
               >
                 Apply Range

@@ -77,6 +77,17 @@ export const AiTrafficView: React.FC<{
 
   const COLORS = ['#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#06b6d4'];
 
+  const [hiddenSources, setHiddenSources] = React.useState<string[]>([]);
+
+  const handleLegendClick = (data: any) => {
+    const { dataKey } = data;
+    if (hiddenSources.includes(dataKey)) {
+        setHiddenSources(hiddenSources.filter(s => s !== dataKey));
+    } else {
+        setHiddenSources([...hiddenSources, dataKey]);
+    }
+  };
+
   return (
     <div className="w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-6">
       
@@ -148,7 +159,7 @@ export const AiTrafficView: React.FC<{
                     itemStyle={{ color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
                     labelStyle={{ color: '#94a3b8', fontSize: '10px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}
                 />
-                <Legend verticalAlign="top" iconType="circle" />
+                <Legend verticalAlign="top" iconType="circle" onClick={handleLegendClick} wrapperStyle={{ cursor: 'pointer' }} />
                 {Object.keys(trendData[0] || {}).filter(k => k !== 'date').map((source, idx) => (
                     <Line 
                         key={source} 
@@ -158,6 +169,7 @@ export const AiTrafficView: React.FC<{
                         strokeWidth={3} 
                         dot={false}
                         activeDot={{ r: 6 }} 
+                        hide={hiddenSources.includes(source)}
                     />
                 ))}
               </LineChart>
