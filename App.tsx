@@ -125,18 +125,23 @@ const App: React.FC = () => {
   
   const [loadingInsights, setLoadingInsights] = useState(false);
   
-  const [filters, setFilters] = useState<DashboardFilters>({
-    dateRange: { 
-      start: formatDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)), 
-      end: formatDate(new Date()) 
-    },
-    comparison: {
-      enabled: false,
-      type: 'previous_period'
-    },
-    country: 'All',
-    queryType: 'All',
-    ga4Dimension: 'sessionDefaultChannelGroup'
+  const [filters, setFilters] = useState<DashboardFilters>(() => {
+    const d = new Date();
+    const lastMonthStart = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(d.getFullYear(), d.getMonth(), 0);
+    return {
+      dateRange: { 
+        start: formatDate(lastMonthStart), 
+        end: formatDate(lastMonthEnd) 
+      },
+      comparison: {
+        enabled: false,
+        type: 'previous_period'
+      },
+      country: 'All',
+      queryType: 'All',
+      ga4Dimension: 'sessionDefaultChannelGroup'
+    };
   });
   
   const [searchTerm, setSearchTerm] = useState('');
