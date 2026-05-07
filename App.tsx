@@ -79,6 +79,7 @@ const App: React.FC = () => {
   const [realKeywordData, setRealKeywordData] = useState<KeywordData[]>([]);
   
   const [googleAdsGlobalMetrics, setGoogleAdsGlobalMetrics] = useState<GoogleAdsGlobalMetrics | null>(null);
+  const [googleAdsDailyTotals, setGoogleAdsDailyTotals] = useState<{date: string, impressions: number, label: 'current' | 'previous'}[]>([]);
   const [bridgeDataGA4, setBridgeDataGA4] = useState<BridgeData[]>([]); 
   const [bridgeDataGoogleAds, setBridgeDataGoogleAds] = useState<BridgeData[]>([]); 
   const [keywordBridgeDataGA4, setKeywordBridgeDataGA4] = useState<KeywordBridgeData[]>([]);
@@ -672,6 +673,7 @@ const App: React.FC = () => {
          // Query 3: Customer-level metrics (The most accurate "Overview" total)
          const googleAdsCustomerQuery = `
             SELECT 
+              segments.date,
               metrics.cost_micros, 
               metrics.clicks, 
               metrics.impressions, 
@@ -751,6 +753,8 @@ const App: React.FC = () => {
                 avgCpa: 0
             };
 
+            const adsDailyMap: Record<string, {date: string, impressions: number, label: 'current' | 'previous'}> = {};
+
             if (allAccountIds.length > 0) {
                 const chunkSize = 3; // Smaller chunks to prevent memory spikes
                 for (let i = 0; i < allAccountIds.length; i += chunkSize) {
@@ -762,15 +766,27 @@ const App: React.FC = () => {
                         if (Array.isArray(res)) {
                             for (const row of res) {
                                 const metrics = row.metrics;
+                                const segments = row.segments;
+                                const date = segments?.date;
+
                                 globalMetrics.totalCost += (parseInt(metrics?.costMicros) || 0) / 1000000;
                                 globalMetrics.totalClicks += parseInt(metrics?.clicks) || 0;
                                 globalMetrics.totalConversions += parseFloat(metrics?.conversions) || 0;
                                 globalMetrics.totalImpressions += parseInt(metrics?.impressions) || 0;
+
+                                if (date) {
+                                    if (!adsDailyMap[date]) {
+                                        adsDailyMap[date] = { date, impressions: 0, label: 'current' };
+                                    }
+                                    adsDailyMap[date].impressions += parseInt(metrics?.impressions) || 0;
+                                }
                             }
                         }
                     });
                     setLoadingProgress(Math.round(((i + chunk.length) / (allAccountIds.length * 2)) * 100));
                 }
+
+                setGoogleAdsDailyTotals(Object.values(adsDailyMap));
 
                 if (globalMetrics.totalClicks > 0) {
                     globalMetrics.avgCpc = globalMetrics.totalCost / globalMetrics.totalClicks;
@@ -1941,6 +1957,8 @@ const App: React.FC = () => {
               grouping={grouping} 
               setGrouping={setGrouping} 
               currencySymbol={currencySymbol} 
+              gscDailyTotals={gscDailyTotals}
+              googleAdsDailyTotals={googleAdsDailyTotals}
             />
           )}
           

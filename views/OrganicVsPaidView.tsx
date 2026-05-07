@@ -327,15 +327,73 @@ const CountryPerformanceTable = ({ title, data, type, currencySymbol, comparison
   );
 };
 
-export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGrouping, currencySymbol }: {
+export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGrouping, currencySymbol, gscDailyTotals = [], googleAdsDailyTotals = [] }: {
   stats: any;
   data: DailyData[];
   comparisonEnabled: boolean;
   grouping: 'daily' | 'weekly' | 'monthly';
   setGrouping: (g: 'daily' | 'weekly' | 'monthly') => void;
   currencySymbol: string;
+  gscDailyTotals?: any[];
+  googleAdsDailyTotals?: any[];
 }) => {
   const [weightMetric, setWeightMetric] = useState<'sessions' | 'revenue'>('sessions');
+  const [visibleSeries, setVisibleSeries] = useState<Set<string>>(new Set(['Organic Impressions', 'Ads Impressions', 'Global Impressions']));
+
+  const toggleSeries = (name: string) => {
+    setVisibleSeries(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  const impressionsData = useMemo(() => {
+    const map: Record<string, { date: string, organic: number, paid: number, total: number }> = {};
+    
+    const getBucket = (dateStr: string) => {
+      if (!dateStr) return 'N/A';
+      if (grouping === 'weekly') return formatDate(getStartOfWeek(new Date(dateStr)));
+      if (grouping === 'monthly') return `${dateStr.slice(0, 7)}-01`;
+      return dateStr;
+    };
+
+    gscDailyTotals.forEach(d => {
+      if (d.label === 'previous') return;
+      const b = getBucket(d.date);
+      if (!map[b]) map[b] = { date: d.date, organic: 0, paid: 0, total: 0 };
+      map[b].organic += d.impressions;
+      map[b].total += d.impressions;
+    });
+
+    googleAdsDailyTotals.forEach(d => {
+      if (d.label === 'previous') return;
+      // G Ads dates usually come as YYYY-MM-DD but let's be safe
+      const b = getBucket(d.date);
+      if (!map[b]) map[b] = { date: d.date, organic: 0, paid: 0, total: 0 };
+      map[b].paid += d.impressions;
+      map[b].total += d.impressions;
+    });
+
+    return Object.keys(map).sort().map(bucket => {
+      const d = map[bucket];
+      let xLabel = bucket;
+      const refDate = d.date ? new Date(d.date) : null;
+      if (refDate && !isNaN(refDate.getTime())) {
+        xLabel = grouping === 'monthly' 
+          ? refDate.toLocaleDateString('en-US', { month: 'short' })
+          : refDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      }
+      return {
+        date: xLabel,
+        'Organic Impressions': d.organic,
+        'Ads Impressions': d.paid,
+        'Global Impressions': d.total
+      };
+    });
+  }, [gscDailyTotals, googleAdsDailyTotals, grouping]);
+
 
   const chartData = useMemo(() => {
     if (!data.length) return [];
@@ -493,6 +551,92 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
         </div>
       </div>
 
+      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+          <div>
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Global Search Impressions</h4>
+            <p className="text-[11px] font-bold text-slate-600">Combined GSC (Organic) and Google Ads (Paid) daily impressions</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => exportToCSV(impressionsData, "Global_Search_Impressions")} 
+              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+            >
+              <FileText size={12} /> Export CSV
+            </button>
+          </div>
+        </div>
+        <div className="h-[350px]">
+          {impressionsData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={impressionsData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
+                <Tooltip 
+                  content={({ active, payload, label }: any) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div className="bg-slate-900 text-white p-4 rounded-[20px] shadow-2xl border border-white/10 min-w-[180px]">
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 border-b border-white/5 pb-2">{label}</p>
+                          <div className="space-y-2.5">
+                            {payload.map((entry: any, index: number) => (
+                              <div key={index} className="flex justify-between items-center gap-4">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                                  <span className="text-[10px] font-bold text-white uppercase">{entry.name}</span>
+                                </div>
+                                <span className="text-[11px] font-black">{entry.value.toLocaleString()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Legend 
+                  verticalAlign="top" 
+                  align="center" 
+                  iconType="circle"
+                  onClick={(e) => toggleSeries(e.dataKey)}
+                  wrapperStyle={{ cursor: 'pointer', paddingBottom: '20px' }}
+                />
+                <Line 
+                   name="Organic Impressions" 
+                   type="monotone" 
+                   dataKey="Organic Impressions" 
+                   stroke="#6366f1" 
+                   strokeWidth={3} 
+                   dot={false}
+                   hide={!visibleSeries.has('Organic Impressions')}
+                />
+                <Line 
+                   name="Ads Impressions" 
+                   type="monotone" 
+                   dataKey="Ads Impressions" 
+                   stroke="#f59e0b" 
+                   strokeWidth={3} 
+                   dot={false}
+                   hide={!visibleSeries.has('Ads Impressions')}
+                />
+                <Line 
+                   name="Global Impressions" 
+                   type="monotone" 
+                   dataKey="Global Impressions" 
+                   stroke="#10b981" 
+                   strokeWidth={4} 
+                   dot={false}
+                   strokeDasharray="5 5"
+                   hide={!visibleSeries.has('Global Impressions')}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : <EmptyState text="No impressions data available to chart. Please check GSC and Google Ads connections." />}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 gap-8">
         <UnifiedFunnel title="Unified Search Funnel (Org + Paid)" data={unifiedFunnelData} />
       </div>
@@ -608,11 +752,6 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
     comparisonEnabled={comparisonEnabled} 
   />
 </div>
-
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-    <EcommerceFunnel title="Organic Search Funnel" data={organicFunnelData} color="indigo" />
-    <EcommerceFunnel title="Paid Search Funnel" data={paidFunnelData} color="amber" />
-  </div>
 
       {/* Organic / Paid Performance */}
     </div>
