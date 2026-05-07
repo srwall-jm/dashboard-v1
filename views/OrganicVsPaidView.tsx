@@ -504,7 +504,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
   return (
     <div className="w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-6">
       
-      {/* Global Share Analysis at Top */}
+      {/* 1, 2, 3: Global Share Analysis (Market Dominance) */}
       <div className="space-y-4">
         <div className="flex items-center gap-3 px-2">
           <div className="w-7 h-7 bg-violet-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px] shadow-lg shadow-violet-600/20">
@@ -515,6 +515,27 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
         <ShareOfSearchAnalysis stats={stats} currencySymbol={currencySymbol} />
       </div>
 
+      {/* 4, 5: Organic & Paid Performance Summary Cards */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        {[ {type: 'ORG', color: 'indigo', label: 'Organic', s: stats.organic}, {type: 'PAID', color: 'amber', label: 'Paid', s: stats.paid} ].map(ch => (
+          <div key={ch.type} className="space-y-4">
+            <div className="flex items-center gap-3 px-2"><div className={`w-7 h-7 bg-${ch.color}-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px]`}>{ch.type}</div><h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{ch.label} Performance</h4></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <KpiCard title="Sessions" value={ch.s.current.sessions} comparison={comparisonEnabled ? ch.s.changes.sessions : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sessions : undefined} icon={<TrendingUp />} color={ch.color} />
+              <KpiCard title="Conv. Rate" value={`${ch.s.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? ch.s.changes.cr : undefined} icon={<Percent />} isPercent color={ch.color} />
+              <KpiCard title="Revenue" value={`${currencySymbol}${ch.s.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? ch.s.changes.revenue : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<Tag />} prefix={currencySymbol} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
+              <KpiCard title="Sales" value={ch.s.current.sales} comparison={comparisonEnabled ? ch.s.changes.sales : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<ShoppingBag />} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 6: Unified Search Funnel */}
+      <div className="grid grid-cols-1 gap-8">
+        <UnifiedFunnel title="Unified Search Funnel (Org + Paid)" data={unifiedFunnelData} />
+      </div>
+
+      {/* 7: Global Search Share Trend */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
@@ -553,6 +574,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
         </div>
       </div>
 
+      {/* 8: Global Search Impressions */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
@@ -656,24 +678,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-8">
-        <UnifiedFunnel title="Unified Search Funnel (Org + Paid)" data={unifiedFunnelData} />
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        {[ {type: 'ORG', color: 'indigo', label: 'Organic', s: stats.organic}, {type: 'PAID', color: 'amber', label: 'Paid', s: stats.paid} ].map(ch => (
-          <div key={ch.type} className="space-y-4">
-            <div className="flex items-center gap-3 px-2"><div className={`w-7 h-7 bg-${ch.color}-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px]`}>{ch.type}</div><h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{ch.label} Performance</h4></div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <KpiCard title="Sessions" value={ch.s.current.sessions} comparison={comparisonEnabled ? ch.s.changes.sessions : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sessions : undefined} icon={<TrendingUp />} color={ch.color} />
-              <KpiCard title="Conv. Rate" value={`${ch.s.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? ch.s.changes.cr : undefined} icon={<Percent />} isPercent color={ch.color} />
-              <KpiCard title="Revenue" value={`${currencySymbol}${ch.s.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? ch.s.changes.revenue : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<Tag />} prefix={currencySymbol} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
-              <KpiCard title="Sales" value={ch.s.current.sales} comparison={comparisonEnabled ? ch.s.changes.sales : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<ShoppingBag />} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
-            </div>
-          </div>
-        ))}
-      </div>
-
+      {/* 9: Sessions Performance */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -717,6 +722,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
         </div>
       </div>
 
+      {/* 10: Revenue Evolution */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -755,24 +761,24 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
         </div>
       </div>
 
-<div className="grid grid-cols-1 gap-8"> {/* They will now take up the full width */}
-  <CountryPerformanceTable 
-    title="Organic performance by country" 
-    data={data} 
-    type="Organic" 
-    currencySymbol={currencySymbol} 
-    comparisonEnabled={comparisonEnabled} 
-  />
-  <CountryPerformanceTable 
-    title="Paid performance by country" 
-    data={data} 
-    type="Paid" 
-    currencySymbol={currencySymbol} 
-    comparisonEnabled={comparisonEnabled} 
-  />
-</div>
+      {/* 11, 12: Country Performance Tables */}
+      <div className="grid grid-cols-1 gap-8">
+        <CountryPerformanceTable 
+          title="Organic performance by country" 
+          data={data} 
+          type="Organic" 
+          currencySymbol={currencySymbol} 
+          comparisonEnabled={comparisonEnabled} 
+        />
+        <CountryPerformanceTable 
+          title="Paid performance by country" 
+          data={data} 
+          type="Paid" 
+          currencySymbol={currencySymbol} 
+          comparisonEnabled={comparisonEnabled} 
+        />
+      </div>
 
-      {/* Organic / Paid Performance */}
     </div>
   );
 };
