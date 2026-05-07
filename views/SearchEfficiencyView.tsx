@@ -507,12 +507,12 @@ export const SearchEfficiencyView: React.FC<{
                                   </td>
                                   <td className="py-2 px-2 text-right">
                                       <span className="text-[11px] font-bold text-slate-600">
-                                          {row.convRateOrganic ? `${row.convRateOrganic.toFixed(2)}%` : '-'}
+                                          {row.organicClicks > 0 ? `${(row.convRateOrganic || 0).toFixed(2)}%` : '-'}
                                       </span>
                                   </td>
                                   <td className="py-2 px-2 text-right">
                                       <span className="text-[11px] font-bold text-slate-600">
-                                          {row.convRatePaid ? `${row.convRatePaid.toFixed(2)}%` : '-'}
+                                          {row.paidSessions > 0 ? `${(row.convRatePaid || 0).toFixed(2)}%` : '-'}
                                       </span>
                                   </td>
                                   <td className="py-2 px-2 text-right">
