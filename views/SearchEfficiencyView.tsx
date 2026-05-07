@@ -67,7 +67,7 @@ export const SearchEfficiencyView: React.FC<{
             paidShare: 0,
             ppcCost: row.ppcCost || 0,
             avgCpc: row.ppcSessions > 0 ? (row.ppcCost || 0) / row.ppcSessions : 0,
-            convRateOrganic: (row.organicCvr || 0) * 100, 
+            convRateOrganic: (row.organicCvr || 0), 
             convRatePaid: row.ppcSessions > 0 ? ((row.ppcConversions || 0) / row.ppcSessions) * 100 : 0,
             paidCpa: (row.ppcConversions || 0) > 0 ? (row.ppcCost || 0) / row.ppcConversions : 0,
             queries: [],
@@ -96,7 +96,7 @@ export const SearchEfficiencyView: React.FC<{
                 ppcCost: row.ppcCost || 0,
                 avgCpc: row.paidSessions > 0 ? (row.ppcCost || 0) / row.paidSessions : 0,
                 convRateOrganic: 0,
-                convRatePaid: row.paidSessions > 0 ? (row.paidConversions / row.paidSessions) * 100 : 0,
+                convRatePaid: row.paidCvr || 0,
                 paidCpa: row.paidConversions > 0 ? (row.ppcCost || 0) / row.paidConversions : 0,
                 queries: [],
                 avgOrganicRank: null
