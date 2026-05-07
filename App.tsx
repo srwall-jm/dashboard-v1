@@ -1343,7 +1343,7 @@ const App: React.FC = () => {
   
   // Trigger Keyword Fetch for Google Ads when entering relevant tabs
   useEffect(() => {
-    if ((activeTab === DashboardTab.PPC_SEO_BRIDGE || activeTab === DashboardTab.SEARCH_EFFICIENCY || activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE) && 
+    if ((activeTab === DashboardTab.ORGANIC_VS_PAID || activeTab === DashboardTab.PPC_SEO_BRIDGE || activeTab === DashboardTab.SEARCH_EFFICIENCY || activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE) && 
         googleAdsAuth?.token && 
         !isGoogleAdsKeywordsLoaded && 
         !isGoogleAdsKeywordsLoading &&
@@ -1465,9 +1465,11 @@ const App: React.FC = () => {
       return;
     }
 
-    if (activeTab === DashboardTab.PPC_SEO_BRIDGE || activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE || activeTab === DashboardTab.SEARCH_EFFICIENCY) {
-      lastBridgeFetchParams.current = currentParams;
-      fetchBridgeData();
+    if (activeTab === DashboardTab.ORGANIC_VS_PAID || activeTab === DashboardTab.PPC_SEO_BRIDGE || activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE || activeTab === DashboardTab.SEARCH_EFFICIENCY) {
+      if (currentParams !== lastBridgeFetchParams.current) {
+        lastBridgeFetchParams.current = currentParams;
+        fetchBridgeData();
+      }
     } else if (activeTab === DashboardTab.AI_TRAFFIC_MONITOR) {
       fetchAiTrafficData();
     }
@@ -1959,6 +1961,8 @@ const App: React.FC = () => {
               currencySymbol={currencySymbol} 
               gscDailyTotals={gscDailyTotals}
               googleAdsDailyTotals={googleAdsDailyTotals}
+              onFetchAdsData={fetchBridgeData}
+              isAdsLoading={isLoadingBridge}
             />
           )}
           

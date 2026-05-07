@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend
 } from 'recharts';
-import { TrendingUp, Percent, Tag, ShoppingBag, Globe, FileText, ChevronDown, ArrowUpRight, ArrowDownRight, PieChart as PieIcon } from 'lucide-react';
+import { TrendingUp, Percent, Tag, ShoppingBag, Globe, FileText, ChevronDown, RefreshCw, Megaphone, ArrowUpRight, ArrowDownRight, PieChart as PieIcon } from 'lucide-react';
 import { DailyData } from '../types';
 import { exportToCSV, formatDate, getStartOfWeek, normalizeCountry } from '../utils';
 import { KpiCard } from '../components/KpiCard';
@@ -327,7 +327,7 @@ const CountryPerformanceTable = ({ title, data, type, currencySymbol, comparison
   );
 };
 
-export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGrouping, currencySymbol, gscDailyTotals = [], googleAdsDailyTotals = [] }: {
+export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGrouping, currencySymbol, gscDailyTotals = [], googleAdsDailyTotals = [], onFetchAdsData, isAdsLoading }: {
   stats: any;
   data: DailyData[];
   comparisonEnabled: boolean;
@@ -336,6 +336,8 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
   currencySymbol: string;
   gscDailyTotals?: any[];
   googleAdsDailyTotals?: any[];
+  onFetchAdsData?: () => void;
+  isAdsLoading?: boolean;
 }) => {
   const [weightMetric, setWeightMetric] = useState<'sessions' | 'revenue'>('sessions');
   const [visibleSeries, setVisibleSeries] = useState<Set<string>>(new Set(['Organic Impressions', 'Ads Impressions', 'Global Impressions']));
@@ -558,6 +560,23 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
             <p className="text-[11px] font-bold text-slate-600">Combined GSC (Organic) and Google Ads (Paid) daily impressions</p>
           </div>
           <div className="flex items-center gap-4">
+            {googleAdsDailyTotals.length === 0 && onFetchAdsData && (
+              <button 
+                onClick={onFetchAdsData}
+                disabled={isAdsLoading}
+                className="flex items-center gap-2 px-3 py-1.5 bg-amber-500 text-white hover:bg-amber-600 rounded-xl text-[9px] font-black uppercase transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isAdsLoading ? (
+                  <>
+                    <RefreshCw size={12} className="animate-spin" /> Fetching Ads...
+                  </>
+                ) : (
+                  <>
+                    <Megaphone size={12} /> Add Ads Data
+                  </>
+                )}
+              </button>
+            )}
             <button 
               onClick={() => exportToCSV(impressionsData, "Global_Search_Impressions")} 
               className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
