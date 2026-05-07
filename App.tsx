@@ -502,7 +502,7 @@ const App: React.FC = () => {
     };
     
     // 0. FETCH GA4 ORGANIC SESSIONS (Per URL)
-    const ga4OrganicMap: Record<string, { sessions: number, totalCvr: number }> = {};
+    const ga4OrganicMap: Record<string, { sessions: number, transactions: number }> = {};
     if (ga4Auth?.property && ga4Auth.token) {
         try {
             const ga4OrgResp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
@@ -511,7 +511,7 @@ const App: React.FC = () => {
                 body: JSON.stringify({
                     dateRanges: [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }],
                     dimensions: [{ name: 'landingPage' }],
-                    metrics: [{ name: 'sessions' }, { name: 'sessionConversionRate' }],
+                    metrics: [{ name: 'sessions' }, { name: 'transactions' }],
                     dimensionFilter: {
                         filter: {
                             fieldName: 'sessionDefaultChannelGroup',
@@ -525,12 +525,12 @@ const App: React.FC = () => {
             (ga4OrgData.rows || []).forEach((row: any) => {
                 const path = normalizeUrl(row.dimensionValues[0].value);
                 const sessions = parseInt(row.metricValues[0].value) || 0;
-                const cvr = (parseFloat(row.metricValues[1].value) || 0) * 100;
+                const transactions = parseFloat(row.metricValues[1].value) || 0;
                 if (!ga4OrganicMap[path]) {
-                    ga4OrganicMap[path] = { sessions: 0, totalCvr: 0 };
+                    ga4OrganicMap[path] = { sessions: 0, transactions: 0 };
                 }
                 ga4OrganicMap[path].sessions += sessions;
-                ga4OrganicMap[path].totalCvr += (sessions * cvr);
+                ga4OrganicMap[path].transactions += transactions;
             });
         } catch (e) {
             console.error("Error fetching GA4 Organic Data:", e);
@@ -838,9 +838,9 @@ const App: React.FC = () => {
                 const gscData = gscUrlMap[path]; 
                 const paidStats = googleAdsPaidMap[path];
                 
-                const organicStats = ga4OrganicMap[path] || { sessions: 0, totalCvr: 0 };
+                const organicStats = ga4OrganicMap[path] || { sessions: 0, transactions: 0 };
                 const organicSessions = organicStats.sessions;
-                const organicCvr = organicSessions > 0 ? (organicStats.totalCvr / organicSessions) : 0;
+                const organicCvr = organicSessions > 0 ? (organicStats.transactions / organicSessions) * 100 : 0;
                 const organicClicks = gscData ? gscData.totalClicks : 0;
                 const organicRank = gscData && gscData.totalImpressions > 0 
                     ? gscData.weightedRankSum / gscData.totalImpressions 
@@ -875,6 +875,7 @@ const App: React.FC = () => {
                     organicRank: organicRank, 
                     organicClicks: organicClicks, 
                     organicSessions: organicSessions, 
+                    organicTransactions: organicStats.transactions,
                     organicCvr: organicCvr,
                     ppcCampaign: "Google Ads", 
                     ppcCost: paidStats?.cost || 0, 
@@ -916,7 +917,7 @@ const App: React.FC = () => {
                 body: JSON.stringify({
                     dateRanges: [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }],
                     dimensions: [ { name: 'landingPage' }, { name: 'sessionDefaultChannelGroup' }, { name: 'sessionCampaignName' } ],
-                    metrics: [ { name: 'sessions' }, { name: 'sessionConversionRate' } ],
+                    metrics: [ { name: 'sessions' }, { name: 'transactions' } ],
                     limit: 100000 
                 })
             });
@@ -927,11 +928,13 @@ const App: React.FC = () => {
                 const channelGroup = row.dimensionValues[1].value.toLowerCase();
                 const campaignName = row.dimensionValues[2].value;
                 const sessions = parseInt(row.metricValues[0].value) || 0;
+                const transactions = parseFloat(row.metricValues[1].value) || 0;
                 const path = normalizeUrl(rawUrl);
                 
                 if ((channelGroup.includes('paid') || channelGroup.includes('cpc') || channelGroup.includes('ppc'))) {
                     if (!ga4PaidMap[path]) ga4PaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set() };
                     ga4PaidMap[path].clicksOrSessions += sessions;
+                    ga4PaidMap[path].conversions += transactions;
                     
                     let campType = "Other Paid";
                     const n = campaignName.toLowerCase();
@@ -950,7 +953,7 @@ const App: React.FC = () => {
                 body: JSON.stringify({
                     dateRanges: [{ startDate: filters.dateRange.start, endDate: filters.dateRange.end }],
                     dimensions: [{ name: 'sessionGoogleAdsKeyword' }, { name: 'landingPage' }],
-                    metrics: [{ name: 'sessions' }, { name: 'sessionConversionRate' }, { name: 'advertiserAdCost' }],
+                    metrics: [{ name: 'sessions' }, { name: 'transactions' }, { name: 'advertiserAdCost' }],
                     limit: 25000
                 })
             });
@@ -965,7 +968,7 @@ const App: React.FC = () => {
                  const cleanPath = normalizeUrl(rawUrl);
                  
                  const sessions = parseInt(row.metricValues[0].value) || 0;
-                 const rate = (parseFloat(row.metricValues[1].value) || 0) * 100;
+                 const transactions = (parseFloat(row.metricValues[1].value) || 0);
                  const cost = parseFloat(row.metricValues[2].value) || 0;
                  
                  // NUEVA: FILL GRANULAR MAP (URL + KW) FROM GA4 SIDE
@@ -985,7 +988,7 @@ const App: React.FC = () => {
                      };
                  }
                  granularCompositeMap[key].paidSessions += sessions;
-                 granularCompositeMap[key].paidConversions += (sessions * rate);
+                 granularCompositeMap[key].paidConversions += transactions;
                  granularCompositeMap[key].paidCost += cost;
             });
             
@@ -997,9 +1000,9 @@ const App: React.FC = () => {
                 const gscData = gscUrlMap[path];
                 const paidStats = ga4PaidMap[path];
                 
-                const organicStats = ga4OrganicMap[path] || { sessions: 0, totalCvr: 0 };
+                const organicStats = ga4OrganicMap[path] || { sessions: 0, transactions: 0 };
                 const organicSessions = organicStats.sessions;
-                const organicCvr = organicSessions > 0 ? (organicStats.totalCvr / organicSessions) : 0;
+                const organicCvr = organicSessions > 0 ? (organicStats.transactions / organicSessions) * 100 : 0;
                 const organicClicks = gscData ? gscData.totalClicks : 0;
                 // User Request: Use Avg Rank instead of Best Rank
                 const organicRank = gscData && gscData.totalImpressions > 0 
@@ -1029,6 +1032,7 @@ const App: React.FC = () => {
                     organicRank: organicRank, 
                     organicClicks: organicClicks, 
                     organicSessions: organicSessions, 
+                    organicTransactions: organicStats.transactions,
                     organicCvr: organicCvr,
                     ppcCampaign: campDisplay, 
                     ppcCost: 0, 
@@ -1054,7 +1058,7 @@ const App: React.FC = () => {
                  
                  if (paidVol === 0 && orgVol === 0) return;
                  
-                 const cvr = paidVol > 0 ? (item.paidConversions / paidVol) : 0;
+                 const cvr = paidVol > 0 ? (item.paidConversions / paidVol) * 100 : 0;
                  const avgCpc = paidVol > 0 ? item.paidCost / paidVol : 0;
                  
                  let action = "MAINTAIN";
@@ -1288,7 +1292,6 @@ const App: React.FC = () => {
             { name: 'sessions' }, 
             { name: 'totalRevenue' }, 
             { name: 'transactions' }, 
-            { name: 'sessionConversionRate' },
             { name: 'itemsAddedToCart' },
             { name: 'itemsCheckedOut' }
           ],
@@ -1325,9 +1328,9 @@ const App: React.FC = () => {
           sessions: parseInt(row.metricValues[0].value) || 0,
           revenue: parseFloat(row.metricValues[1].value) || 0,
           sales: parseInt(row.metricValues[2].value) || 0,
-          conversionRate: (parseFloat(row.metricValues[3].value) || 0) * 100,
-          addToCarts: parseInt(row.metricValues[4].value) || 0,
-          checkouts: parseInt(row.metricValues[5].value) || 0,
+          conversionRate: (parseInt(row.metricValues[0].value) || 0) > 0 ? (parseFloat(row.metricValues[2].value) / parseInt(row.metricValues[0].value)) * 100 : 0,
+          addToCarts: parseInt(row.metricValues[3].value) || 0,
+          checkouts: parseInt(row.metricValues[4].value) || 0,
           clicks: 0, impressions: 0, ctr: 0
         };
       });

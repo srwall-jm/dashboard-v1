@@ -144,6 +144,8 @@ export const generateMockBridgeData = (): BridgeData[] => {
     const ppcCpa = ppcConversions > 0 ? ppcCost / ppcConversions : 0;
     const organicClicks = rank && rank < 10 ? Math.floor(Math.random() * 1000) : Math.floor(Math.random() * 50);
     const organicSessions = Math.floor(organicClicks * 1.3) + Math.floor(Math.random() * 50); 
+    const organicTransactions = Math.floor(organicSessions * 0.02);
+    const organicCvr = organicSessions > 0 ? (organicTransactions / organicSessions) * 100 : 0;
     
     const ppcSessions = Math.floor(ppcCost / (0.5 + Math.random()));
     const ppcAvgCpc = ppcSessions > 0 ? ppcCost / ppcSessions : 0;
@@ -175,7 +177,8 @@ export const generateMockBridgeData = (): BridgeData[] => {
       organicRank: rank,
       organicClicks: organicClicks,
       organicSessions: organicSessions, 
-      organicCvr: Math.random() * 0.05,
+      organicTransactions: organicTransactions,
+      organicCvr: organicCvr,
       ppcCampaign: campaigns[i % campaigns.length],
       ppcCost,
       ppcConversions,

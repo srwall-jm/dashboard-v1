@@ -14,6 +14,8 @@ interface UrlEfficiencyRow {
   url: string;
   cluster: 'Cannibalization Risk' | 'Paid Reliance' | 'Paid Gap' | 'Other';
   organicClicks: number;
+  organicSessions: number;
+  organicTransactions: number;
   paidSessions: number;
   paidShare: number;
   ppcCost: number;
@@ -63,11 +65,13 @@ export const SearchEfficiencyView: React.FC<{
             url,
             cluster: 'Other',
             organicClicks: row.organicClicks || 0,
+            organicSessions: row.organicSessions || 0,
+            organicTransactions: row.organicTransactions || 0,
             paidSessions: row.ppcSessions || 0,
             paidShare: 0,
             ppcCost: row.ppcCost || 0,
             avgCpc: row.ppcSessions > 0 ? (row.ppcCost || 0) / row.ppcSessions : 0,
-            convRateOrganic: (row.organicCvr || 0), 
+            convRateOrganic: (row.organicSessions || 0) > 0 ? ((row.organicTransactions || 0) / row.organicSessions) * 100 : 0, 
             convRatePaid: row.ppcSessions > 0 ? ((row.ppcConversions || 0) / row.ppcSessions) * 100 : 0,
             paidCpa: (row.ppcConversions || 0) > 0 ? (row.ppcCost || 0) / row.ppcConversions : 0,
             queries: [],
@@ -91,11 +95,13 @@ export const SearchEfficiencyView: React.FC<{
                 url,
                 cluster: 'Other',
                 organicClicks: row.organicClicks || 0,
+                organicSessions: row.organicSessions || 0,
+                organicTransactions: row.organicTransactions || 0,
                 paidSessions: row.paidSessions || 0,
                 paidShare: 0,
                 ppcCost: row.ppcCost || 0,
                 avgCpc: row.paidSessions > 0 ? (row.ppcCost || 0) / row.paidSessions : 0,
-                convRateOrganic: 0,
+                convRateOrganic: (row.organicSessions || 0) > 0 ? ((row.organicTransactions || 0) / row.organicSessions) * 100 : 0,
                 convRatePaid: row.paidCvr || 0,
                 paidCpa: row.paidConversions > 0 ? (row.ppcCost || 0) / row.paidConversions : 0,
                 queries: [],
@@ -507,7 +513,7 @@ export const SearchEfficiencyView: React.FC<{
                                   </td>
                                   <td className="py-2 px-2 text-right">
                                       <span className="text-[11px] font-bold text-slate-600">
-                                          {row.organicClicks > 0 ? `${(row.convRateOrganic || 0).toFixed(2)}%` : '-'}
+                                          {row.organicSessions > 0 ? `${(row.convRateOrganic || 0).toFixed(2)}%` : '-'}
                                       </span>
                                   </td>
                                   <td className="py-2 px-2 text-right">
