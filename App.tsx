@@ -37,6 +37,7 @@ const PRIORITY_DIMENSIONS = [
 const App: React.FC = () => {
   const lastFetchParams = useRef<string>('');
   const lastBridgeFetchParams = useRef<string>('');
+  const lastAiFetchParams = useRef<string>('');
   
   const [user, setUser] = useState<{ name: string; email: string; picture: string } | null>(() => {
     const saved = localStorage.getItem('seo_suite_user');
@@ -1460,18 +1461,19 @@ const App: React.FC = () => {
   };
   
   useEffect(() => {
-    const currentParams = `${ga4Auth?.property?.id}-${gscAuth?.site?.siteUrl}-${filters.dateRange.start}-${filters.dateRange.end}`;
-    if (lastBridgeFetchParams.current === currentParams && (bridgeDataGA4.length > 0 || bridgeDataGoogleAds.length > 0)) {
-      return;
-    }
+    const bridgeParams = `${ga4Auth?.property?.id}-${gscAuth?.site?.siteUrl}-${filters.dateRange.start}-${filters.dateRange.end}`;
+    const aiParams = `${ga4Auth?.property?.id}-${filters.dateRange.start}-${filters.dateRange.end}`;
 
     if (activeTab === DashboardTab.ORGANIC_VS_PAID || activeTab === DashboardTab.PPC_SEO_BRIDGE || activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE || activeTab === DashboardTab.SEARCH_EFFICIENCY) {
-      if (currentParams !== lastBridgeFetchParams.current) {
-        lastBridgeFetchParams.current = currentParams;
+      if (bridgeParams !== lastBridgeFetchParams.current) {
+        lastBridgeFetchParams.current = bridgeParams;
         fetchBridgeData();
       }
     } else if (activeTab === DashboardTab.AI_TRAFFIC_MONITOR) {
-      fetchAiTrafficData();
+      if (aiParams !== lastAiFetchParams.current) {
+        lastAiFetchParams.current = aiParams;
+        fetchAiTrafficData();
+      }
     }
   }, [
     activeTab, 
