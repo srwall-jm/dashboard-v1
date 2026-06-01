@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { X, Cpu, Settings2, Database, ExternalLink, Search, LogOut } from 'lucide-react';
+import { X, Cpu, Settings2, Database, ExternalLink, Search, LogOut, AlertCircle } from 'lucide-react';
 import { Ga4Property, GscSite, GoogleAdsCustomer } from '../types';
 
 interface SettingsModalProps {
@@ -166,6 +166,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                            className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs p-3 focus:ring-2 ring-amber-400 outline-none transition-all font-mono" 
                            placeholder="Enter your Developer Token..." 
                        />
+                       <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-[9px] text-amber-800 leading-relaxed shadow-inner">
+                           <p className="font-bold mb-1 flex items-center gap-1 text-amber-900"><AlertCircle size={10} /> Account Access Warning:</p>
+                           If you encounter a <span className="font-mono bg-amber-100 px-1 rounded">DEVELOPER_TOKEN_PROHIBITED</span> error, your Developer Token may be a "Test Token" restricted to its own project. Ensure your token has "Basic" or "Standard" access level in Google Ads API Center.
+                       </div>
                        <p className="text-[9px] text-slate-400 mt-1.5 flex items-center gap-1">
                            <Settings2 size={10} /> Saved locally for this session or client.
                        </p>

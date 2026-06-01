@@ -291,7 +291,7 @@ const App: React.FC = () => {
         setError(null);
         setIsLoadingGoogleAds(true);
         const tokenToUse = (developerToken || '').trim() || DEVELOPER_TOKEN;
-        const resp = await fetch('/api/googleads/v21/customers:listAccessibleCustomers', {
+        const resp = await fetch('/api/googleads/v18/customers:listAccessibleCustomers', {
             method: 'GET',
             headers: { 
               'Authorization': `Bearer ${token}`,
@@ -301,7 +301,14 @@ const App: React.FC = () => {
         
         if (!resp.ok) {
             const errData = await resp.json().catch(() => ({}));
-            const errMsg = errData.error?.message || `Google Ads Status: ${resp.status}`;
+            let errMsg = errData.error?.message || `Google Ads Status: ${resp.status}`;
+            
+            // Check for specific DEVELOPER_TOKEN_PROHIBITED error
+            const errors = errData.error?.details?.[0]?.errors;
+            if (errors?.some((e: any) => e.errorCode?.authorizationError === 'DEVELOPER_TOKEN_PROHIBITED')) {
+                errMsg = "Error: El Developer Token no está permitido para este proyecto de Google Cloud (Project ID 333322783684). Por favor, asegúrate de que tu token tenga acceso 'Basic' o 'Standard', o que el proyecto esté vinculado a tu MCC en la consola de Google Ads API.";
+            }
+            
             throw new Error(errMsg);
         }
         const data = await resp.json();
@@ -337,90 +344,76 @@ const App: React.FC = () => {
   
   const fetchGoogleAdsSubAccounts = async (token: string, managerId: string) => {
     setIsLoadingGoogleAds(true);
-    let allLeafAccounts: GoogleAdsCustomer[] = [];
-    let processingQueue = [managerId];
-    let processedIds = new Set<string>();
-    
     try {
-      while (processingQueue.length > 0) {
-        const currentId = processingQueue.shift();
-        if (!currentId || processedIds.has(currentId)) continue;
-        processedIds.add(currentId);
-        
-        const query = `
-          SELECT 
-            customer_client.resource_name, 
-            customer_client.descriptive_name, 
-            customer_client.manager, 
-            customer_client.status, 
-            customer_client.id
-          FROM customer_client
-          WHERE customer_client.status = 'ENABLED'
-        `.trim();
-        
-        const targetUrl = `/api/googleads/v21/customers/${currentId}/googleAds:search`;
-        const resp = await fetch(targetUrl, {
-          method: 'POST',
-          headers: { 
-            'Authorization': `Bearer ${token}`, 
-            'Content-Type': 'application/json',
-            'developer-token': (developerToken || '').trim() || DEVELOPER_TOKEN,
-            'login-customer-id': managerId 
-          },
-          body: JSON.stringify({ query })
-        });
-        
-        if (!resp.ok) {
-          const errorText = await resp.text();
-          console.error(`Error en cuenta ${currentId}:`, errorText);
-          continue;
+      // Use a single query to get ALL leaf accounts (non-managers) in the hierarchy
+      // This is much more efficient than a BFS crawl
+      const query = `
+        SELECT 
+          customer_client.id, 
+          customer_client.descriptive_name, 
+          customer_client.resource_name,
+          customer_client.level
+        FROM customer_client
+        WHERE customer_client.manager = false 
+          AND customer_client.status = 'ENABLED'
+          AND customer_client.hidden = false
+      `.trim();
+      
+      const targetUrl = `/api/googleads/v18/customers/${managerId}/googleAds:search`;
+      const resp = await fetch(targetUrl, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`, 
+          'Content-Type': 'application/json',
+          'developer-token': (developerToken || '').trim() || DEVELOPER_TOKEN,
+          'login-customer-id': managerId 
+        },
+        body: JSON.stringify({ query })
+      });
+      
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        const errors = errData.error?.details?.[0]?.errors;
+        if (errors?.some((e: any) => e.errorCode?.authorizationError === 'DEVELOPER_TOKEN_PROHIBITED')) {
+            throw new Error("DEVELOPER_TOKEN_PROHIBITED: Este token requiere acceso 'Basic' o 'Standard' para este proyecto.");
         }
-        
-        const json = await resp.json();
-        
-        const results = json.results || [];
-        for (const row of results) {
-          const client = row.customerClient;
-          if (!client) continue;
-          
-          const id = String(client.id);
-          const isManager = client.manager === true;
-          const name = client.descriptiveName || 'Unnamed Account';
-          
-          if (isManager) {
-            if (!processedIds.has(id)) {
-              processingQueue.push(id);
-            }
-          } else {
-            allLeafAccounts.push({
-              resourceName: client.resourceName,
-              id: id,
-              descriptiveName: name
-            });
-          }
-        }
+        throw new Error(errData.error?.message || `Status: ${resp.status}`);
       }
       
-      // Deduplicate leaf accounts by ID to prevent double counting (e.g. if API returns recursive results)
-      let uniqueLeafAccounts = allLeafAccounts.filter((acc, index, self) => 
+      const json = await resp.json();
+      const results = json.results || [];
+      
+      let allLeafAccounts: GoogleAdsCustomer[] = results.map((row: any) => {
+        const client = row.customerClient;
+        return {
+          id: String(client.id),
+          descriptiveName: client.descriptiveName || `Account ${client.id}`,
+          resourceName: client.resourceName
+        };
+      });
+      
+      // Deduplicate by ID
+      const uniqueLeafAccounts = allLeafAccounts.filter((acc, index, self) => 
           index === self.findIndex((t) => t.id === acc.id)
       );
       
+      // Fallback if no sub-accounts found (maybe it's a direct client account, not an MCC)
       if (uniqueLeafAccounts.length === 0) {
-          uniqueLeafAccounts = [{
+          console.log("No sub-accounts found. Checking if it's a standalone account...");
+          setAvailableGoogleAdsSubAccounts([{
               id: managerId,
               descriptiveName: 'Selected Account',
               resourceName: `customers/${managerId}`
-          }];
+          }]);
+      } else {
+          console.log(`Found ${uniqueLeafAccounts.length} sub-accounts.`);
+          setAvailableGoogleAdsSubAccounts(uniqueLeafAccounts);
       }
       
-      console.log("Cuentas finales encontradas (Unique):", uniqueLeafAccounts);
-      
-      setAvailableGoogleAdsSubAccounts(uniqueLeafAccounts);
-      
-    } catch (e) {
-      console.error("Error fetching Google Ads recursive sub-accounts:", e);
-      setError("Error retrieving account hierarchy. Using the main account.");
+    } catch (e: any) {
+      console.error("Error fetching Google Ads hierarchy:", e);
+      setError(`Hierarchy Error: ${e.message}`);
+      // Fallback
       setAvailableGoogleAdsSubAccounts([{
           id: managerId,
           descriptiveName: 'Selected Account',
@@ -738,15 +731,19 @@ const App: React.FC = () => {
                         body.pageToken = nextPageToken;
                     }
 
-                    const res = await fetch(`/api/googleads/v21/customers/${cleanTargetId}/googleAds:search`, {
+                    const res = await fetch(`/api/googleads/v18/customers/${cleanTargetId}/googleAds:search`, {
                         method: 'POST',
                         headers: headers,
                         body: JSON.stringify(body)
                     });
                     
                     if (!res.ok) {
-                        const text = await res.text();
-                        console.error(`Google Ads API Error for ${targetId}:`, text);
+                        const errData = await res.json().catch(() => ({}));
+                        const errors = errData.error?.details?.[0]?.errors;
+                        if (errors?.some((e: any) => e.errorCode?.authorizationError === 'DEVELOPER_TOKEN_PROHIBITED')) {
+                            throw new Error("DEVELOPER_TOKEN_PROHIBITED: Este token requiere acceso 'Basic' o 'Standard'.");
+                        }
+                        console.error(`Google Ads API Error for ${targetId}:`, errData);
                         break;
                     }
                     
@@ -1171,7 +1168,7 @@ const App: React.FC = () => {
             do {
                 const body: any = { query };
                 if (nextPageToken) body.pageToken = nextPageToken;
-                const res = await fetch(`/api/googleads/v21/customers/${cleanTargetId}/googleAds:search`, {
+                const res = await fetch(`/api/googleads/v18/customers/${cleanTargetId}/googleAds:search`, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify(body)
