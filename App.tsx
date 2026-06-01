@@ -267,7 +267,7 @@ const App: React.FC = () => {
   const fetchGoogleAdsCustomers = async (token: string) => {
     try {
         setIsLoadingGoogleAds(true);
-        const tokenToUse = developerToken || DEVELOPER_TOKEN;
+        const tokenToUse = (developerToken || '').trim() || DEVELOPER_TOKEN;
         const resp = await fetch('/api/googleads/v21/customers:listAccessibleCustomers', {
             method: 'GET',
             headers: { 
@@ -341,7 +341,7 @@ const App: React.FC = () => {
           headers: { 
             'Authorization': `Bearer ${token}`, 
             'Content-Type': 'application/json',
-            'developer-token': DEVELOPER_TOKEN,
+            'developer-token': (developerToken || '').trim() || DEVELOPER_TOKEN,
             'login-customer-id': managerId 
           },
           body: JSON.stringify({ query })
@@ -697,7 +697,7 @@ const App: React.FC = () => {
             const headers: any = { 
                 Authorization: `Bearer ${googleAdsAuth.token}`, 
                 'Content-Type': 'application/json',
-                'developer-token': developerToken || DEVELOPER_TOKEN
+                'developer-token': (developerToken || '').trim() || DEVELOPER_TOKEN
             };
             
             if (selectedGoogleAdsCustomer) {
@@ -1133,7 +1133,7 @@ const App: React.FC = () => {
         const headers: any = { 
             Authorization: `Bearer ${googleAdsAuth.token}`, 
             'Content-Type': 'application/json',
-            'developer-token': developerToken || DEVELOPER_TOKEN
+            'developer-token': (developerToken || '').trim() || DEVELOPER_TOKEN
         };
         if (selectedGoogleAdsCustomer) {
             headers['login-customer-id'] = selectedGoogleAdsCustomer.id.toString().replace(/-/g, '');
@@ -1470,7 +1470,7 @@ const App: React.FC = () => {
   };
   
   useEffect(() => {
-    const bridgeParams = `${ga4Auth?.property?.id}-${gscAuth?.site?.siteUrl}-${filters.dateRange.start}-${filters.dateRange.end}`;
+    const bridgeParams = `${ga4Auth?.property?.id}-${gscAuth?.site?.siteUrl}-${selectedGoogleAdsCustomer?.id}-${availableGoogleAdsSubAccounts.length}-${(developerToken || '').trim()}-${filters.dateRange.start}-${filters.dateRange.end}`;
     const aiParams = `${ga4Auth?.property?.id}-${filters.dateRange.start}-${filters.dateRange.end}`;
 
     if (activeTab === DashboardTab.ORGANIC_VS_PAID || activeTab === DashboardTab.PPC_SEO_BRIDGE || activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE || activeTab === DashboardTab.SEARCH_EFFICIENCY) {
@@ -1488,6 +1488,9 @@ const App: React.FC = () => {
     activeTab, 
     ga4Auth?.property?.id, 
     gscAuth?.site?.siteUrl, 
+    selectedGoogleAdsCustomer?.id,
+    availableGoogleAdsSubAccounts.length,
+    developerToken,
     filters.dateRange.start,
     filters.dateRange.end
   ]);
