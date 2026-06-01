@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  RefreshCw, Filter, Globe, Tag, AlertCircle, Sparkles, Cpu, Activity, Menu, X
+  RefreshCw, Filter, Globe, Tag, AlertCircle, Sparkles, Cpu, Activity, Menu, X, FileText
 } from 'lucide-react';
 import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, GoogleAdsCustomer, QueryType, BridgeData, AiTrafficData, KeywordBridgeData, GoogleAdsGlobalMetrics } from './types';
 import { getDashboardInsights, getOpenAiInsights } from './geminiService';
@@ -291,7 +291,7 @@ const App: React.FC = () => {
         setError(null);
         setIsLoadingGoogleAds(true);
         const tokenToUse = (developerToken || '').trim() || DEVELOPER_TOKEN;
-        const resp = await fetch('/api/googleads/v21/customers:listAccessibleCustomers', {
+        const resp = await fetch('/api/googleads/v18/customers:listAccessibleCustomers', {
             method: 'GET',
             headers: { 
               'Authorization': `Bearer ${token}`,
@@ -355,10 +355,10 @@ const App: React.FC = () => {
             customer_client.status, 
             customer_client.id
           FROM customer_client
-          WHERE customer_client.level <= 1
+          WHERE customer_client.status = 'ENABLED'
         `.trim();
         
-        const targetUrl = `/api/googleads/v21/customers/${currentId}/googleAds:search`;
+        const targetUrl = `/api/googleads/v18/customers/${currentId}/googleAds:search`;
         const resp = await fetch(targetUrl, {
           method: 'POST',
           headers: { 
@@ -738,7 +738,7 @@ const App: React.FC = () => {
                         body.pageToken = nextPageToken;
                     }
 
-                    const res = await fetch(`/api/googleads/v21/customers/${cleanTargetId}/googleAds:search`, {
+                    const res = await fetch(`/api/googleads/v18/customers/${cleanTargetId}/googleAds:search`, {
                         method: 'POST',
                         headers: headers,
                         body: JSON.stringify(body)
@@ -799,16 +799,28 @@ const App: React.FC = () => {
                                 const segments = row.segments;
                                 const date = segments?.date;
 
-                                globalMetrics.totalCost += (parseInt(metrics?.costMicros) || 0) / 1000000;
-                                globalMetrics.totalClicks += parseInt(metrics?.clicks) || 0;
-                                globalMetrics.totalConversions += parseFloat(metrics?.conversions) || 0;
-                                globalMetrics.totalImpressions += parseInt(metrics?.impressions) || 0;
+                                // Ultra-robust parsing for metrics
+                                const parseMetric = (val: any) => {
+                                    if (val === undefined || val === null) return 0;
+                                    if (typeof val === 'object' && val.value !== undefined) return Number(val.value) || 0;
+                                    return Number(val) || 0;
+                                };
+
+                                const clicks = parseMetric(metrics?.clicks || metrics?.clicks_val);
+                                const costMicros = parseMetric(metrics?.costMicros || metrics?.cost_micros);
+                                const conversions = parseMetric(metrics?.conversions || metrics?.conversions_val);
+                                const impressions = parseMetric(metrics?.impressions || metrics?.impressions_val);
+
+                                globalMetrics.totalCost += costMicros / 1000000;
+                                globalMetrics.totalClicks += clicks;
+                                globalMetrics.totalConversions += conversions;
+                                globalMetrics.totalImpressions += impressions;
 
                                 if (date) {
                                     if (!adsDailyMap[date]) {
                                         adsDailyMap[date] = { date, impressions: 0, label: 'current' };
                                     }
-                                    adsDailyMap[date].impressions += parseInt(metrics?.impressions) || 0;
+                                    adsDailyMap[date].impressions += impressions;
                                 }
                             }
                         }
@@ -848,10 +860,21 @@ const App: React.FC = () => {
                                 googleAdsPaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set(['Google Ads']) };
                             }
                             const metrics = row.metrics;
-                            googleAdsPaidMap[path].clicksOrSessions += parseInt(metrics?.clicks) || 0;
-                            googleAdsPaidMap[path].conversions += parseFloat(metrics?.conversions) || 0;
-                            googleAdsPaidMap[path].impressions += parseInt(metrics?.impressions) || 0;
-                            googleAdsPaidMap[path].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
+                            const parseMetric = (val: any) => {
+                                if (val === undefined || val === null) return 0;
+                                if (typeof val === 'object' && val.value !== undefined) return Number(val.value) || 0;
+                                return Number(val) || 0;
+                            };
+
+                            const clicks = parseMetric(metrics?.clicks || metrics?.clicks_val);
+                            const costMicros = parseMetric(metrics?.costMicros || metrics?.cost_micros);
+                            const conversions = parseMetric(metrics?.conversions || metrics?.conversions_val);
+                            const impressions = parseMetric(metrics?.impressions || metrics?.impressions_val);
+
+                            googleAdsPaidMap[path].clicksOrSessions += clicks;
+                            googleAdsPaidMap[path].conversions += conversions;
+                            googleAdsPaidMap[path].impressions += impressions;
+                            googleAdsPaidMap[path].cost += costMicros / 1000000;
                         }
                     });
                 });
@@ -1161,7 +1184,7 @@ const App: React.FC = () => {
             do {
                 const body: any = { query };
                 if (nextPageToken) body.pageToken = nextPageToken;
-                const res = await fetch(`/api/googleads/v21/customers/${cleanTargetId}/googleAds:search`, {
+                const res = await fetch(`/api/googleads/v18/customers/${cleanTargetId}/googleAds:search`, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify(body)
@@ -1187,13 +1210,24 @@ const App: React.FC = () => {
                     if (!kw) return;
                     const cleanKw = kw.toLowerCase().trim();
                     const metrics = row.metrics;
+                    const parseMetric = (val: any) => {
+                        if (val === undefined || val === null) return 0;
+                        if (typeof val === 'object' && val.value !== undefined) return Number(val.value) || 0;
+                        return Number(val) || 0;
+                    };
+
+                    const clicks = parseMetric(metrics?.clicks || metrics?.clicks_val);
+                    const costMicros = parseMetric(metrics?.costMicros || metrics?.cost_micros);
+                    const conversions = parseMetric(metrics?.conversions || metrics?.conversions_val);
+                    const impressions = parseMetric(metrics?.impressions || metrics?.impressions_val);
+
                     if (!googleAdsGlobalKeywordMap[cleanKw]) {
                         googleAdsGlobalKeywordMap[cleanKw] = { clicks: 0, conversions: 0, cost: 0, impressions: 0 };
                     }
-                    googleAdsGlobalKeywordMap[cleanKw].clicks += parseInt(metrics?.clicks) || 0;
-                    googleAdsGlobalKeywordMap[cleanKw].conversions += parseFloat(metrics?.conversions) || 0;
-                    googleAdsGlobalKeywordMap[cleanKw].impressions += parseInt(metrics?.impressions) || 0;
-                    googleAdsGlobalKeywordMap[cleanKw].cost += (parseInt(metrics?.costMicros) || 0) / 1000000;
+                    googleAdsGlobalKeywordMap[cleanKw].clicks += clicks;
+                    googleAdsGlobalKeywordMap[cleanKw].conversions += conversions;
+                    googleAdsGlobalKeywordMap[cleanKw].impressions += impressions;
+                    googleAdsGlobalKeywordMap[cleanKw].cost += costMicros / 1000000;
                 });
             });
         }
@@ -2078,7 +2112,16 @@ const App: React.FC = () => {
           )}
         </div>
         
-        <div className="mt-12 flex justify-center pb-12">
+        <div className="mt-12 flex flex-col items-center gap-4 pb-12">
+          {error && (
+            <a 
+              href="/api/ads-logs" 
+              target="_blank" 
+              className="text-[9px] font-black uppercase text-slate-400 hover:text-indigo-600 underline tracking-widest flex items-center gap-1.5"
+            >
+              <FileText size={10} /> View Technical Debug Logs
+            </a>
+          )}
           <button 
             onClick={handleGenerateInsights} 
             disabled={loadingInsights || isAnythingLoading || (realDailyData.length === 0 && realKeywordData.length === 0)} 
@@ -2109,8 +2152,13 @@ const App: React.FC = () => {
             <div className="space-y-2">
               <h3 className="text-xl font-bold text-gray-900">Sincronizando Datos</h3>
               <p className="text-gray-500 text-sm">
-                We are processing your {availableGoogleAdsSubAccounts.length > 0 ? availableGoogleAdsSubAccounts.length : '7000+'} campaigns. 
-                This operation is massive and is being performed securely for your browser.
+                We are processing {availableGoogleAdsSubAccounts.length} account{availableGoogleAdsSubAccounts.length !== 1 ? 's' : ''}. 
+                {availableGoogleAdsSubAccounts.length === 1 && (
+                  <span className="block mt-2 font-bold text-amber-600">
+                    If you expect more accounts, please check your "Manager Account" selection in Settings. 
+                  </span>
+                )}
+                This operation integrates Google Ads and Search Console data securely for your browser.
               </p>
             </div>
             <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">

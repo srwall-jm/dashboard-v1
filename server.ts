@@ -63,6 +63,19 @@ async function startServer() {
     }
   });
 
+  app.get('/api/ads-logs', (req, res) => {
+    try {
+      if (fs.existsSync('ads_error_log.txt')) {
+        const content = fs.readFileSync('ads_error_log.txt', 'utf-8');
+        res.type('text/plain').send(content);
+      } else {
+        res.send('No logs found yet.');
+      }
+    } catch (e) {
+      res.status(500).send('Error reading logs');
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
