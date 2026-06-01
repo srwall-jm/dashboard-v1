@@ -327,7 +327,7 @@ const CountryPerformanceTable = ({ title, data, type, currencySymbol, comparison
   );
 };
 
-export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGrouping, currencySymbol, gscDailyTotals = [], googleAdsDailyTotals = [], onFetchAdsData, isAdsLoading }: {
+export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, setGrouping, currencySymbol, gscDailyTotals = [], googleAdsDailyTotals = [], onFetchAdsData, isAdsLoading, onRefresh }: {
   stats: any;
   data: DailyData[];
   comparisonEnabled: boolean;

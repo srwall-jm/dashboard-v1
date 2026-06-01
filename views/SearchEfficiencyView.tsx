@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend
 } from 'recharts';
 import { 
-  DollarSign, TrendingDown, PiggyBank, Target, AlertTriangle, CheckCircle, Search, FileText, Info, Zap, ChevronUp, ChevronDown, Key, ExternalLink, Filter, ChevronRight
+  DollarSign, TrendingDown, PiggyBank, Target, AlertTriangle, CheckCircle, Search, FileText, Info, Zap, ChevronUp, ChevronDown, Key, ExternalLink, Filter, ChevronRight, RefreshCw
 } from 'lucide-react';
 import { KeywordBridgeData, GoogleAdsGlobalMetrics } from '../types';
 import { KpiCard } from '../components/KpiCard';

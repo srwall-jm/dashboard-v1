@@ -10,7 +10,7 @@ import { KpiCard } from '../components/KpiCard';
 import { ComparisonTooltip } from '../components/ComparisonTooltip';
 import { EmptyState } from '../components/EmptyState';
 
-const CountryShareAnalysis = ({ data, currencySymbol }: { data: any[], currencySymbol: string }) => {
+const CountryShareAnalysis = ({ data, currencySymbol, onRefresh, isLoading }: { data: any[], currencySymbol: string, onRefresh?: () => void, isLoading?: boolean }) => {
   const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#f97316', '#3b82f6'];
 
   const totalSessions = useMemo(() => data.reduce((acc, curr) => acc + curr.traffic, 0) || 1, [data]);
@@ -326,7 +326,7 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
           <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px] shadow-lg shadow-indigo-600/20"><Globe size={14} /></div>
           <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Market Distribution & Efficiency Analysis</h4>
         </div>
-        <CountryShareAnalysis data={countryPerformanceData} currencySymbol={currencySymbol} />
+        <CountryShareAnalysis data={countryPerformanceData} currencySymbol={currencySymbol} onRefresh={onRefresh} isLoading={isLoading} />
       </div>
 
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm mt-8">
