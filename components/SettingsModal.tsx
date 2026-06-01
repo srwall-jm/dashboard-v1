@@ -11,6 +11,8 @@ interface SettingsModalProps {
   setAiProvider: (p: 'gemini' | 'openai') => void;
   openaiKey: string;
   setOpenaiKey: (key: string) => void;
+  developerToken: string;
+  setDeveloperToken: (token: string) => void;
   brandRegexStr: string;
   setBrandRegexStr: (str: string) => void;
   ga4Auth: any;
@@ -41,6 +43,7 @@ interface SettingsModalProps {
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen, onClose, handleLogout, // Add this
   aiProvider, setAiProvider, openaiKey, setOpenaiKey,
+  developerToken, setDeveloperToken,
   brandRegexStr, setBrandRegexStr,
   ga4Auth, gscAuth, googleAdsAuth,
   handleConnectGa4, handleConnectGsc, handleConnectGoogleAds,
@@ -145,6 +148,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                        <div className="flex items-center gap-1.5 text-[9px] text-emerald-600 font-bold px-1 pt-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> Connected</div>
                     </div>
                   )}
+               </div>
+            </div>
+
+            {/* Developer Token Input - NEW */}
+            <div className="mt-8 pt-6 border-t border-slate-100">
+               <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                   <div className="w-full sm:w-1/3">
+                       <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest block mb-1">Google Ads Developer Token</label>
+                       <p className="text-[9px] text-slate-400">Required for API requests to Google Ads.</p>
+                   </div>
+                   <div className="w-full sm:w-2/3">
+                       <input 
+                           type="password" 
+                           value={developerToken} 
+                           onChange={e => setDeveloperToken(e.target.value)} 
+                           className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs p-3 focus:ring-2 ring-amber-400 outline-none transition-all font-mono" 
+                           placeholder="Enter your Developer Token..." 
+                       />
+                       <p className="text-[9px] text-slate-400 mt-1.5 flex items-center gap-1">
+                           <Settings2 size={10} /> Saved locally for this session or client.
+                       </p>
+                   </div>
                </div>
             </div>
           </section>

@@ -112,6 +112,7 @@ const App: React.FC = () => {
     return (saved as 'gemini' | 'openai') || 'gemini';
   });
   const [openaiKey, setOpenaiKey] = useState(() => localStorage.getItem('openai_api_key') || '');
+  const [developerToken, setDeveloperToken] = useState(() => localStorage.getItem('google_ads_developer_token') || '');
   
   const [activeTab, setActiveTab] = useState<DashboardTab>(DashboardTab.ORGANIC_VS_PAID);
   
@@ -152,6 +153,10 @@ const App: React.FC = () => {
   const tokenClientGsc = useRef<any>(null);
   const tokenClientGoogleAds = useRef<any>(null);
   
+  useEffect(() => {
+    localStorage.setItem('google_ads_developer_token', developerToken);
+  }, [developerToken]);
+
   const isBranded = (text: string) => {
     if (!text || text.trim() === '') return false;
     try {
@@ -262,11 +267,12 @@ const App: React.FC = () => {
   const fetchGoogleAdsCustomers = async (token: string) => {
     try {
         setIsLoadingGoogleAds(true);
+        const tokenToUse = developerToken || DEVELOPER_TOKEN;
         const resp = await fetch('/api/googleads/v21/customers:listAccessibleCustomers', {
             method: 'GET',
             headers: { 
               'Authorization': `Bearer ${token}`,
-              'developer-token': DEVELOPER_TOKEN
+              'developer-token': tokenToUse
             }
         });
         
@@ -691,7 +697,7 @@ const App: React.FC = () => {
             const headers: any = { 
                 Authorization: `Bearer ${googleAdsAuth.token}`, 
                 'Content-Type': 'application/json',
-                'developer-token': DEVELOPER_TOKEN
+                'developer-token': developerToken || DEVELOPER_TOKEN
             };
             
             if (selectedGoogleAdsCustomer) {
@@ -1127,7 +1133,7 @@ const App: React.FC = () => {
         const headers: any = { 
             Authorization: `Bearer ${googleAdsAuth.token}`, 
             'Content-Type': 'application/json',
-            'developer-token': DEVELOPER_TOKEN
+            'developer-token': developerToken || DEVELOPER_TOKEN
         };
         if (selectedGoogleAdsCustomer) {
             headers['login-customer-id'] = selectedGoogleAdsCustomer.id.toString().replace(/-/g, '');
@@ -1805,6 +1811,8 @@ const App: React.FC = () => {
         setAiProvider={setAiProvider}
         openaiKey={openaiKey} 
         setOpenaiKey={setOpenaiKey}
+        developerToken={developerToken}
+        setDeveloperToken={setDeveloperToken}
         brandRegexStr={brandRegexStr} 
         setBrandRegexStr={setBrandRegexStr}
         ga4Auth={ga4Auth} 
