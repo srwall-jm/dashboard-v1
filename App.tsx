@@ -5,7 +5,7 @@ import {
 import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, GoogleAdsCustomer, QueryType, BridgeData, AiTrafficData, KeywordBridgeData, GoogleAdsGlobalMetrics } from './types';
 import { getDashboardInsights, getOpenAiInsights } from './geminiService';
 import GoogleLogin from './GoogleLogin'; 
-import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry, extractPath, AI_SOURCE_REGEX_STRING } from './utils';
+import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry, extractPath, AI_SOURCE_REGEX_STRING, parseGoogleAdsMetric } from './utils';
 import { generateMockBridgeData, generateMockAiTrafficData } from './mockData';
 // Import New Components and Views
 import { Sidebar } from './components/Sidebar';
@@ -291,7 +291,7 @@ const App: React.FC = () => {
         setError(null);
         setIsLoadingGoogleAds(true);
         const tokenToUse = (developerToken || '').trim() || DEVELOPER_TOKEN;
-        const resp = await fetch('/api/googleads/v18/customers:listAccessibleCustomers', {
+        const resp = await fetch('/api/googleads/v17/customers:listAccessibleCustomers', {
             method: 'GET',
             headers: { 
               'Authorization': `Bearer ${token}`,
@@ -358,7 +358,7 @@ const App: React.FC = () => {
           WHERE customer_client.status = 'ENABLED'
         `.trim();
         
-        const targetUrl = `/api/googleads/v18/customers/${currentId}/googleAds:search`;
+        const targetUrl = `/api/googleads/v17/customers/${currentId}/googleAds:search`;
         const resp = await fetch(targetUrl, {
           method: 'POST',
           headers: { 
@@ -738,7 +738,7 @@ const App: React.FC = () => {
                         body.pageToken = nextPageToken;
                     }
 
-                    const res = await fetch(`/api/googleads/v18/customers/${cleanTargetId}/googleAds:search`, {
+                    const res = await fetch(`/api/googleads/v17/customers/${cleanTargetId}/googleAds:search`, {
                         method: 'POST',
                         headers: headers,
                         body: JSON.stringify(body)
@@ -799,17 +799,10 @@ const App: React.FC = () => {
                                 const segments = row.segments;
                                 const date = segments?.date;
 
-                                // Ultra-robust parsing for metrics
-                                const parseMetric = (val: any) => {
-                                    if (val === undefined || val === null) return 0;
-                                    if (typeof val === 'object' && val.value !== undefined) return Number(val.value) || 0;
-                                    return Number(val) || 0;
-                                };
-
-                                const clicks = parseMetric(metrics?.clicks || metrics?.clicks_val);
-                                const costMicros = parseMetric(metrics?.costMicros || metrics?.cost_micros);
-                                const conversions = parseMetric(metrics?.conversions || metrics?.conversions_val);
-                                const impressions = parseMetric(metrics?.impressions || metrics?.impressions_val);
+                                const clicks = parseGoogleAdsMetric(metrics?.clicks || metrics?.clicks_val);
+                                const costMicros = parseGoogleAdsMetric(metrics?.costMicros || metrics?.cost_micros);
+                                const conversions = parseGoogleAdsMetric(metrics?.conversions || metrics?.conversions_val);
+                                const impressions = parseGoogleAdsMetric(metrics?.impressions || metrics?.impressions_val);
 
                                 globalMetrics.totalCost += costMicros / 1000000;
                                 globalMetrics.totalClicks += clicks;
@@ -860,16 +853,10 @@ const App: React.FC = () => {
                                 googleAdsPaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set(['Google Ads']) };
                             }
                             const metrics = row.metrics;
-                            const parseMetric = (val: any) => {
-                                if (val === undefined || val === null) return 0;
-                                if (typeof val === 'object' && val.value !== undefined) return Number(val.value) || 0;
-                                return Number(val) || 0;
-                            };
-
-                            const clicks = parseMetric(metrics?.clicks || metrics?.clicks_val);
-                            const costMicros = parseMetric(metrics?.costMicros || metrics?.cost_micros);
-                            const conversions = parseMetric(metrics?.conversions || metrics?.conversions_val);
-                            const impressions = parseMetric(metrics?.impressions || metrics?.impressions_val);
+                            const clicks = parseGoogleAdsMetric(metrics?.clicks || metrics?.clicks_val);
+                            const costMicros = parseGoogleAdsMetric(metrics?.costMicros || metrics?.cost_micros);
+                            const conversions = parseGoogleAdsMetric(metrics?.conversions || metrics?.conversions_val);
+                            const impressions = parseGoogleAdsMetric(metrics?.impressions || metrics?.impressions_val);
 
                             googleAdsPaidMap[path].clicksOrSessions += clicks;
                             googleAdsPaidMap[path].conversions += conversions;
@@ -1184,7 +1171,7 @@ const App: React.FC = () => {
             do {
                 const body: any = { query };
                 if (nextPageToken) body.pageToken = nextPageToken;
-                const res = await fetch(`/api/googleads/v18/customers/${cleanTargetId}/googleAds:search`, {
+                const res = await fetch(`/api/googleads/v17/customers/${cleanTargetId}/googleAds:search`, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify(body)
@@ -1210,16 +1197,10 @@ const App: React.FC = () => {
                     if (!kw) return;
                     const cleanKw = kw.toLowerCase().trim();
                     const metrics = row.metrics;
-                    const parseMetric = (val: any) => {
-                        if (val === undefined || val === null) return 0;
-                        if (typeof val === 'object' && val.value !== undefined) return Number(val.value) || 0;
-                        return Number(val) || 0;
-                    };
-
-                    const clicks = parseMetric(metrics?.clicks || metrics?.clicks_val);
-                    const costMicros = parseMetric(metrics?.costMicros || metrics?.cost_micros);
-                    const conversions = parseMetric(metrics?.conversions || metrics?.conversions_val);
-                    const impressions = parseMetric(metrics?.impressions || metrics?.impressions_val);
+                    const clicks = parseGoogleAdsMetric(metrics?.clicks || metrics?.clicks_val);
+                    const costMicros = parseGoogleAdsMetric(metrics?.costMicros || metrics?.cost_micros);
+                    const conversions = parseGoogleAdsMetric(metrics?.conversions || metrics?.conversions_val);
+                    const impressions = parseGoogleAdsMetric(metrics?.impressions || metrics?.impressions_val);
 
                     if (!googleAdsGlobalKeywordMap[cleanKw]) {
                         googleAdsGlobalKeywordMap[cleanKw] = { clicks: 0, conversions: 0, cost: 0, impressions: 0 };

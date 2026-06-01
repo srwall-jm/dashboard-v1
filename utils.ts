@@ -129,6 +129,14 @@ export const exportToCSV = (data: any[], filename: string) => {
   document.body.removeChild(link);
 };
 
+export const parseGoogleAdsMetric = (val: any): number => {
+  if (val === undefined || val === null) return 0;
+  // If it's the standard metric object with a value property
+  if (typeof val === 'object' && val.value !== undefined) return Number(val.value) || 0;
+  // If it's a single value (string or number)
+  return Number(val) || 0;
+};
+
 export const aggregateData = (data: DailyData[]) => {
     const currentData = data.filter(d => d.dateRangeLabel === 'current');
     const prevData = data.filter(d => d.dateRangeLabel === 'previous');
