@@ -48,6 +48,12 @@ async function startServer() {
       
       const responseText = await response.text();
       
+      if (!response.ok) {
+        console.error(`Google Ads API Error [${response.status}]:`, responseText);
+        // También guardamos en un archivo para persistencia si es necesario
+        fs.writeFileSync('ads_error_log.txt', `[${new Date().toISOString()}] URL: ${targetUrl}\nStatus: ${response.status}\nResponse: ${responseText}\n\n`, { flag: 'a' });
+      }
+      
       res.status(response.status);
       res.set('Content-Type', response.headers.get('content-type') || 'application/json');
       res.send(responseText);
