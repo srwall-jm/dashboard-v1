@@ -291,7 +291,7 @@ const App: React.FC = () => {
         setError(null);
         setIsLoadingGoogleAds(true);
         const tokenToUse = (developerToken || '').trim() || DEVELOPER_TOKEN;
-        const resp = await fetch('/api/googleads/v18/customers:listAccessibleCustomers', {
+        const resp = await fetch('/api/googleads/v21/customers:listAccessibleCustomers', {
             method: 'GET',
             headers: { 
               'Authorization': `Bearer ${token}`,
@@ -347,19 +347,22 @@ const App: React.FC = () => {
     try {
       // Use a single query to get ALL leaf accounts (non-managers) in the hierarchy
       // This is much more efficient than a BFS crawl
+      // We remove the hidden=false and manager=false filters to see if that helps in complex hierarchies
+      // and we will filter in the code
       const query = `
         SELECT 
           customer_client.id, 
           customer_client.descriptive_name, 
           customer_client.resource_name,
-          customer_client.level
+          customer_client.manager,
+          customer_client.status,
+          customer_client.level,
+          customer_client.hidden
         FROM customer_client
-        WHERE customer_client.manager = false 
-          AND customer_client.status = 'ENABLED'
-          AND customer_client.hidden = false
+        WHERE customer_client.status = 'ENABLED'
       `.trim();
       
-      const targetUrl = `/api/googleads/v18/customers/${managerId}/googleAds:search`;
+      const targetUrl = `/api/googleads/v21/customers/${managerId}/googleAds:search`;
       const resp = await fetch(targetUrl, {
         method: 'POST',
         headers: { 
@@ -375,7 +378,7 @@ const App: React.FC = () => {
         const errData = await resp.json().catch(() => ({}));
         const errors = errData.error?.details?.[0]?.errors;
         if (errors?.some((e: any) => e.errorCode?.authorizationError === 'DEVELOPER_TOKEN_PROHIBITED')) {
-            throw new Error("DEVELOPER_TOKEN_PROHIBITED: Este token requiere acceso 'Basic' o 'Standard' para este proyecto.");
+            throw new Error("ERROR DE TOKEN: El Developer Token no está permitido para este proyecto (333322783684). Necesitas un token con nivel de acceso 'Basic' o 'Standard'.");
         }
         throw new Error(errData.error?.message || `Status: ${resp.status}`);
       }
@@ -383,30 +386,32 @@ const App: React.FC = () => {
       const json = await resp.json();
       const results = json.results || [];
       
-      let allLeafAccounts: GoogleAdsCustomer[] = results.map((row: any) => {
-        const client = row.customerClient;
-        return {
-          id: String(client.id),
-          descriptiveName: client.descriptiveName || `Account ${client.id}`,
-          resourceName: client.resourceName
-        };
-      });
+      // Filter for non-managers and non-hidden accounts
+      let allLeafAccounts: GoogleAdsCustomer[] = results
+        .filter((row: any) => row.customerClient && !row.customerClient.manager && !row.customerClient.hidden)
+        .map((row: any) => {
+          const client = row.customerClient;
+          return {
+            id: String(client.id),
+            descriptiveName: client.descriptiveName || `Cuenta ${client.id}`,
+            resourceName: client.resourceName
+          };
+        });
       
       // Deduplicate by ID
       const uniqueLeafAccounts = allLeafAccounts.filter((acc, index, self) => 
           index === self.findIndex((t) => t.id === acc.id)
       );
       
-      // Fallback if no sub-accounts found (maybe it's a direct client account, not an MCC)
       if (uniqueLeafAccounts.length === 0) {
-          console.log("No sub-accounts found. Checking if it's a standalone account...");
+          console.log("No se encontraron subcuentas. Usando cuenta principal...");
           setAvailableGoogleAdsSubAccounts([{
               id: managerId,
-              descriptiveName: 'Selected Account',
+              descriptiveName: 'MCC / Cuenta Seleccionada',
               resourceName: `customers/${managerId}`
           }]);
       } else {
-          console.log(`Found ${uniqueLeafAccounts.length} sub-accounts.`);
+          console.log(`Encontradas ${uniqueLeafAccounts.length} subcuentas.`);
           setAvailableGoogleAdsSubAccounts(uniqueLeafAccounts);
       }
       
@@ -731,7 +736,7 @@ const App: React.FC = () => {
                         body.pageToken = nextPageToken;
                     }
 
-                    const res = await fetch(`/api/googleads/v18/customers/${cleanTargetId}/googleAds:search`, {
+                    const res = await fetch(`/api/googleads/v21/customers/${cleanTargetId}/googleAds:search`, {
                         method: 'POST',
                         headers: headers,
                         body: JSON.stringify(body)
@@ -1168,7 +1173,7 @@ const App: React.FC = () => {
             do {
                 const body: any = { query };
                 if (nextPageToken) body.pageToken = nextPageToken;
-                const res = await fetch(`/api/googleads/v18/customers/${cleanTargetId}/googleAds:search`, {
+                const res = await fetch(`/api/googleads/v21/customers/${cleanTargetId}/googleAds:search`, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify(body)
@@ -2116,36 +2121,44 @@ const App: React.FC = () => {
       </main>
       {isLoadingBridge && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl text-center space-y-6">
-            <div className="relative w-24 h-24 mx-auto">
-              <div className="absolute inset-0 border-4 border-blue-100 rounded-full"></div>
+          <div className="bg-white rounded-[32px] p-10 max-w-md w-full shadow-2xl text-center space-y-6 animate-in zoom-in-95">
+            <div className="relative w-28 h-28 mx-auto">
+              <div className="absolute inset-0 border-8 border-slate-100 rounded-full"></div>
               <div 
-                className="absolute inset-0 border-4 border-blue-600 rounded-full border-t-transparent animate-spin"
-                style={{ animationDuration: '1.5s' }}
+                className="absolute inset-0 border-8 border-indigo-600 rounded-full border-t-transparent animate-spin"
+                style={{ animationDuration: '1.2s' }}
               ></div>
-              <div className="absolute inset-0 flex items-center justify-center font-bold text-blue-600">
+              <div className="absolute inset-0 flex items-center justify-center font-black text-xl text-slate-900">
                 {loadingProgress}%
               </div>
             </div>
-            <div className="space-y-2">
-              <h3 className="text-xl font-bold text-gray-900">Sincronizando Datos</h3>
-              <p className="text-gray-500 text-sm">
-                We are processing {availableGoogleAdsSubAccounts.length} account{availableGoogleAdsSubAccounts.length !== 1 ? 's' : ''}. 
+            <div className="space-y-3">
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight text-balance">Sincronizando Campañas</h3>
+              <div className="space-y-4">
+                <p className="text-slate-500 text-sm font-medium">
+                  Estamos procesando <strong>{availableGoogleAdsSubAccounts.length} cuenta{availableGoogleAdsSubAccounts.length !== 1 ? 's' : ''}</strong>.
+                </p>
+                
                 {availableGoogleAdsSubAccounts.length === 1 && (
-                  <span className="block mt-2 font-bold text-amber-600">
-                    If you expect more accounts, please check your "Manager Account" selection in Settings. 
-                  </span>
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 text-[10px] leading-relaxed text-left">
+                    <p className="font-bold mb-1 flex items-center gap-1"><AlertCircle size={12} /> ¿Esperabas ver más cuentas?</p>
+                    Si esta es una cuenta MCC con subcuentas, asegúrate de que el Developer Token tenga acceso <strong>Basic</strong> o <strong>Standard</strong>. 
+                    Tokens en nivel <strong>Test</strong> solo pueden acceder a su propio proyecto de Google Cloud.
+                  </div>
                 )}
-                This operation integrates Google Ads and Search Console data securely for your browser.
-              </p>
+                
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest bg-slate-50 py-2 rounded-lg">
+                  Integrando Google Ads + GSC + GA4
+                </p>
+              </div>
             </div>
-            <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+            <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
               <div 
-                className="bg-blue-600 h-full transition-all duration-500 ease-out"
+                className="bg-indigo-600 h-full transition-all duration-700 ease-in-out"
                 style={{ width: `${loadingProgress}%` }}
               ></div>
             </div>
-            <p className="text-xs text-gray-400 italic">Please, do not close this tab...</p>
+            <p className="text-[10px] text-slate-400 font-bold italic animate-pulse">Por favor, no cierres esta pestaña...</p>
           </div>
         </div>
       )}
