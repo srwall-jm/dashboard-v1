@@ -287,7 +287,7 @@ const App: React.FC = () => {
         setError(null);
         setIsLoadingGoogleAds(true);
         const tokenToUse = (developerToken || '').trim() || DEVELOPER_TOKEN;
-        const resp = await fetch('/api/googleads/v18/customers:listAccessibleCustomers', {
+        const resp = await fetch('/api/googleads/v21/customers:listAccessibleCustomers', {
             method: 'GET',
             headers: { 
               'Authorization': `Bearer ${token}`,
@@ -354,7 +354,7 @@ const App: React.FC = () => {
           WHERE customer_client.level <= 1
         `.trim();
         
-        const targetUrl = `/api/googleads/v18/customers/${currentId}/googleAds:search`;
+        const targetUrl = `/api/googleads/v21/customers/${currentId}/googleAds:search`;
         const resp = await fetch(targetUrl, {
           method: 'POST',
           headers: { 
@@ -734,7 +734,7 @@ const App: React.FC = () => {
                         body.pageToken = nextPageToken;
                     }
 
-                    const res = await fetch(`/api/googleads/v18/customers/${cleanTargetId}/googleAds:search`, {
+                    const res = await fetch(`/api/googleads/v21/customers/${cleanTargetId}/googleAds:search`, {
                         method: 'POST',
                         headers: headers,
                         body: JSON.stringify(body)
@@ -1157,7 +1157,7 @@ const App: React.FC = () => {
             do {
                 const body: any = { query };
                 if (nextPageToken) body.pageToken = nextPageToken;
-                const res = await fetch(`/api/googleads/v18/customers/${cleanTargetId}/googleAds:search`, {
+                const res = await fetch(`/api/googleads/v21/customers/${cleanTargetId}/googleAds:search`, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify(body)
