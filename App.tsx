@@ -155,7 +155,25 @@ const App: React.FC = () => {
   
   useEffect(() => {
     localStorage.setItem('google_ads_developer_token', developerToken);
-  }, [developerToken]);
+    
+    // Re-fetch Google Ads customers when the developer token or auth changes 
+    if (googleAdsAuth?.token && !isLoadingGoogleAds) {
+      fetchGoogleAdsCustomers(googleAdsAuth.token);
+    }
+  }, [developerToken, googleAdsAuth?.token]);
+
+  // Initial data loading for account lists on mount or when auth is restored from sessionStorage
+  useEffect(() => {
+    if (ga4Auth?.token && availableProperties.length === 0) {
+      fetchGa4Properties(ga4Auth.token);
+    }
+  }, [ga4Auth?.token]);
+
+  useEffect(() => {
+    if (gscAuth?.token && availableSites.length === 0) {
+      fetchGscSites(gscAuth.token);
+    }
+  }, [gscAuth?.token]);
 
   const isBranded = (text: string) => {
     if (!text || text.trim() === '') return false;
@@ -266,9 +284,10 @@ const App: React.FC = () => {
   
   const fetchGoogleAdsCustomers = async (token: string) => {
     try {
+        setError(null);
         setIsLoadingGoogleAds(true);
         const tokenToUse = (developerToken || '').trim() || DEVELOPER_TOKEN;
-        const resp = await fetch('/api/googleads/v21/customers:listAccessibleCustomers', {
+        const resp = await fetch('/api/googleads/v18/customers:listAccessibleCustomers', {
             method: 'GET',
             headers: { 
               'Authorization': `Bearer ${token}`,
@@ -335,7 +354,7 @@ const App: React.FC = () => {
           WHERE customer_client.level <= 1
         `.trim();
         
-        const targetUrl = `/api/googleads/v21/customers/${currentId}/googleAds:search`;
+        const targetUrl = `/api/googleads/v18/customers/${currentId}/googleAds:search`;
         const resp = await fetch(targetUrl, {
           method: 'POST',
           headers: { 
@@ -715,7 +734,7 @@ const App: React.FC = () => {
                         body.pageToken = nextPageToken;
                     }
 
-                    const res = await fetch(`/api/googleads/v21/customers/${cleanTargetId}/googleAds:search`, {
+                    const res = await fetch(`/api/googleads/v18/customers/${cleanTargetId}/googleAds:search`, {
                         method: 'POST',
                         headers: headers,
                         body: JSON.stringify(body)
@@ -1103,13 +1122,6 @@ const App: React.FC = () => {
     setIsLoadingBridge(false);
   };
   
-  // Restore Google Ads Data on Load if Auth exists (Persistency Logic)
-  useEffect(() => {
-    if (googleAdsAuth?.token && availableGoogleAdsCustomers.length === 0 && !isLoadingGoogleAds) {
-        fetchGoogleAdsCustomers(googleAdsAuth.token);
-    }
-  }, [googleAdsAuth]);
-
   const fetchGoogleAdsKeywords = async () => {
     if (!googleAdsAuth?.token || isGoogleAdsKeywordsLoading || isGoogleAdsKeywordsLoaded || availableGoogleAdsSubAccounts.length === 0) return;
     
@@ -1145,7 +1157,7 @@ const App: React.FC = () => {
             do {
                 const body: any = { query };
                 if (nextPageToken) body.pageToken = nextPageToken;
-                const res = await fetch(`/api/googleads/v21/customers/${cleanTargetId}/googleAds:search`, {
+                const res = await fetch(`/api/googleads/v18/customers/${cleanTargetId}/googleAds:search`, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify(body)
