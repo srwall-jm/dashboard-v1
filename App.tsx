@@ -1952,6 +1952,17 @@ const App: React.FC = () => {
                     <option value="Non-Branded">Non-Branded</option>
                  </select>
               </div>
+              
+              <div className="pl-1 pr-1.5 flex items-center">
+                  <button 
+                    onClick={handleManualRefresh}
+                    disabled={isAnythingLoading}
+                    className="flex items-center gap-2 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[10px] font-black transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                  >
+                    <RefreshCw size={12} className={isAnythingLoading ? 'animate-spin' : ''} />
+                    {isAnythingLoading ? 'SYNCING...' : 'REFRESH'}
+                  </button>
+              </div>
             </div>
           </div>
         </header>
@@ -2082,6 +2093,7 @@ const App: React.FC = () => {
                  isLoading={isGoogleAdsKeywordsLoading}
                  isBranded={isBranded}
                  onRefresh={handleManualRefresh}
+                 queryTypeFilter={filters.queryType}
               />
           )}
           

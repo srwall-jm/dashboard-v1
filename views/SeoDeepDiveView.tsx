@@ -93,16 +93,6 @@ return (
         </div>
         
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
-          {onRefresh && (
-             <button 
-               onClick={onRefresh}
-               disabled={isLoading}
-               className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl text-[9px] font-black uppercase transition-all shadow-md active:scale-95 disabled:opacity-50"
-             >
-               <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
-               {isLoading ? 'REFRESHING...' : 'REFRESH DATA'}
-             </button>
-          )}
           <button 
             onClick={() => {
               const dataToExport = keywords.map(k => ({

@@ -555,19 +555,7 @@ export const SeoPpcBridgeView: React.FC<{
                 Google Ads Data (Paid Search)
              </button>
           </div>
-          
-          <div className="flex items-center gap-2">
-             {onRefresh && (
-                <button 
-                  onClick={onRefresh}
-                  disabled={isLoading}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl text-[9px] font-black uppercase transition-all shadow-md active:scale-95 disabled:opacity-50"
-                >
-                  <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
-                  {isLoading ? 'REFRESHING...' : 'REFRESH DATA'}
-                </button>
-             )}
-          </div>
+          <div className="hidden md:block w-32"></div>
        </div>
 
        {activeDataSource === 'GA4' ? (

@@ -101,17 +101,6 @@ export const AiTrafficView: React.FC<{
             AI Traffic Analysis
           </h4>
         </div>
-        
-        {onRefresh && (
-            <button 
-                onClick={onRefresh}
-                disabled={isLoading}
-                className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl text-[9px] font-black uppercase transition-all shadow-md active:scale-95 disabled:opacity-50"
-            >
-                <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
-                {isLoading ? 'REFRESHING...' : 'REFRESH DATA'}
-            </button>
-        )}
       </div>
 
       {/* Section A: Global Summary */}

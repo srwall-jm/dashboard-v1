@@ -41,9 +41,9 @@ export const SearchEfficiencyView: React.FC<{
   isLoading?: boolean;
   isBranded?: (text: string) => boolean;
   onRefresh?: () => void;
-}> = ({ urlData, keywordData, currencySymbol, globalMetrics, totalGscClicks, isLoading, isBranded, onRefresh }) => {
+  queryTypeFilter: 'All' | 'Branded' | 'Non-Branded';
+}> = ({ urlData, keywordData, currencySymbol, globalMetrics, totalGscClicks, isLoading, isBranded, onRefresh, queryTypeFilter }) => {
   const [clusterFilter, setClusterFilter] = useState<'All' | 'Cannibalization Risk' | 'Paid Reliance' | 'Paid Gap'>('All');
-  const [queryTypeFilter, setQueryTypeFilter] = useState<'All' | 'Branded' | 'Non-Branded'>('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ppcCost', direction: 'desc' });
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
@@ -472,36 +472,6 @@ export const SearchEfficiencyView: React.FC<{
                           {cluster}
                       </button>
                   ))}
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest w-full mb-1">Query Type</span>
-                  <div className="flex items-center gap-2">
-                    {['All', 'Branded', 'Non-Branded'].map(qType => (
-                        <button 
-                            key={qType}
-                            onClick={() => setQueryTypeFilter(qType as any)}
-                            className={`px-4 py-2 text-xs font-black rounded-xl transition-all border ${
-                                queryTypeFilter === qType 
-                                    ? 'bg-slate-900 text-white border-slate-900'
-                                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-                            }`}
-                        >
-                            {qType}
-                        </button>
-                    ))}
-                    
-                    {onRefresh && (
-                        <button 
-                            onClick={onRefresh}
-                            disabled={isLoading}
-                            className="ml-4 flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl text-xs font-black transition-all shadow-md active:scale-95 disabled:opacity-50"
-                        >
-                            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-                            {isLoading ? 'REFRESHING...' : 'REFRESH DATA'}
-                        </button>
-                    )}
-                  </div>
               </div>
           </div>
 

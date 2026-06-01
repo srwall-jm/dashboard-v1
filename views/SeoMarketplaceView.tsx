@@ -115,16 +115,6 @@ const CountryShareAnalysis = ({ data, currencySymbol, onRefresh, isLoading }: { 
               <p className="text-[11px] font-bold text-slate-600">Average revenue generated per organic session per country</p>
             </div>
             <div className="flex items-center gap-4">
-              {onRefresh && (
-                <button 
-                  onClick={onRefresh}
-                  disabled={isLoading}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl text-[9px] font-black uppercase transition-all shadow-md active:scale-95 disabled:opacity-50"
-                >
-                  <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
-                  {isLoading ? 'REFRESHING...' : 'REFRESH DATA'}
-                </button>
-              )}
               <button 
                 onClick={() => exportToCSV(efficiencyRank, "Country_Efficiency_Leaderboard")} 
                 className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
