@@ -39,8 +39,11 @@ export const SearchEfficiencyView: React.FC<{
   globalMetrics: GoogleAdsGlobalMetrics | null;
   totalGscClicks: number;
   isLoading?: boolean;
-}> = ({ urlData, keywordData, currencySymbol, globalMetrics, totalGscClicks, isLoading }) => {
+  isBranded?: (text: string) => boolean;
+  onRefresh?: () => void;
+}> = ({ urlData, keywordData, currencySymbol, globalMetrics, totalGscClicks, isLoading, isBranded, onRefresh }) => {
   const [clusterFilter, setClusterFilter] = useState<'All' | 'Cannibalization Risk' | 'Paid Reliance' | 'Paid Gap'>('All');
+  const [queryTypeFilter, setQueryTypeFilter] = useState<'All' | 'Branded' | 'Non-Branded'>('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ppcCost', direction: 'desc' });
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
@@ -56,37 +59,18 @@ export const SearchEfficiencyView: React.FC<{
     // Group by URL
     const urlMap = new Map<string, UrlEfficiencyRow>();
 
-    // 1. Initialize with precise URL-level data
-    for (let i = 0; i < urlData.length; i++) {
-        const row = urlData[i];
-        const url = row.url || '(not set)';
-        
-        urlMap.set(url, {
-            url,
-            cluster: 'Other',
-            organicClicks: row.organicClicks || 0,
-            organicSessions: row.organicSessions || 0,
-            organicTransactions: row.organicTransactions || 0,
-            paidSessions: row.ppcSessions || 0,
-            paidShare: 0,
-            ppcCost: row.ppcCost || 0,
-            avgCpc: row.ppcSessions > 0 ? (row.ppcCost || 0) / row.ppcSessions : 0,
-            convRateOrganic: (row.organicSessions || 0) > 0 ? ((row.organicTransactions || 0) / row.organicSessions) * 100 : 0, 
-            convRatePaid: row.ppcSessions > 0 ? ((row.ppcConversions || 0) / row.ppcSessions) * 100 : 0,
-            paidCpa: (row.ppcConversions || 0) > 0 ? (row.ppcCost || 0) / row.ppcConversions : 0,
-            queries: [],
-            avgOrganicRank: null
-        });
+    // Prepare keywords first, filtered by query type if needed
+    const processedKeywords = isBranded && queryTypeFilter !== 'All' 
+        ? keywordData.filter(k => {
+            const branded = isBranded(k.keyword);
+            return queryTypeFilter === 'Branded' ? branded : !branded;
+          })
+        : keywordData;
 
-        // Global metrics from precise URL data
-        totalCost += row.ppcCost || 0;
-        totalOrganicClicks += row.organicClicks || 0;
-        totalPaidSessions += row.ppcSessions || 0;
-    }
-
-    // 2. Attach keyword data for breakdown and rank calculation
-    for (let i = 0; i < keywordData.length; i++) {
-        const row = keywordData[i];
+    // 1. Initialize from keywords first to ensure we capture all PPC/SEO activity 
+    // even if the join in urlData is still processing.
+    for (let i = 0; i < processedKeywords.length; i++) {
+        const row = processedKeywords[i];
         const url = row.url || '(not set)';
         
         let urlEntry = urlMap.get(url);
@@ -94,34 +78,85 @@ export const SearchEfficiencyView: React.FC<{
             urlEntry = {
                 url,
                 cluster: 'Other',
-                organicClicks: row.organicClicks || 0,
-                organicSessions: row.organicSessions || 0,
-                organicTransactions: row.organicTransactions || 0,
-                paidSessions: row.paidSessions || 0,
+                organicClicks: 0,
+                organicSessions: 0,
+                organicTransactions: 0,
+                paidSessions: 0,
                 paidShare: 0,
-                ppcCost: row.ppcCost || 0,
-                avgCpc: row.paidSessions > 0 ? (row.ppcCost || 0) / row.paidSessions : 0,
-                convRateOrganic: (row.organicSessions || 0) > 0 ? ((row.organicTransactions || 0) / row.organicSessions) * 100 : 0,
-                convRatePaid: row.paidCvr || 0,
-                paidCpa: row.paidConversions > 0 ? (row.ppcCost || 0) / row.paidConversions : 0,
+                ppcCost: 0,
+                avgCpc: 0,
+                convRateOrganic: 0,
+                convRatePaid: 0,
+                paidCpa: 0,
                 queries: [],
                 avgOrganicRank: null
             };
             urlMap.set(url, urlEntry);
-            
-            totalCost += row.ppcCost || 0;
-            totalOrganicClicks += row.organicClicks || 0;
-            totalPaidSessions += row.paidSessions || 0;
         }
         
         urlEntry.queries.push(row);
+        
+        // Always aggregate keyword level metrics
+        urlEntry.organicClicks += row.organicClicks || 0;
+        urlEntry.organicSessions += row.organicSessions || 0;
+        urlEntry.organicTransactions += row.organicTransactions || 0;
+        urlEntry.paidSessions += row.paidSessions || 0;
+        urlEntry.ppcCost += row.ppcCost || 0;
+    }
+
+    // 2. Supplement with urlData if we are in 'All' view to get full URL context 
+    // (sessions, transactions that might not be keyed to specific keywords)
+    if (queryTypeFilter === 'All') {
+        for (let i = 0; i < urlData.length; i++) {
+            const row = urlData[i];
+            const url = row.url || '(not set)';
+            
+            let urlEntry = urlMap.get(url);
+            if (!urlEntry) {
+                urlMap.set(url, {
+                    url,
+                    cluster: 'Other',
+                    organicClicks: row.organicClicks || 0,
+                    organicSessions: row.organicSessions || 0,
+                    organicTransactions: row.organicTransactions || 0,
+                    paidSessions: row.ppcSessions || 0,
+                    paidShare: 0,
+                    ppcCost: row.ppcCost || 0,
+                    avgCpc: row.ppcSessions > 0 ? (row.ppcCost || 0) / row.ppcSessions : 0,
+                    convRateOrganic: (row.organicSessions || 0) > 0 ? ((row.organicTransactions || 0) / row.organicSessions) * 100 : 0, 
+                    convRatePaid: row.ppcSessions > 0 ? ((row.ppcConversions || 0) / row.ppcSessions) * 100 : 0,
+                    paidCpa: (row.ppcConversions || 0) > 0 ? (row.ppcCost || 0) / row.ppcConversions : 0,
+                    queries: [],
+                    avgOrganicRank: null
+                });
+            } else {
+                // If already created from keywords, we prefer the deeper URL-level stats 
+                // for sessions and transactions if they are higher (more accurate total)
+                urlEntry.organicClicks = Math.max(urlEntry.organicClicks, row.organicClicks || 0);
+                urlEntry.organicSessions = Math.max(urlEntry.organicSessions, row.organicSessions || 0);
+                urlEntry.organicTransactions = Math.max(urlEntry.organicTransactions, row.organicTransactions || 0);
+                urlEntry.paidSessions = Math.max(urlEntry.paidSessions, row.ppcSessions || 0);
+                urlEntry.ppcCost = Math.max(urlEntry.ppcCost, row.ppcCost || 0);
+            }
+        }
     }
 
     const result: UrlEfficiencyRow[] = [];
+    
+    // Reset global totals for final sum
+    totalCost = 0;
+    totalOrganicClicks = 0;
+    totalPaidSessions = 0;
 
     urlMap.forEach((urlData) => {
-        // Apply filters
+        // Apply search filter
         if (searchTerm && !urlData.url.toLowerCase().includes(searchLower)) return;
+
+        // Finalize row metrics
+        urlData.avgCpc = urlData.paidSessions > 0 ? urlData.ppcCost / urlData.paidSessions : 0;
+        urlData.convRateOrganic = urlData.organicSessions > 0 ? (urlData.organicTransactions / urlData.organicSessions) * 100 : 0;
+        // convRatePaid and paidCpa are hard to re-agg perfectly without conversion counts per URL, 
+        // we'll use keyword-level averages or row data if we have it.
 
         // Calculate avg rank
         let totalRank = 0;
@@ -134,10 +169,13 @@ export const SearchEfficiencyView: React.FC<{
         });
         urlData.avgOrganicRank = rankCount > 0 ? totalRank / rankCount : null;
 
+        const totalTraffic = urlData.organicClicks + urlData.paidSessions;
+        urlData.paidShare = totalTraffic > 0 ? (urlData.paidSessions / totalTraffic) * 100 : 0;
+
         // Clustering
         if (urlData.avgOrganicRank !== null && urlData.avgOrganicRank <= 3 && urlData.ppcCost > 0) {
             urlData.cluster = 'Cannibalization Risk';
-            potentialSavings += urlData.ppcCost;
+            potentialSavings += urlData.ppcCost * 0.4; // Estimate 40% savings
         } else if ((urlData.avgOrganicRank === null || urlData.avgOrganicRank > 10) && urlData.ppcCost > 0) {
             urlData.cluster = 'Paid Reliance';
         } else if (urlData.organicClicks > 0 && (!urlData.ppcCost || urlData.ppcCost === 0)) {
@@ -146,16 +184,17 @@ export const SearchEfficiencyView: React.FC<{
 
         if (clusterFilter !== 'All' && urlData.cluster !== clusterFilter) return;
 
-        const totalTraffic = urlData.organicClicks + urlData.paidSessions;
-        urlData.paidShare = totalTraffic > 0 ? (urlData.paidSessions / totalTraffic) * 100 : 0;
-
-        // Sort queries by traffic/cost
+        // Sort queries by traffic
         urlData.queries.sort((a, b) => (b.organicClicks + b.paidSessions) - (a.organicClicks + a.paidSessions));
+
+        totalCost += urlData.ppcCost;
+        totalOrganicClicks += urlData.organicClicks;
+        totalPaidSessions += urlData.paidSessions;
 
         result.push(urlData);
     });
 
-    if (globalMetrics) {
+    if (globalMetrics && queryTypeFilter === 'All' && !searchTerm && clusterFilter === 'All') {
         totalCost = globalMetrics.totalCost;
     }
     
@@ -176,7 +215,7 @@ export const SearchEfficiencyView: React.FC<{
         filteredData: result, 
         metrics: { totalCost, potentialSavings, optimizedSpend, accumulatedSavings, avgPaidShare, topCannibalizedUrls } 
     };
-  }, [urlData, keywordData, clusterFilter, searchTerm, globalMetrics]);
+  }, [urlData, keywordData, clusterFilter, queryTypeFilter, searchTerm, globalMetrics, isBranded]);
 
   // 3. Sorting
   const sortedData = useMemo(() => {
@@ -413,24 +452,57 @@ export const SearchEfficiencyView: React.FC<{
               </div>
           </div>
 
-          {/* Cluster Filters */}
-          <div className="flex flex-wrap gap-2 mb-6">
-              {['All', 'Cannibalization Risk', 'Paid Reliance', 'Paid Gap'].map(cluster => (
-                  <button 
-                      key={cluster}
-                      onClick={() => setClusterFilter(cluster as any)}
-                      className={`px-4 py-2 text-xs font-black rounded-xl transition-all border ${
-                          clusterFilter === cluster 
-                              ? cluster === 'Cannibalization Risk' ? 'bg-rose-50 text-rose-600 border-rose-200'
-                              : cluster === 'Paid Reliance' ? 'bg-amber-50 text-amber-600 border-amber-200'
-                              : cluster === 'Paid Gap' ? 'bg-indigo-50 text-indigo-600 border-indigo-200'
-                              : 'bg-slate-900 text-white border-slate-900'
-                              : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-                      }`}
-                  >
-                      {cluster}
-                  </button>
-              ))}
+          {/* Cluster & Query Type Filters */}
+          <div className="flex flex-col md:flex-row gap-4 mb-6">
+              <div className="flex flex-wrap gap-2">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest w-full mb-1">Clusters</span>
+                  {['All', 'Cannibalization Risk', 'Paid Reliance', 'Paid Gap'].map(cluster => (
+                      <button 
+                          key={cluster}
+                          onClick={() => setClusterFilter(cluster as any)}
+                          className={`px-4 py-2 text-xs font-black rounded-xl transition-all border ${
+                              clusterFilter === cluster 
+                                  ? cluster === 'Cannibalization Risk' ? 'bg-rose-50 text-rose-600 border-rose-200'
+                                  : cluster === 'Paid Reliance' ? 'bg-amber-50 text-amber-600 border-amber-200'
+                                  : cluster === 'Paid Gap' ? 'bg-indigo-50 text-indigo-600 border-indigo-200'
+                                  : 'bg-slate-900 text-white border-slate-900'
+                                  : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                          }`}
+                      >
+                          {cluster}
+                      </button>
+                  ))}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest w-full mb-1">Query Type</span>
+                  <div className="flex items-center gap-2">
+                    {['All', 'Branded', 'Non-Branded'].map(qType => (
+                        <button 
+                            key={qType}
+                            onClick={() => setQueryTypeFilter(qType as any)}
+                            className={`px-4 py-2 text-xs font-black rounded-xl transition-all border ${
+                                queryTypeFilter === qType 
+                                    ? 'bg-slate-900 text-white border-slate-900'
+                                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                            }`}
+                        >
+                            {qType}
+                        </button>
+                    ))}
+                    
+                    {onRefresh && (
+                        <button 
+                            onClick={onRefresh}
+                            disabled={isLoading}
+                            className="ml-4 flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl text-xs font-black transition-all shadow-md active:scale-95 disabled:opacity-50"
+                        >
+                            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+                            {isLoading ? 'REFRESHING...' : 'REFRESH DATA'}
+                        </button>
+                    )}
+                  </div>
+              </div>
           </div>
 
           <div className="overflow-x-auto custom-scrollbar flex-1">

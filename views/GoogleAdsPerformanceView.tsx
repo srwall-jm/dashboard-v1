@@ -4,7 +4,7 @@ import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, BarChart, Bar, ZAxis
 } from 'recharts';
 import { 
-  DollarSign, MousePointerClick, Percent, Search, FileText, Target, ExternalLink, Zap, ChevronUp, ChevronDown
+  DollarSign, MousePointerClick, Percent, Search, FileText, Target, ExternalLink, Zap, ChevronUp, ChevronDown, RefreshCw
 } from 'lucide-react';
 import { BridgeData, GoogleAdsGlobalMetrics, GoogleAdsCustomer } from '../types';
 import { exportToCSV } from '../utils';
@@ -20,7 +20,9 @@ export const GoogleAdsPerformanceView: React.FC<{
   data: BridgeData[]; 
   currencySymbol: string; 
   globalMetrics: GoogleAdsGlobalMetrics | null;
-}> = ({ data, currencySymbol, globalMetrics }) => {
+  onRefresh?: () => void;
+  isLoading?: boolean;
+}> = ({ data, currencySymbol, globalMetrics, onRefresh, isLoading }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ppcCost', direction: 'desc' });
 
@@ -259,6 +261,16 @@ export const GoogleAdsPerformanceView: React.FC<{
             </div>
             
             <div className="flex items-center gap-3 w-full md:w-auto">
+               {onRefresh && (
+                  <button 
+                    onClick={onRefresh}
+                    disabled={isLoading}
+                    className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl text-[9px] font-black uppercase transition-all shadow-md active:scale-95 disabled:opacity-50"
+                  >
+                    <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
+                    {isLoading ? 'REFRESHING...' : 'REFRESH DATA'}
+                  </button>
+               )}
                <div className="relative w-full md:w-64">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                   <input 

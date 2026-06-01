@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Search, ChevronDown, ChevronUp, Link as LinkIcon, ExternalLink, FileText } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, Link as LinkIcon, ExternalLink, FileText, RefreshCw } from 'lucide-react';
 import { KeywordData } from '../types';
 import { exportToCSV } from '../utils';
 
@@ -10,7 +10,8 @@ export const SeoDeepDiveView: React.FC<{
   setSearchTerm: (s: string) => void; 
   isLoading: boolean;
   comparisonEnabled: boolean;
-}> = ({ keywords, searchTerm, setSearchTerm, isLoading, comparisonEnabled }) => {
+  onRefresh?: () => void;
+}> = ({ keywords, searchTerm, setSearchTerm, isLoading, comparisonEnabled, onRefresh }) => {
   const [expandedUrls, setExpandedUrls] = useState<Set<string>>(new Set());
 
   const toggleUrl = (url: string) => {
@@ -92,6 +93,16 @@ return (
         </div>
         
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+          {onRefresh && (
+             <button 
+               onClick={onRefresh}
+               disabled={isLoading}
+               className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl text-[9px] font-black uppercase transition-all shadow-md active:scale-95 disabled:opacity-50"
+             >
+               <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
+               {isLoading ? 'REFRESHING...' : 'REFRESH DATA'}
+             </button>
+          )}
           <button 
             onClick={() => {
               const dataToExport = keywords.map(k => ({

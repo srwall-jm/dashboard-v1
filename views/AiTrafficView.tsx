@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
-import { Bot, Zap, TrendingUp, Sparkles, MessageSquare, Search, Brain, FileText } from 'lucide-react';
+import { Bot, Zap, TrendingUp, Sparkles, MessageSquare, Search, Brain, FileText, RefreshCw } from 'lucide-react';
 import { AiTrafficData } from '../types';
 import { KpiCard } from '../components/KpiCard';
 import { EmptyState } from '../components/EmptyState';
@@ -11,7 +11,9 @@ import { exportToCSV } from '../utils';
 export const AiTrafficView: React.FC<{
   data: AiTrafficData[];
   currencySymbol: string;
-}> = ({ data, currencySymbol }) => {
+  onRefresh?: () => void;
+  isLoading?: boolean;
+}> = ({ data, currencySymbol, onRefresh, isLoading }) => {
 
   // 1. Scorecard Aggregations (Global)
   const scorecards = useMemo(() => {
@@ -91,6 +93,27 @@ export const AiTrafficView: React.FC<{
   return (
     <div className="w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-6">
       
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-2">
+        <div>
+          <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+            <Bot size={14} className="text-indigo-600" />
+            AI Traffic Analysis
+          </h4>
+        </div>
+        
+        {onRefresh && (
+            <button 
+                onClick={onRefresh}
+                disabled={isLoading}
+                className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl text-[9px] font-black uppercase transition-all shadow-md active:scale-95 disabled:opacity-50"
+            >
+                <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
+                {isLoading ? 'REFRESHING...' : 'REFRESH DATA'}
+            </button>
+        )}
+      </div>
+
       {/* Section A: Global Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <KpiCard 

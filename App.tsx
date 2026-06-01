@@ -175,6 +175,10 @@ const App: React.FC = () => {
     }
   }, [gscAuth?.token]);
 
+  const handleManualRefresh = () => {
+    fetchBridgeData();
+  };
+
   const isBranded = (text: string) => {
     if (!text || text.trim() === '') return false;
     try {
@@ -1991,6 +1995,7 @@ const App: React.FC = () => {
               googleAdsDailyTotals={googleAdsDailyTotals}
               onFetchAdsData={fetchBridgeData}
               isAdsLoading={isLoadingBridge}
+              onRefresh={handleManualRefresh}
             />
           )}
           
@@ -2007,6 +2012,8 @@ const App: React.FC = () => {
               isBranded={isBranded} 
               queryTypeFilter={filters.queryType} 
               countryFilter={filters.country} 
+              onRefresh={handleManualRefresh}
+              isLoading={isAnythingLoading}
             />
           )}
           
@@ -2017,6 +2024,7 @@ const App: React.FC = () => {
               setSearchTerm={setSearchTerm} 
               isLoading={isAnythingLoading} 
               comparisonEnabled={filters.comparison.enabled} 
+              onRefresh={handleManualRefresh}
             />
           )}
           
@@ -2032,6 +2040,8 @@ const App: React.FC = () => {
                 selectedGoogleAdsCustomer={selectedGoogleAdsCustomer}
                 onGoogleAdsCustomerChange={handleGoogleAdsCustomerChange}
                 isGoogleAdsKeywordsLoading={isGoogleAdsKeywordsLoading}
+                onRefresh={handleManualRefresh}
+                isLoading={isAnythingLoading}
             />
           )}
           
@@ -2040,6 +2050,8 @@ const App: React.FC = () => {
                   data={bridgeDataGoogleAds} 
                   currencySymbol={currencySymbol} 
                   globalMetrics={googleAdsGlobalMetrics}
+                  onRefresh={handleManualRefresh}
+                  isLoading={isAnythingLoading}
               />
           )}
           
@@ -2051,6 +2063,8 @@ const App: React.FC = () => {
                  globalMetrics={googleAdsGlobalMetrics}
                  totalGscClicks={gscTotals?.current?.clicks || 0}
                  isLoading={isGoogleAdsKeywordsLoading}
+                 isBranded={isBranded}
+                 onRefresh={handleManualRefresh}
               />
           )}
           
@@ -2058,6 +2072,8 @@ const App: React.FC = () => {
             <AiTrafficView 
               data={aiTrafficData} 
               currencySymbol={currencySymbol} 
+              onRefresh={handleManualRefresh}
+              isLoading={isAnythingLoading}
             />
           )}
         </div>

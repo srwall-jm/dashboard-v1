@@ -338,6 +338,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
   googleAdsDailyTotals?: any[];
   onFetchAdsData?: () => void;
   isAdsLoading?: boolean;
+  onRefresh?: () => void;
 }) => {
   const [weightMetric, setWeightMetric] = useState<'sessions' | 'revenue'>('sessions');
   const [visibleSeries, setVisibleSeries] = useState<Set<string>>(new Set(['Organic Impressions', 'Ads Impressions', 'Global Impressions']));
@@ -582,6 +583,16 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
             <p className="text-[11px] font-bold text-slate-600">Combined GSC (Organic) and Google Ads (Paid) daily impressions</p>
           </div>
           <div className="flex items-center gap-4">
+            {onRefresh && (
+               <button 
+                 onClick={onRefresh}
+                 disabled={isAdsLoading}
+                 className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl text-[9px] font-black uppercase transition-all shadow-md active:scale-95 disabled:opacity-50"
+               >
+                 <RefreshCw size={12} className={isAdsLoading ? 'animate-spin' : ''} />
+                 {isAdsLoading ? 'REFRESHING...' : 'REFRESH DATA'}
+               </button>
+            )}
             {googleAdsDailyTotals.length === 0 && onFetchAdsData && (
               <button 
                 onClick={onFetchAdsData}

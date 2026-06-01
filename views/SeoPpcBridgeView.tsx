@@ -4,7 +4,7 @@ import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, BarChart, Bar, LineChart, Line, Legend, LabelList
 } from 'recharts';
 import { 
-  AlertOctagon, Zap, ShieldCheck, FileText, ExternalLink, Search, Filter, ChevronDown, ChevronRight, ChevronUp, CornerDownRight, BarChart2, TrendingUp, DollarSign, Info, LayoutList, Key, Settings, CheckSquare, Square
+  AlertOctagon, Zap, ShieldCheck, FileText, ExternalLink, Search, Filter, ChevronDown, ChevronRight, ChevronUp, CornerDownRight, BarChart2, TrendingUp, DollarSign, Info, LayoutList, Key, Settings, CheckSquare, Square, RefreshCw
 } from 'lucide-react';
 import { BridgeData, DailyData, KeywordBridgeData, GoogleAdsCustomer } from '../types';
 import { exportToCSV, formatDate } from '../utils';
@@ -525,17 +525,20 @@ export const SeoPpcBridgeView: React.FC<{
   selectedGoogleAdsCustomer: GoogleAdsCustomer | null;
   onGoogleAdsCustomerChange: (c: GoogleAdsCustomer | null) => void;
   isGoogleAdsKeywordsLoading?: boolean;
+  onRefresh?: () => void;
+  isLoading?: boolean;
 }> = ({ 
   ga4Data, googleAdsData, ga4KeywordData, googleAdsKeywordData, dailyData, currencySymbol,
   availableGoogleAdsCustomers, selectedGoogleAdsCustomer, onGoogleAdsCustomerChange,
-  isGoogleAdsKeywordsLoading
+  isGoogleAdsKeywordsLoading, onRefresh, isLoading
 }) => {
   const [activeDataSource, setActiveDataSource] = useState<'GA4' | 'GOOGLE_ADS'>('GA4');
 
   return (
     <div className="space-y-6">
        {/* Header / Toggle Source */}
-       <div className="flex justify-center mb-4">
+       <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
+          <div className="hidden md:block w-32"></div>
           <div className="bg-slate-100 p-1 rounded-2xl flex items-center gap-1 shadow-inner">
              <button 
                 onClick={() => setActiveDataSource('GA4')}
@@ -551,6 +554,19 @@ export const SeoPpcBridgeView: React.FC<{
                 <div className="w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-[8px]">G</div>
                 Google Ads Data (Paid Search)
              </button>
+          </div>
+          
+          <div className="flex items-center gap-2">
+             {onRefresh && (
+                <button 
+                  onClick={onRefresh}
+                  disabled={isLoading}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl text-[9px] font-black uppercase transition-all shadow-md active:scale-95 disabled:opacity-50"
+                >
+                  <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
+                  {isLoading ? 'REFRESHING...' : 'REFRESH DATA'}
+                </button>
+             )}
           </div>
        </div>
 

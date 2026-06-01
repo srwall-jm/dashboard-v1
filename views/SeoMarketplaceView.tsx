@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ScatterChart, Scatter, ZAxis, Cell, Legend, PieChart, Pie, BarChart, Bar
 } from 'recharts';
-import { MousePointer2, Eye, Percent, TrendingUp, Tag, ShoppingBag, Globe, FileText, Trophy } from 'lucide-react';
+import { MousePointer2, Eye, Percent, TrendingUp, Tag, ShoppingBag, Globe, FileText, Trophy, RefreshCw } from 'lucide-react';
 import { DailyData, KeywordData, QueryType } from '../types';
 import { exportToCSV, formatDate, getStartOfWeek, normalizeCountry } from '../utils';
 import { KpiCard } from '../components/KpiCard';
@@ -115,6 +115,16 @@ const CountryShareAnalysis = ({ data, currencySymbol }: { data: any[], currencyS
               <p className="text-[11px] font-bold text-slate-600">Average revenue generated per organic session per country</p>
             </div>
             <div className="flex items-center gap-4">
+              {onRefresh && (
+                <button 
+                  onClick={onRefresh}
+                  disabled={isLoading}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl text-[9px] font-black uppercase transition-all shadow-md active:scale-95 disabled:opacity-50"
+                >
+                  <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
+                  {isLoading ? 'REFRESHING...' : 'REFRESH DATA'}
+                </button>
+              )}
               <button 
                 onClick={() => exportToCSV(efficiencyRank, "Country_Efficiency_Leaderboard")} 
                 className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
@@ -157,7 +167,7 @@ const CountryShareAnalysis = ({ data, currencySymbol }: { data: any[], currencyS
   );
 };
 
-export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggregate, comparisonEnabled, currencySymbol, grouping, isBranded, queryTypeFilter, countryFilter }: {
+export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotals, aggregate, comparisonEnabled, currencySymbol, grouping, isBranded, queryTypeFilter, countryFilter, onRefresh, isLoading }: {
   data: DailyData[];
   keywordData: KeywordData[];
   gscDailyTotals: any[];
@@ -169,6 +179,8 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
   isBranded: (text: string) => boolean;
   queryTypeFilter: QueryType | 'All';
   countryFilter: string;
+  onRefresh?: () => void;
+  isLoading?: boolean;
 }) => {
   const [brandedMetric, setBrandedMetric] = useState<'clicks' | 'impressions'>('clicks');
   const organicGa4 = useMemo(() => aggregate(data.filter((d: any) => d.channel?.toLowerCase().includes('organic'))), [data, aggregate]);
