@@ -20,7 +20,8 @@ import { GoogleAdsPerformanceView } from './views/GoogleAdsPerformanceView';
 import { SearchEfficiencyView } from './views/SearchEfficiencyView';
 
 const CLIENT_ID = "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com"; 
-const DEVELOPER_TOKEN = import.meta.env.VITE_GOOGLE_ADS_DEVELOPER_TOKEN || "oZ5EnjmTqUCcS8dZbRjulA"; // Reemplaza con tu Developer Token de Google Ads
+// Fallback opcional vía env var (agencia). El campo que cada cliente rellena en Settings tiene prioridad.
+const DEVELOPER_TOKEN = import.meta.env.VITE_GOOGLE_ADS_DEVELOPER_TOKEN || "";
 const SCOPE_GA4 = "https://www.googleapis.com/auth/analytics.readonly";
 const SCOPE_GSC = "https://www.googleapis.com/auth/webmasters.readonly";
 const SCOPE_GOOGLE_ADS = "https://www.googleapis.com/auth/adwords";
@@ -155,11 +156,16 @@ const App: React.FC = () => {
   
   useEffect(() => {
     localStorage.setItem('google_ads_developer_token', developerToken);
-    
-    // Re-fetch Google Ads customers when the developer token or auth changes 
-    if (googleAdsAuth?.token && !isLoadingGoogleAds) {
-      fetchGoogleAdsCustomers(googleAdsAuth.token);
-    }
+
+    // Re-fetch Google Ads customers when the developer token or auth changes,
+    // but debounced so it doesn't fire once per keystroke while typing.
+    if (!googleAdsAuth?.token) return;
+    const handle = setTimeout(() => {
+      if (!isLoadingGoogleAds) {
+        fetchGoogleAdsCustomers(googleAdsAuth.token);
+      }
+    }, 800);
+    return () => clearTimeout(handle);
   }, [developerToken, googleAdsAuth?.token]);
 
   // Initial data loading for account lists on mount or when auth is restored from sessionStorage
@@ -291,7 +297,7 @@ const App: React.FC = () => {
         setError(null);
         setIsLoadingGoogleAds(true);
         const tokenToUse = (developerToken || '').trim() || DEVELOPER_TOKEN;
-        const resp = await fetch('/api/googleads/v21/customers:listAccessibleCustomers', {
+        const resp = await fetch('/api/googleads/v25/customers:listAccessibleCustomers', {
             method: 'GET',
             headers: { 
               'Authorization': `Bearer ${token}`,
@@ -362,7 +368,7 @@ const App: React.FC = () => {
         WHERE customer_client.status = 'ENABLED'
       `.trim();
       
-      const targetUrl = `/api/googleads/v21/customers/${managerId}/googleAds:search`;
+      const targetUrl = `/api/googleads/v25/customers/${managerId}/googleAds:search`;
       const resp = await fetch(targetUrl, {
         method: 'POST',
         headers: { 
@@ -736,7 +742,7 @@ const App: React.FC = () => {
                         body.pageToken = nextPageToken;
                     }
 
-                    const res = await fetch(`/api/googleads/v21/customers/${cleanTargetId}/googleAds:search`, {
+                    const res = await fetch(`/api/googleads/v25/customers/${cleanTargetId}/googleAds:search`, {
                         method: 'POST',
                         headers: headers,
                         body: JSON.stringify(body)
@@ -1173,7 +1179,7 @@ const App: React.FC = () => {
             do {
                 const body: any = { query };
                 if (nextPageToken) body.pageToken = nextPageToken;
-                const res = await fetch(`/api/googleads/v21/customers/${cleanTargetId}/googleAds:search`, {
+                const res = await fetch(`/api/googleads/v25/customers/${cleanTargetId}/googleAds:search`, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify(body)
@@ -2179,5 +2185,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-
-
