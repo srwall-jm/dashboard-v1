@@ -19,7 +19,7 @@ import { AiTrafficView } from './views/AiTrafficView';
 import { GoogleAdsPerformanceView } from './views/GoogleAdsPerformanceView';
 import { SearchEfficiencyView } from './views/SearchEfficiencyView';
 
-const CLIENT_ID = "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com"; 
+const DEFAULT_CLIENT_ID = "333322783684-pjhn2omejhngckfd46g8bh2dng9dghlc.apps.googleusercontent.com"; 
 // Fallback opcional vía env var (agencia). El campo que cada cliente rellena en Settings tiene prioridad.
 const DEVELOPER_TOKEN = import.meta.env.VITE_GOOGLE_ADS_DEVELOPER_TOKEN || "";
 const SCOPE_GA4 = "https://www.googleapis.com/auth/analytics.readonly";
@@ -114,6 +114,7 @@ const App: React.FC = () => {
   });
   const [openaiKey, setOpenaiKey] = useState(() => localStorage.getItem('openai_api_key') || '');
   const [developerToken, setDeveloperToken] = useState(() => localStorage.getItem('google_ads_developer_token') || '');
+  const [googleAdsClientId, setGoogleAdsClientId] = useState(() => localStorage.getItem('google_ads_client_id') || DEFAULT_CLIENT_ID);
   
   const [activeTab, setActiveTab] = useState<DashboardTab>(DashboardTab.ORGANIC_VS_PAID);
   
@@ -1538,7 +1539,7 @@ const App: React.FC = () => {
     const initializeOAuth = () => {
       if (typeof window !== 'undefined' && (window as any).google && (window as any).google.accounts) {
         tokenClientGa4.current = (window as any).google.accounts.oauth2.initTokenClient({
-          client_id: CLIENT_ID,
+          client_id: DEFAULT_CLIENT_ID,
           scope: SCOPE_GA4,
           prompt: '',
           callback: (resp: any) => {
@@ -1552,7 +1553,7 @@ const App: React.FC = () => {
         });
         
         tokenClientGsc.current = (window as any).google.accounts.oauth2.initTokenClient({
-          client_id: CLIENT_ID,
+          client_id: DEFAULT_CLIENT_ID,
           scope: SCOPE_GSC,
           prompt: '',
           callback: (resp: any) => {
@@ -1564,9 +1565,24 @@ const App: React.FC = () => {
             }
           },
         });
-        
+      } else { 
+        setTimeout(initializeOAuth, 500); 
+      }
+    };
+    initializeOAuth();
+  }, []);
+
+  // Google Ads uses its own OAuth Client ID, configurable per client, because the
+  // developer token is permanently paired to whichever Cloud project the Client ID
+  // belongs to. Re-initializes whenever the client picks a different Client ID.
+  useEffect(() => {
+    localStorage.setItem('google_ads_client_id', googleAdsClientId);
+    const clientIdToUse = (googleAdsClientId || '').trim() || DEFAULT_CLIENT_ID;
+
+    const initializeGoogleAdsOAuth = () => {
+      if (typeof window !== 'undefined' && (window as any).google && (window as any).google.accounts) {
         tokenClientGoogleAds.current = (window as any).google.accounts.oauth2.initTokenClient({
-            client_id: CLIENT_ID,
+            client_id: clientIdToUse,
             scope: SCOPE_GOOGLE_ADS,
             prompt: '',
             callback: (resp: any) => {
@@ -1578,12 +1594,12 @@ const App: React.FC = () => {
               }
             },
         });
-      } else { 
-        setTimeout(initializeOAuth, 500); 
+      } else {
+        setTimeout(initializeGoogleAdsOAuth, 500);
       }
     };
-    initializeOAuth();
-  }, []);
+    initializeGoogleAdsOAuth();
+  }, [googleAdsClientId]);
   
   const handleLoginSuccess = (credentialToken: string) => {
     try {
@@ -1855,6 +1871,8 @@ const App: React.FC = () => {
         setOpenaiKey={setOpenaiKey}
         developerToken={developerToken}
         setDeveloperToken={setDeveloperToken}
+        googleAdsClientId={googleAdsClientId}
+        setGoogleAdsClientId={setGoogleAdsClientId}
         brandRegexStr={brandRegexStr} 
         setBrandRegexStr={setBrandRegexStr}
         ga4Auth={ga4Auth} 
