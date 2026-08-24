@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { X, Cpu, Settings2, Database, ExternalLink, Search, LogOut, AlertCircle } from 'lucide-react';
 import { Ga4Property, GscSite, GoogleAdsCustomer } from '../types';
@@ -13,6 +12,8 @@ interface SettingsModalProps {
   setOpenaiKey: (key: string) => void;
   developerToken: string;
   setDeveloperToken: (token: string) => void;
+  googleAdsClientId: string;
+  setGoogleAdsClientId: (id: string) => void;
   brandRegexStr: string;
   setBrandRegexStr: (str: string) => void;
   ga4Auth: any;
@@ -44,6 +45,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen, onClose, handleLogout, // Add this
   aiProvider, setAiProvider, openaiKey, setOpenaiKey,
   developerToken, setDeveloperToken,
+  googleAdsClientId, setGoogleAdsClientId,
   brandRegexStr, setBrandRegexStr,
   ga4Auth, gscAuth, googleAdsAuth,
   handleConnectGa4, handleConnectGsc, handleConnectGoogleAds,
@@ -172,6 +174,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                        </div>
                        <p className="text-[9px] text-slate-400 mt-1.5 flex items-center gap-1">
                            <Settings2 size={10} /> Saved locally for this session or client.
+                       </p>
+                   </div>
+               </div>
+            </div>
+
+            {/* Google Ads OAuth Client ID - NEW */}
+            <div className="mt-6 pt-6 border-t border-slate-100">
+               <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                   <div className="w-full sm:w-1/3">
+                       <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest block mb-1">Google Ads OAuth Client ID</label>
+                       <p className="text-[9px] text-slate-400">Must belong to the same Cloud project as this Developer Token.</p>
+                   </div>
+                   <div className="w-full sm:w-2/3">
+                       <input 
+                           type="text" 
+                           value={googleAdsClientId} 
+                           onChange={e => setGoogleAdsClientId(e.target.value)} 
+                           className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs p-3 focus:ring-2 ring-amber-400 outline-none transition-all font-mono" 
+                           placeholder="xxxxxxxx.apps.googleusercontent.com" 
+                       />
+                       <p className="text-[9px] text-slate-400 mt-1.5 flex items-center gap-1">
+                           <Settings2 size={10} /> Changes take effect the next time you press "Connect Google Ads". Each Developer Token is permanently paired to the Cloud project of the Client ID used the first time it succeeds, so use a different Client ID per client.
                        </p>
                    </div>
                </div>
