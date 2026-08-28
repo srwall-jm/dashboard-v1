@@ -276,7 +276,7 @@ export const SearchEfficiencyView: React.FC<{
     }
   ];
 
-  const handleExport = () => {
+  const handleExportUrls = () => {
     const csv = sortedData.map(d => ({
         URL: d.url,
         Cluster: d.cluster,
@@ -285,9 +285,67 @@ export const SearchEfficiencyView: React.FC<{
         Paid_Sessions: d.paidSessions,
         Paid_Share: d.paidShare.toFixed(1) + '%',
         Paid_Cost: d.ppcCost.toFixed(2),
-        Avg_CPC: d.avgCpc.toFixed(2)
+        Avg_CPC: d.avgCpc.toFixed(2),
+        Organic_Cvr: d.organicSessions > 0 ? (d.convRateOrganic || 0).toFixed(2) + '%' : 'N/A',
+        Paid_Cvr: d.paidSessions > 0 ? (d.convRatePaid || 0).toFixed(2) + '%' : 'N/A',
+        Paid_CPA: d.paidCpa > 0 ? d.paidCpa.toFixed(2) : 'N/A'
     }));
-    exportToCSV(csv, "Optimization_Savings_Report");
+    exportToCSV(csv, "Search_Efficiency_URLs_Report");
+  };
+
+  const handleExportKeywords = () => {
+    const keywordRows: any[] = [];
+    
+    sortedData.forEach(urlRow => {
+      if (urlRow.queries && urlRow.queries.length > 0) {
+        urlRow.queries.forEach(q => {
+          keywordRows.push({
+            Keyword: q.keyword,
+            URL: urlRow.url,
+            Cluster: urlRow.cluster,
+            SEO_Rank: q.organicRank !== null && q.organicRank !== undefined ? q.organicRank.toFixed(1) : 'N/A',
+            Organic_Clicks: q.organicClicks || 0,
+            Paid_Sessions_Clicks: q.paidSessions || q.paidClicks || 0,
+            PPC_Cost: (q.ppcCost || 0).toFixed(2),
+            Avg_CPC: (q.avgCpc || 0).toFixed(2),
+            Paid_Conversions: q.paidConversions || 0,
+            Action_Label: q.actionLabel || ''
+          });
+        });
+      } else {
+        keywordRows.push({
+          Keyword: '(no query data)',
+          URL: urlRow.url,
+          Cluster: urlRow.cluster,
+          SEO_Rank: urlRow.avgOrganicRank?.toFixed(1) || 'N/A',
+          Organic_Clicks: urlRow.organicClicks,
+          Paid_Sessions_Clicks: urlRow.paidSessions,
+          PPC_Cost: urlRow.ppcCost.toFixed(2),
+          Avg_CPC: urlRow.avgCpc.toFixed(2),
+          Paid_Conversions: 0,
+          Action_Label: ''
+        });
+      }
+    });
+
+    if (keywordRows.length === 0) {
+      keywordData.forEach(q => {
+        keywordRows.push({
+          Keyword: q.keyword,
+          URL: q.url || '(not set)',
+          Cluster: 'N/A',
+          SEO_Rank: q.organicRank !== null && q.organicRank !== undefined ? q.organicRank.toFixed(1) : 'N/A',
+          Organic_Clicks: q.organicClicks || 0,
+          Paid_Sessions_Clicks: q.paidSessions || q.paidClicks || 0,
+          PPC_Cost: (q.ppcCost || 0).toFixed(2),
+          Avg_CPC: (q.avgCpc || 0).toFixed(2),
+          Paid_Conversions: q.paidConversions || 0,
+          Action_Label: q.actionLabel || ''
+        });
+      });
+    }
+
+    exportToCSV(keywordRows, "Search_Efficiency_Keywords_Report");
   };
 
   const formatCurrency = (val: number, decimals: number = 2) => {
@@ -443,12 +501,22 @@ export const SearchEfficiencyView: React.FC<{
                       className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 ring-indigo-500 transition-all"
                     />
                  </div>
-                 <button 
-                  onClick={handleExport} 
-                  className="flex items-center justify-center gap-2 px-4 py-2 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-xs font-black uppercase transition-all shadow-md whitespace-nowrap w-full md:w-auto"
-                 >
-                    <FileText size={14} /> CSV
-                  </button>
+                 <div className="flex items-center gap-2 w-full md:w-auto">
+                   <button 
+                    onClick={handleExportUrls} 
+                    className="flex items-center justify-center gap-2 px-3.5 py-2 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-xs font-black uppercase transition-all shadow-md whitespace-nowrap flex-1 md:flex-none"
+                    title="Export URL efficiency summary report"
+                   >
+                      <FileText size={14} /> CSV (URLs)
+                    </button>
+                   <button 
+                    onClick={handleExportKeywords} 
+                    className="flex items-center justify-center gap-2 px-3.5 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl text-xs font-black uppercase transition-all shadow-md whitespace-nowrap flex-1 md:flex-none"
+                    title="Export keyword level breakdown report"
+                   >
+                      <Key size={14} /> CSV (Keywords)
+                    </button>
+                 </div>
               </div>
           </div>
 
@@ -573,7 +641,29 @@ export const SearchEfficiencyView: React.FC<{
                                   <tr className="bg-slate-50/50 border-b border-slate-100">
                                                                              <td colSpan={11} className="p-0">
                                           <div className="p-6 pl-14">
-                                              <h5 className="text-xs font-black text-slate-800 mb-3 uppercase tracking-widest">Top 10 Queries for this URL</h5>
+                                              <div className="flex items-center justify-between mb-3">
+                                                   <h5 className="text-xs font-black text-slate-800 uppercase tracking-widest">Top {row.queries.length} Queries for this URL</h5>
+                                                   {row.queries.length > 0 && (
+                                                       <button
+                                                           onClick={(e) => {
+                                                               e.stopPropagation();
+                                                               const csv = row.queries.map(q => ({
+                                                                   Query: q.keyword,
+                                                                   URL: row.url,
+                                                                   SEO_Rank: q.organicRank ? `#${q.organicRank.toFixed(1)}` : 'N/A',
+                                                                   Organic_Clicks: q.organicClicks || 0,
+                                                                   Paid_Clicks: q.paidSessions || q.paidClicks || 0,
+                                                                   PPC_Cost: (q.ppcCost || 0).toFixed(2)
+                                                               }));
+                                                               const sanitizedUrl = row.url.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+                                                               exportToCSV(csv, `Queries_${sanitizedUrl}`);
+                                                           }}
+                                                           className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-lg text-[10px] font-bold shadow-sm transition-all"
+                                                       >
+                                                           <FileText size={12} /> Export URL Queries CSV
+                                                       </button>
+                                                   )}
+                                               </div>
                                               <table className="w-full text-left bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                                                   <thead className="bg-slate-100/50">
                                                       <tr>
