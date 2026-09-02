@@ -1151,10 +1151,12 @@ const App: React.FC = () => {
     setIsGoogleAdsKeywordsLoading(true);
     const allAccountIds = availableGoogleAdsSubAccounts.map(acc => acc.id);
     const googleAdsGlobalKeywordMap: Record<string, { clicks: number, conversions: number, cost: number, impressions: number }> = {};
+    const googleAdsKeywordUrlMap: Record<string, { clicks: number, conversions: number, cost: number }> = {};
     
     const googleAdsKwQuery = `
         SELECT 
           ad_group_criterion.keyword.text,
+          ad_group_criterion.final_urls,
           metrics.cost_micros, 
           metrics.clicks, 
           metrics.conversions,
@@ -1210,6 +1212,7 @@ const App: React.FC = () => {
                     const costMicros = parseGoogleAdsMetric(metrics?.costMicros || metrics?.cost_micros);
                     const conversions = parseGoogleAdsMetric(metrics?.conversions || metrics?.conversions_val);
                     const impressions = parseGoogleAdsMetric(metrics?.impressions || metrics?.impressions_val);
+                    const cost = costMicros / 1000000;
 
                     if (!googleAdsGlobalKeywordMap[cleanKw]) {
                         googleAdsGlobalKeywordMap[cleanKw] = { clicks: 0, conversions: 0, cost: 0, impressions: 0 };
@@ -1217,7 +1220,21 @@ const App: React.FC = () => {
                     googleAdsGlobalKeywordMap[cleanKw].clicks += clicks;
                     googleAdsGlobalKeywordMap[cleanKw].conversions += conversions;
                     googleAdsGlobalKeywordMap[cleanKw].impressions += impressions;
-                    googleAdsGlobalKeywordMap[cleanKw].cost += costMicros / 1000000;
+                    googleAdsGlobalKeywordMap[cleanKw].cost += cost;
+
+                    const finalUrls: string[] = row.adGroupCriterion?.finalUrls || row.adGroupCriterion?.final_urls || [];
+                    if (Array.isArray(finalUrls) && finalUrls.length > 0) {
+                        finalUrls.forEach(fUrl => {
+                            const cleanPath = normalizeUrl(fUrl);
+                            const key = `${cleanPath}||${cleanKw}`;
+                            if (!googleAdsKeywordUrlMap[key]) {
+                                googleAdsKeywordUrlMap[key] = { clicks: 0, conversions: 0, cost: 0 };
+                            }
+                            googleAdsKeywordUrlMap[key].clicks += clicks;
+                            googleAdsKeywordUrlMap[key].conversions += conversions;
+                            googleAdsKeywordUrlMap[key].cost += cost;
+                        });
+                    }
                 });
             });
         }
@@ -1225,15 +1242,36 @@ const App: React.FC = () => {
         // Now update the bridge data with the keywords
         setBridgeDataGoogleAds(prev => prev.map(item => {
             if (!item.gscTopQueries) return item;
+            const urlPaidSessions = item.ppcSessions || 0;
+            const urlPaidCost = item.ppcCost || 0;
+
             return {
                 ...item,
                 gscTopQueries: item.gscTopQueries.map(q => {
                     const cleanKw = q.query.toLowerCase().trim();
-                    const paidKwData = googleAdsGlobalKeywordMap[cleanKw];
+                    const compositeKey = `${item.url}||${cleanKw}`;
+                    let paidVol = 0;
+                    let paidCost = 0;
+
+                    if (urlPaidSessions > 0) {
+                        const directUrlKw = googleAdsKeywordUrlMap[compositeKey];
+                        if (directUrlKw) {
+                            paidVol = directUrlKw.clicks;
+                            paidCost = directUrlKw.cost;
+                        } else {
+                            const paidKwData = googleAdsGlobalKeywordMap[cleanKw];
+                            if (paidKwData && paidKwData.clicks > 0) {
+                                paidVol = Math.min(paidKwData.clicks, urlPaidSessions);
+                                const avgCpc = paidKwData.cost / paidKwData.clicks;
+                                paidCost = Math.min(paidVol * avgCpc, urlPaidCost);
+                            }
+                        }
+                    }
+
                     return {
                         ...q,
-                        paidClicks: paidKwData?.clicks || 0,
-                        paidCost: paidKwData?.cost || 0
+                        paidClicks: paidVol,
+                        paidCost: paidCost
                     };
                 })
             };
@@ -1244,13 +1282,35 @@ const App: React.FC = () => {
         // We use bridgeDataGoogleAds as the source of URLs
         bridgeDataGoogleAds.forEach(item => {
             if (!item.gscTopQueries) return;
+            const urlPaidSessions = item.ppcSessions || 0;
+            const urlPaidCost = item.ppcCost || 0;
+
             item.gscTopQueries.forEach(q => {
                 const cleanKw = q.query.toLowerCase().trim();
-                const paidKwData = googleAdsGlobalKeywordMap[cleanKw];
-                if (paidKwData || q.clicks > 0) {
-                    const paidVol = paidKwData ? paidKwData.clicks : 0;
-                    const paidCost = paidKwData ? paidKwData.cost : 0;
-                    const cvr = paidVol > 0 ? (paidKwData!.conversions / paidVol) * 100 : 0;
+                const compositeKey = `${item.url}||${cleanKw}`;
+                let paidVol = 0;
+                let paidCost = 0;
+                let paidConversions = 0;
+
+                if (urlPaidSessions > 0) {
+                    const directUrlKw = googleAdsKeywordUrlMap[compositeKey];
+                    if (directUrlKw) {
+                        paidVol = directUrlKw.clicks;
+                        paidCost = directUrlKw.cost;
+                        paidConversions = directUrlKw.conversions;
+                    } else {
+                        const paidKwData = googleAdsGlobalKeywordMap[cleanKw];
+                        if (paidKwData && paidKwData.clicks > 0) {
+                            paidVol = Math.min(paidKwData.clicks, urlPaidSessions);
+                            const avgCpc = paidKwData.cost / paidKwData.clicks;
+                            paidCost = Math.min(paidVol * avgCpc, urlPaidCost);
+                            paidConversions = paidKwData.conversions;
+                        }
+                    }
+                }
+
+                if (paidVol > 0 || q.clicks > 0) {
+                    const cvr = paidVol > 0 ? (paidConversions / paidVol) * 100 : 0;
                     const avgCpc = paidVol > 0 ? paidCost / paidVol : (googleAdsGlobalMetrics?.avgCpc || 0);
 
                     googleAdsKwResults.push({
@@ -1265,8 +1325,8 @@ const App: React.FC = () => {
                         paidClicks: paidVol,
                         paidCtr: 0,
                         searchImpressionShare: 0,
-                        paidConversions: paidKwData?.conversions || 0,
-                        paidCta: (paidKwData?.conversions || 0) > 0 ? paidCost / (paidKwData?.conversions || 0) : 0,
+                        paidConversions: paidConversions,
+                        paidCta: paidConversions > 0 ? paidCost / paidConversions : 0,
                         actionLabel: q.rank <= 3 && paidVol > 0 ? "REVIEW" : "MAINTAIN",
                         dataSource: 'GOOGLE_ADS'
                     });
