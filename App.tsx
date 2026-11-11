@@ -14,6 +14,7 @@ import { RecommendationRulesPanel } from './components/RecommendationRulesPanel'
 import { TAB_META } from './navigation';
 import { Lang, LANGS, LangProvider, isLang, translate } from './i18n';
 import { buildSnapshot } from './snapshots';
+import { KeywordResult, DailyPoint, measurementWindow, measureKeyword, coveringRange, gaqlString, queryRegexBatches, todayIso } from './planResults';
 import { Plan, PlanItem, withPlanItem, doNotReduceMap, loadLocalPlan, saveLocalPlan, fetchSharedPlan, saveSharedPlanItem } from './plan';
 import { MonthlyReport } from './components/MonthlyReport';
 import { ClientProfile, ClientProfileInput, ClientProfileList, fetchClientProfiles, saveClientProfile, deleteClientProfile } from './clientProfiles';
@@ -147,6 +148,8 @@ const App: React.FC = () => {
   const isShowingSampleDataRef = useRef(false);
   // Search Console totals per query (all URLs together), filled while the bridge data loads.
   const gscQueryTotals = useRef<Record<string, { clicks: number; impressions: number; weightedRankSum: number }>>({});
+  // Keyword text exactly as written in Google Ads, by its lower-cased form.
+  const keywordSpellings = useRef<Record<string, Set<string>>>({});
   
   const [aiTrafficData, setAiTrafficData] = useState<AiTrafficData[]>([]); 
   const [gscDailyTotals, setGscDailyTotals] = useState<any[]>([]);
@@ -381,6 +384,126 @@ const App: React.FC = () => {
     }
     return () => { cancelled = true; };
   }, [planIsShared, activeProfile?.id, adsClientKey]);
+
+  // --- What happened after the applied changes ---
+  const [planResults, setPlanResults] = useState<Record<string, KeywordResult>>({});
+  const [isMeasuringPlan, setIsMeasuringPlan] = useState(false);
+  const [planMeasureNote, setPlanMeasureNote] = useState<string | null>(null);
+  useEffect(() => { setPlanResults({}); setPlanMeasureNote(null); }, [adsClientKey, activeProfile?.id]);
+
+  const measurePlan = async () => {
+    const today = todayIso();
+    const applied = Object.entries(plan).filter(([, item]) => item.status === 'applied' && item.appliedOn);
+    const ready = applied
+      .map(([keyword, item]) => ({ keyword, window: measurementWindow(item.appliedOn as string, today) }))
+      .filter(entry => entry.window.ready)
+      .slice(0, 40);
+    if (ready.length === 0) {
+      setPlanMeasureNote(t(applied.length === 0 ? 'No keyword is marked as applied yet.' : 'None of the applied changes has two complete weeks after it yet.'));
+      return;
+    }
+    const range = coveringRange(ready.map(entry => entry.window));
+    if (!range) return;
+
+    setIsMeasuringPlan(true);
+    setPlanMeasureNote(null);
+    const problems: string[] = [];
+    const points: Record<string, Record<string, DailyPoint>> = {};
+    const point = (keyword: string, date: string) => {
+      const byDate = points[keyword] || (points[keyword] = {});
+      return byDate[date] || (byDate[date] = { date, paidClicks: 0, paidCost: 0, organicClicks: 0 });
+    };
+
+    try {
+      // Paid clicks and cost per day, for these keywords only.
+      if (googleAdsAuth?.token && activeAdsAccounts.length > 0) {
+        const texts = Array.from(new Set(ready.flatMap(entry => Array.from(keywordSpellings.current[entry.keyword] || [entry.keyword]))));
+        const query = `
+          SELECT ad_group_criterion.keyword.text, segments.date, metrics.clicks, metrics.cost_micros
+          FROM keyword_view
+          WHERE segments.date BETWEEN '${range.start}' AND '${range.end}'
+          AND ad_group_criterion.keyword.text IN (${texts.map(gaqlString).join(', ')})
+        `;
+        const wanted = new Set(ready.map(entry => entry.keyword));
+        const headers: Record<string, string> = {
+          Authorization: `Bearer ${googleAdsAuth.token}`,
+          'Content-Type': 'application/json',
+          'developer-token': (developerTokenRef.current || '').trim() || DEVELOPER_TOKEN,
+        };
+        if (selectedGoogleAdsCustomer) headers['login-customer-id'] = selectedGoogleAdsCustomer.id.toString().replace(/-/g, '');
+        let failedAccounts = 0;
+        for (const account of activeAdsAccounts) {
+          const customerId = account.id.toString().replace(/-/g, '');
+          let pageToken: string | undefined;
+          try {
+            do {
+              const res = await fetch(`/api/googleads/v25/customers/${customerId}/googleAds:search`, {
+                method: 'POST', headers, body: JSON.stringify(pageToken ? { query, pageToken } : { query }),
+              });
+              if (!res.ok) throw new Error(`status ${res.status}`);
+              const json = await res.json();
+              (json.results || []).forEach((row: any) => {
+                const keyword = String(row.adGroupCriterion?.keyword?.text || '').toLowerCase().trim();
+                const date = row.segments?.date;
+                if (!wanted.has(keyword) || !date) return;
+                const p = point(keyword, date);
+                p.paidClicks += parseGoogleAdsMetric(row.metrics?.clicks);
+                p.paidCost += parseGoogleAdsMetric(row.metrics?.costMicros) / 1000000;
+              });
+              pageToken = json.nextPageToken;
+            } while (pageToken);
+          } catch {
+            failedAccounts += 1;
+          }
+        }
+        if (failedAccounts > 0) problems.push(t('Google Ads could not be read for {n} of {total} accounts, so paid clicks are incomplete.', { n: failedAccounts, total: activeAdsAccounts.length }));
+      } else {
+        problems.push(t('Google Ads is not connected, so paid clicks are missing.'));
+      }
+
+      // Organic clicks per day: the keyword text and the main searches behind it.
+      if (gscAuth?.token && gscAuth.site) {
+        const queriesOf: Record<string, Set<string>> = {};
+        ready.forEach(entry => {
+          const terms = keywordSignals.find(k => k.keyword === entry.keyword)?.searchTerms?.terms || [];
+          queriesOf[entry.keyword] = new Set([entry.keyword, ...terms.map(term => term.term)]);
+        });
+        const allQueries = Array.from(new Set(Object.values(queriesOf).flatMap(set => Array.from(set))));
+        try {
+          for (const expression of queryRegexBatches(allQueries)) {
+            const result = await gscQueryAll(gscAuth.token, gscAuth.site.siteUrl, {
+              startDate: range.start,
+              endDate: range.end,
+              dimensions: ['date', 'query'],
+              dimensionFilterGroups: [{ filters: [{ dimension: 'query', operator: 'includingRegex', expression }] }],
+            });
+            result.rows.forEach((row: any) => {
+              const date = row.keys?.[0];
+              const query = String(row.keys?.[1] || '').toLowerCase().trim();
+              if (!date || !query) return;
+              ready.forEach(entry => { if (queriesOf[entry.keyword].has(query)) point(entry.keyword, date).organicClicks += row.clicks || 0; });
+            });
+          }
+        } catch (err: any) {
+          problems.push(t('Search Console could not be read ({reason}), so organic clicks are missing.', { reason: err?.message || 'request failed' }));
+        }
+      } else {
+        problems.push(t('Search Console is not connected, so organic clicks are missing.'));
+      }
+
+      const results: Record<string, KeywordResult> = {};
+      ready.forEach(entry => { results[entry.keyword] = measureKeyword(Object.values(points[entry.keyword] || {}), entry.window); });
+      setPlanResults(results);
+      const waiting = applied.length - ready.length;
+      setPlanMeasureNote([
+        t('Measured {n} applied keywords: two weeks before against two weeks after. An observation, not proof of cause: seasonality and promotions are in the figures too.', { n: ready.length }),
+        waiting > 0 ? t('{n} more are too recent to measure.', { n: waiting }) : '',
+        ...problems,
+      ].filter(Boolean).join(' '));
+    } finally {
+      setIsMeasuringPlan(false);
+    }
+  };
 
   const handlePlanChange = (keyword: string, item: PlanItem) => {
     const next = withPlanItem(plan, keyword, item);
@@ -1622,6 +1745,7 @@ const App: React.FC = () => {
                     const kw = row.adGroupCriterion?.keyword?.text;
                     if (!kw) return;
                     const cleanKw = kw.toLowerCase().trim();
+                    (keywordSpellings.current[cleanKw] || (keywordSpellings.current[cleanKw] = new Set())).add(kw);
                     const metrics = row.metrics;
                     const clicks = parseGoogleAdsMetric(metrics?.clicks || metrics?.clicks_val);
                     const costMicros = parseGoogleAdsMetric(metrics?.costMicros || metrics?.cost_micros);
@@ -2875,6 +2999,10 @@ const App: React.FC = () => {
                  plan={plan}
                  onPlanChange={handlePlanChange}
                  planShared={planIsShared}
+                 planResults={planResults}
+                 onMeasurePlan={measurePlan}
+                 isMeasuringPlan={isMeasuringPlan}
+                 planMeasureNote={planMeasureNote}
                  clientName={clientName}
                  periodLabel={periodLabel}
               />

@@ -13,6 +13,7 @@ import { EmptyState } from '../components/EmptyState';
 import { exportToCSV } from '../utils';
 import { KeywordSignal, buildRecommendations, RecommendationSettings, DEFAULT_SETTINGS } from '../recommendations';
 import { Plan, PlanItem, doNotReduceMap } from '../plan';
+import type { KeywordResult } from '../planResults';
 import { KeywordRecommendations } from '../components/KeywordRecommendations';
 
 interface UrlEfficiencyRow {
@@ -54,9 +55,13 @@ export const SearchEfficiencyView: React.FC<{
   plan?: Plan;
   onPlanChange?: (keyword: string, item: PlanItem) => void;
   planShared?: boolean;
+  planResults?: Record<string, KeywordResult>;
+  onMeasurePlan?: () => void;
+  isMeasuringPlan?: boolean;
+  planMeasureNote?: string | null;
   clientName?: string;
   periodLabel?: string;
-}> = ({ urlData, keywordData, currencySymbol, globalMetrics, totalGscClicks, isLoading, isBranded, onRefresh, queryTypeFilter, keywordSignals = [], periodDays = 30, recommendationSettings = DEFAULT_SETTINGS, presentation = false, plan, onPlanChange, planShared, clientName, periodLabel }) => {
+}> = ({ urlData, keywordData, currencySymbol, globalMetrics, totalGscClicks, isLoading, isBranded, onRefresh, queryTypeFilter, keywordSignals = [], periodDays = 30, recommendationSettings = DEFAULT_SETTINGS, presentation = false, plan, onPlanChange, planShared, planResults, onMeasurePlan, isMeasuringPlan, planMeasureNote, clientName, periodLabel }) => {
   const [clusterFilter, setClusterFilter] = useState<'All' | 'Cannibalization Risk' | 'Paid Reliance' | 'Paid Gap'>('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ppcCost', direction: 'desc' });
@@ -407,6 +412,10 @@ export const SearchEfficiencyView: React.FC<{
         plan={plan}
         onPlanChange={presentation ? undefined : onPlanChange}
         planShared={planShared}
+        planResults={planResults}
+        onMeasurePlan={onMeasurePlan}
+        isMeasuringPlan={isMeasuringPlan}
+        planMeasureNote={planMeasureNote}
       />
 
       {/* Analyst detail: landing pages. Not part of what the client sees. */}

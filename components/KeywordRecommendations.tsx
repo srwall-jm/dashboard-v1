@@ -8,6 +8,7 @@ import { ACTION_STYLE, PRESSURE_STYLE, PRESSURE_HELP } from '../theme';
 import { Plan, PlanItem, PlanStatus, EMPTY_ITEM, PLAN_STATUS_LABEL, planKeyOf, countPlan } from '../plan';
 import { exportToCSV } from '../utils';
 import { useI18n } from '../i18n';
+import { KeywordResult, measurementWindow, todayIso } from '../planResults';
 
 const ACTION_ICON: Record<RecAction, React.ReactNode> = {
   REDUCE: <ArrowDownRight size={13} aria-hidden="true" />,
@@ -62,15 +63,51 @@ const today = () => {
 };
 
 // What was agreed with the client for one keyword. Editable for the analyst, read-only for the client.
-const PlanCell: React.FC<{ keyword: string; item: PlanItem; onChange?: (item: PlanItem) => void }> = ({ keyword, item, onChange }) => {
-  const { tr } = useI18n();
+const PlanCell: React.FC<{
+  keyword: string;
+  item: PlanItem;
+  onChange?: (item: PlanItem) => void;
+  result?: KeywordResult;
+  money: (v: number) => string;
+}> = ({ keyword, item, onChange, result, money }) => {
+  const { tr, int } = useI18n();
+  const verdictText: Record<KeywordResult['verdict'], string> = {
+    held: tr('Total clicks held.'),
+    smallDrop: tr('Small drop in total clicks.'),
+    drop: tr('Total clicks fell: consider going back one step.'),
+    noSpendChange: tr('Paid spend did not come down, so there is nothing to judge yet.'),
+    noData: tr('No clicks found in the two periods.'),
+  };
+  const verdictClass: Record<KeywordResult['verdict'], string> = {
+    held: 'text-[#047857]', smallDrop: 'text-[#B45309]', drop: 'text-[#B91C1C]', noSpendChange: 'text-slate-500', noData: 'text-slate-500',
+  };
+  const pending = item.status === 'applied' && item.appliedOn && !result ? measurementWindow(item.appliedOn, todayIso()) : null;
+  const resultLine = result ? (
+    <span className="block mt-1 text-[11px] text-slate-600">
+      {result.verdict !== 'noData' && (
+        <>
+          {tr('Total clicks, 2 weeks before and after: {before} → {after} ({change})', {
+            before: int(result.totalBefore),
+            after: int(result.totalAfter),
+            change: result.totalChange === null ? '—' : `${result.totalChange > 0 ? '+' : ''}${Math.round(result.totalChange * 100)}%`,
+          })}
+          {' · '}
+          {tr('spend {amount}', { amount: `${result.spendChange > 0 ? '+' : '−'}${money(Math.abs(result.spendChange))}` })}
+          {'. '}
+        </>
+      )}
+      <span className={`font-semibold ${verdictClass[result.verdict]}`}>{verdictText[result.verdict]}</span>
+    </span>
+  ) : pending && !pending.ready ? (
+    <span className="block mt-1 text-[11px] text-slate-500">{tr('Result can be measured from {date}.', { date: pending.readyOn })}</span>
+  ) : null;
   if (!onChange) {
     const parts = [
       item.status !== 'none' ? `${tr(PLAN_STATUS_LABEL[item.status])}${item.appliedOn ? tr(' on {date}', { date: item.appliedOn }) : ''}` : '',
       item.doNotReduce ? tr('Do not reduce') : '',
       item.note,
     ].filter(Boolean);
-    return <span className="text-xs text-slate-700">{parts.length > 0 ? parts.join(' · ') : '—'}</span>;
+    return <span className="text-xs text-slate-700">{parts.length > 0 ? parts.join(' · ') : '—'}{resultLine}</span>;
   }
   return (
     <div className="flex flex-col gap-1.5 min-w-[170px]">
@@ -111,6 +148,7 @@ const PlanCell: React.FC<{ keyword: string; item: PlanItem; onChange?: (item: Pl
         <input type="checkbox" checked={item.doNotReduce} onChange={e => onChange({ ...item, doNotReduce: e.target.checked })} className="w-3.5 h-3.5 accent-slate-900" />
         {tr('Do not reduce')}
       </label>
+      {resultLine}
     </div>
   );
 };
@@ -123,7 +161,8 @@ const RecTable: React.FC<{
   caption?: string;
   plan?: Plan; // shown as a column when given
   onPlanChange?: (keyword: string, item: PlanItem) => void; // editable when given
-}> = ({ rows, money, sort, onSort, caption, plan, onPlanChange }) => {
+  planResults?: Record<string, KeywordResult>;
+}> = ({ rows, money, sort, onSort, caption, plan, onPlanChange, planResults }) => {
   const i18n = useI18n();
   const { tr } = i18n;
   const header = (label: string, key: SortKey | null, align: 'left' | 'right' = 'left') => {
@@ -190,7 +229,7 @@ const RecTable: React.FC<{
               </td>
               {plan && (
                 <td className="py-3 px-3">
-                  <PlanCell keyword={r.keyword} item={plan[planKeyOf(r.keyword)] || EMPTY_ITEM} onChange={onPlanChange ? item => onPlanChange(r.keyword, item) : undefined} />
+                  <PlanCell keyword={r.keyword} item={plan[planKeyOf(r.keyword)] || EMPTY_ITEM} onChange={onPlanChange ? item => onPlanChange(r.keyword, item) : undefined} result={planResults?.[planKeyOf(r.keyword)]} money={money} />
                 </td>
               )}
             </tr>
@@ -224,7 +263,12 @@ export const KeywordRecommendations: React.FC<{
   plan?: Plan;
   onPlanChange?: (keyword: string, item: PlanItem) => void;
   planShared?: boolean; // saved for the team, as opposed to this browser only
-}> = ({ recommendations, summary, settings, currencySymbol, periodDays, periodLabel, clientName, isLoading, presentation = false, plan, onPlanChange, planShared = false }) => {
+  // What happened after the applied changes, once measured.
+  planResults?: Record<string, KeywordResult>;
+  onMeasurePlan?: () => void;
+  isMeasuringPlan?: boolean;
+  planMeasureNote?: string | null;
+}> = ({ recommendations, summary, settings, currencySymbol, periodDays, periodLabel, clientName, isLoading, presentation = false, plan, onPlanChange, planShared = false, planResults, onMeasurePlan, isMeasuringPlan = false, planMeasureNote }) => {
   const [filter, setFilter] = useState<Filter>('REDUCE');
   const [search, setSearch] = useState('');
   const [visible, setVisible] = useState(PAGE);
@@ -373,6 +417,17 @@ export const KeywordRecommendations: React.FC<{
             ? tr('{agreed} agreed · {applied} applied · {reverted} reverted · {held} marked do not reduce.', { agreed: planCounts.agreed, applied: planCounts.applied, reverted: planCounts.reverted, held: planCounts.doNotReduce })
             : tr('nothing recorded yet. Use the last column to note what was agreed with the client and when it was applied.')}{' '}
           <span className="print:hidden text-slate-500">{planShared ? tr('Shared with the team.') : tr('Saved in this browser only.')}</span>
+          {onMeasurePlan && !presentation && planCounts.applied > 0 && (
+            <button
+              type="button"
+              onClick={onMeasurePlan}
+              disabled={isMeasuringPlan}
+              className="print:hidden ml-2 px-3 py-1 rounded-lg bg-slate-900 text-white text-[11px] font-semibold hover:bg-slate-700 disabled:opacity-50"
+            >
+              {isMeasuringPlan ? tr('Measuring…') : tr('Measure applied changes')}
+            </button>
+          )}
+          {planMeasureNote && <span className="block mt-1.5 text-slate-600">{planMeasureNote}</span>}
         </p>
       )}
 
@@ -414,7 +469,7 @@ export const KeywordRecommendations: React.FC<{
               <p className="text-sm text-slate-600 py-8 text-center">{tr('No keywords in this group.')}</p>
             ) : (
               <div className="overflow-x-auto">
-                <RecTable rows={rows.slice(0, visible)} money={money} sort={sort} onSort={handleSort} caption={tr('Keyword recommendations')} plan={plan} onPlanChange={onPlanChange} />
+                <RecTable rows={rows.slice(0, visible)} money={money} sort={sort} onSort={handleSort} caption={tr('Keyword recommendations')} plan={plan} onPlanChange={onPlanChange} planResults={planResults} />
                 {rows.length > visible && (
                   <button type="button" onClick={() => setVisible(v => v + PAGE)} className="mt-4 text-xs font-semibold text-slate-700 underline underline-offset-2 hover:text-slate-900">
                     {tr('Show {n} more of {total}', { n: Math.min(PAGE, rows.length - visible), total: int(rows.length) })}
@@ -430,13 +485,13 @@ export const KeywordRecommendations: React.FC<{
               <h4 className="jf-display text-xl text-slate-900 mb-2">{tr('Reduce')}: {i18n.keywords(reduceRows.length)}</h4>
               {reduceRows.length === 0
                 ? <p className="text-sm text-slate-600">{tr('No keyword meets the conditions for a reduction in this period.')}</p>
-                : <div className="overflow-x-auto"><RecTable rows={reduceRows} money={money} caption={tr('Keywords to reduce')} plan={planHasEntries ? plan : undefined} /></div>}
+                : <div className="overflow-x-auto"><RecTable rows={reduceRows} money={money} caption={tr('Keywords to reduce')} plan={planHasEntries ? plan : undefined} planResults={planResults} /></div>}
             </section>
             <section>
               <h4 className="jf-display text-xl text-slate-900 mb-2">{tr('Increase')}: {i18n.keywords(increaseRows.length)}</h4>
               {increaseRows.length === 0
                 ? <p className="text-sm text-slate-600">{tr('No keyword meets the conditions for an increase in this period.')}</p>
-                : <div className="overflow-x-auto"><RecTable rows={increaseRows} money={money} caption={tr('Keywords to increase')} plan={planHasEntries ? plan : undefined} /></div>}
+                : <div className="overflow-x-auto"><RecTable rows={increaseRows} money={money} caption={tr('Keywords to increase')} plan={planHasEntries ? plan : undefined} planResults={planResults} /></div>}
             </section>
           </div>
         </>
