@@ -15,6 +15,7 @@ Changed (independent design review)
 
 Fixed
 - Avg. CPC and Avg. CPA in Google Ads showed no currency symbol.
+- GA4 sessions and revenue were read by landing page as well as by day, channel and country, so large sites hit the row cap and totals came out low. The report no longer includes the landing page, which nothing in the menu used; it loads faster and totals are complete.
 - Connecting Google Ads right after typing the developer token (a first visit, or a new browser) sent the request without the token and listed no accounts until the page was reloaded.
 
 Added

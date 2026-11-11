@@ -1684,9 +1684,10 @@ const App: React.FC = () => {
         dimensions: [
           { name: 'date' }, 
           { name: filters.ga4Dimension }, 
-          { name: 'country' }, 
-          { name: 'landingPage' }
+          { name: 'country' }
         ],
+        // No landing page here on purpose. Nothing in the menu reads GA4 sessions by page, and
+        // adding it multiplied the rows until large sites hit the cap and totals came out low.
         metrics: [
           { name: 'sessions' }, 
           { name: 'totalRevenue' }, 
@@ -1720,7 +1721,7 @@ const App: React.FC = () => {
           channel: row.dimensionValues[1].value,
           country: normalizeCountry(row.dimensionValues[2].value),
           queryType: 'Non-Branded' as QueryType,
-          landingPage: row.dimensionValues[3].value,
+          landingPage: '(not set)',
           dateRangeLabel: label,
           sessions: parseInt(row.metricValues[0].value) || 0,
           revenue: parseFloat(row.metricValues[1].value) || 0,
@@ -2446,7 +2447,7 @@ const App: React.FC = () => {
           </div>
         )}
         
-        {accessSession.status === 'open' && (
+        {accessSession.status === 'open' && !clientView && (
           <div className="mb-8 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3 text-rose-800 shadow-sm print:hidden">
             <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
             <div className="space-y-1">
