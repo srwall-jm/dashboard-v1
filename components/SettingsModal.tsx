@@ -41,6 +41,7 @@ interface SettingsModalProps {
   pinnedGoogleAdsAccountIds?: string[];
   onPinnedGoogleAdsAccountsChange?: (ids: string[]) => void;
   googleAdsClientLabel?: string;
+  clientProfilePanel?: React.ReactNode;
   setGa4Auth: (auth: any) => void;
   setGscAuth: (auth: any) => void;
   setGoogleAdsAuth: (auth: any) => void;
@@ -61,7 +62,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   ga4Search, setGa4Search, gscSearch, setGscSearch, googleAdsSearch, setGoogleAdsSearch,
   availableProperties, availableSites, availableGoogleAdsCustomers,
   selectedGoogleAdsCustomer, onGoogleAdsCustomerChange,
-  googleAdsSubAccounts = [], pinnedGoogleAdsAccountIds = [], onPinnedGoogleAdsAccountsChange, googleAdsClientLabel,
+  googleAdsSubAccounts = [], pinnedGoogleAdsAccountIds = [], onPinnedGoogleAdsAccountsChange, googleAdsClientLabel, clientProfilePanel,
   setGa4Auth, setGscAuth, setGoogleAdsAuth,
   filteredProperties, filteredSites, filteredGoogleAdsCustomers
 }) => {
@@ -87,6 +88,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Content - Scrollable */}
         <div className="overflow-y-auto p-8 space-y-8 custom-scrollbar bg-slate-50">
           
+          {clientProfilePanel}
+
           {/* Section 1: Data Connectors */}
           <section className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
             <div className="flex items-center gap-2 mb-4 text-slate-900">
