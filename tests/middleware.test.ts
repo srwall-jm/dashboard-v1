@@ -66,7 +66,7 @@ describe('middleware without Cloudflare Access configured', () => {
     expect(next).toHaveBeenCalledOnce();
     expect(response.status).toBe(200);
     const session = await sessionGet({ env: {}, data: {} } as any);
-    expect(await session.json()).toEqual({ protected: false, email: null });
+    expect(await session.json()).toMatchObject({ protected: false, email: null });
   });
 });
 
@@ -109,7 +109,7 @@ describe('middleware with Cloudflare Access configured', () => {
     expect(data.user).toEqual({ email: 'ana@jellyfish.com' });
 
     const session = await sessionGet({ env: protectedEnv, data } as any);
-    expect(await session.json()).toEqual({ protected: true, email: 'ana@jellyfish.com', allowedDomains: ['jellyfish.com'] });
+    expect(await session.json()).toMatchObject({ protected: true, email: 'ana@jellyfish.com', allowedDomains: ['jellyfish.com'] });
   });
 
   it('forwards Google Ads calls for an allowed sign-in, with only the needed headers', async () => {
@@ -125,5 +125,53 @@ describe('middleware with Cloudflare Access configured', () => {
     expect(forwarded.get('authorization')).toBe('Bearer google-token');
     expect(forwarded.get('cookie')).toBeNull();
     expect(forwarded.get('cf-access-jwt-assertion')).toBeNull();
+  });
+});
+
+describe('agency Google Ads credentials kept on the server', () => {
+  const adsPath = '/api/googleads/v25/customers:listAccessibleCustomers';
+  const forwardedToken = () =>
+    ((globalThis.fetch as any).mock.calls.find((c: any[]) => String(c[0]).includes('googleads'))?.[1].headers as Headers | undefined)?.get('developer-token');
+
+  it('adds the server token for a verified request, replacing whatever the browser sent', async () => {
+    const env = { ...protectedEnv, GOOGLE_ADS_DEVELOPER_TOKEN: 'agency-token' };
+    const { response } = await run(adsPath, env, {
+      'Cf-Access-Jwt-Assertion': await token('ana@jellyfish.com'),
+      authorization: 'Bearer google-token',
+      'developer-token': 'typed-in-browser',
+    });
+    expect(response.status).toBe(200);
+    expect(forwardedToken()).toBe('agency-token');
+  });
+
+  it('works when the browser sends no developer token at all', async () => {
+    const env = { ...protectedEnv, GOOGLE_ADS_DEVELOPER_TOKEN: 'agency-token' };
+    const { response } = await run(adsPath, env, {
+      'Cf-Access-Jwt-Assertion': await token('ana@jellyfish.com'),
+      authorization: 'Bearer google-token',
+    });
+    expect(response.status).toBe(200);
+    expect(forwardedToken()).toBe('agency-token');
+  });
+
+  it('never uses the server token while access is not restricted', async () => {
+    const env = { GOOGLE_ADS_DEVELOPER_TOKEN: 'agency-token' };
+    const withoutOwn = await run(adsPath, env, { authorization: 'Bearer google-token' });
+    expect(withoutOwn.response.status).toBe(401);
+    expect(upstreamCalls).toEqual([]);
+
+    const withOwn = await run(adsPath, env, { authorization: 'Bearer google-token', 'developer-token': 'typed-in-browser' });
+    expect(withOwn.response.status).toBe(200);
+    expect(forwardedToken()).toBe('typed-in-browser');
+  });
+
+  it('tells the app what is managed, without ever returning the token', async () => {
+    const managed = await sessionGet({ env: { ...protectedEnv, GOOGLE_ADS_DEVELOPER_TOKEN: 'agency-token', GOOGLE_ADS_OAUTH_CLIENT_ID: 'abc.apps.googleusercontent.com' }, data: { user: { email: 'ana@jellyfish.com' } } } as any);
+    const text = await managed.text();
+    expect(text).not.toContain('agency-token');
+    expect(JSON.parse(text).googleAds).toEqual({ developerTokenOnServer: true, developerTokenWaitingForAccess: false, oauthClientId: 'abc.apps.googleusercontent.com' });
+
+    const waiting = await sessionGet({ env: { GOOGLE_ADS_DEVELOPER_TOKEN: 'agency-token' }, data: {} } as any);
+    expect((await waiting.json()).googleAds).toEqual({ developerTokenOnServer: false, developerTokenWaitingForAccess: true, oauthClientId: null });
   });
 });

@@ -4,6 +4,8 @@
 //    must carry a valid Access token for an allowed email domain. Anything else is rejected,
 //    including calls to the functions under /api/.
 // 2. Proxy for the Google Ads API (it does not allow direct calls from the browser).
+//    With Access on and GOOGLE_ADS_DEVELOPER_TOKEN set, the agency's developer token is added
+//    here, so it never reaches the browser. It is never added for an unverified request.
 //    Everything under /api/googleads/ is forwarded to googleads.googleapis.com.
 //    Only the headers Google Ads needs are passed on; cookies and the rest stay behind.
 
@@ -45,6 +47,9 @@ export async function onRequest(context) {
     const value = context.request.headers.get(name);
     if (value) headers.set(name, value);
   }
+
+  const agencyToken = config ? String(context.env.GOOGLE_ADS_DEVELOPER_TOKEN || '').trim() : '';
+  if (agencyToken) headers.set('developer-token', agencyToken);
 
   if (!headers.has('authorization') || !headers.has('developer-token')) {
     return json({ error: { message: 'Missing Google Ads credentials.' } }, 401);
