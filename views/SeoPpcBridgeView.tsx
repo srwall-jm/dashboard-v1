@@ -17,34 +17,34 @@ const QueryDetailRow: React.FC<{ query: string, rank: number | null, clicks: num
   <tr className="bg-slate-50/80 border-b border-slate-100/50">
     <td colSpan={2} className="py-2 pl-16"></td>
     <td className="py-2">
-      <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
+      <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
         <CornerDownRight size={10} className="text-slate-300 flex-shrink-0" />
         <span className="truncate max-w-[200px]" title={query}>{query}</span>
       </div>
     </td>
     <td className="text-center py-2">
       {rank ? (
-        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${rank <= 3 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
+        <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold ${rank <= 3 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
           #{rank.toFixed(1)}
         </span>
       ) : '-'}
     </td>
-    <td className="text-right py-2 text-[10px] font-bold text-slate-700">{clicks.toLocaleString()}</td>
-    <td className="text-right py-2 text-[10px] font-bold text-indigo-600">
+    <td className="text-right py-2 text-[11px] font-bold text-slate-700">{clicks.toLocaleString()}</td>
+    <td className="text-right py-2 text-[11px] font-bold text-indigo-600">
         <div className="flex flex-col items-end">
             {isLoading ? (
-              <span className="text-[8px] text-slate-400 animate-pulse italic">Cargando...</span>
+              <span className="text-[11px] text-slate-500 animate-pulse italic">Loading…</span>
             ) : (
               <>
                 <span>{paidClicks.toLocaleString()}</span>
-                <span className="text-[8px] text-rose-500">{currencySymbol}{paidCost.toFixed(2)}</span>
+                <span className="text-[11px] text-rose-500">{currencySymbol}{paidCost.toFixed(2)}</span>
               </>
             )}
         </div>
     </td>
     <td className="text-center py-2">
         {!isLoading && paidClicks > 0 && clicks > 0 ? (
-            <span className="text-[9px] font-bold text-slate-400">{(paidClicks / (paidClicks + clicks) * 100).toFixed(0)}%</span>
+            <span className="text-[11px] font-bold text-slate-500">{(paidClicks / (paidClicks + clicks) * 100).toFixed(0)}%</span>
         ) : '-'}
     </td>
     <td className="py-2"></td>
@@ -267,13 +267,13 @@ const BridgeAnalysisTable: React.FC<{
       return {
         organic: "Org. Sessions (GA4)",
         paid: "Google Ads Clicks",
-        paidColor: "#ea580c" // Orange-600
+        paidColor: "#D97706" // Orange-600
       };
     }
     return {
       organic: "Org. Sessions (GA4)",
       paid: "Paid Sessions (GA4)",
-      paidColor: "#f59e0b" // Amber-500
+      paidColor: "#D97706" // Amber-500
     };
   }, [dataSourceName]);
 
@@ -295,7 +295,7 @@ const BridgeAnalysisTable: React.FC<{
 
   const SortableHeader = ({ label, sortKey, align = 'right' }: { label: string, sortKey: string, align?: 'left' | 'center' | 'right' }) => (
     <th 
-        className={`py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 hover:bg-slate-50 transition-colors select-none text-${align}`}
+        className={`py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wide cursor-pointer hover:text-indigo-600 hover:bg-slate-50 transition-colors select-none text-${align}`}
         onClick={() => handleSort(sortKey)}
     >
         <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}>
@@ -310,21 +310,21 @@ const BridgeAnalysisTable: React.FC<{
 
   return (
     <div className="mb-10">
-    <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden mb-6">
+    <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
             <div className="flex flex-col gap-2">
               <div>
                 <div className="flex items-center gap-3">
-                    <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{title}</h4>
+                    <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">{title}</h4>
                     {headerContent}
                 </div>
                 <p className="text-[11px] font-bold text-slate-600">{subTitle}</p>
               </div>
               <div className="flex bg-slate-100 p-1 rounded-xl w-fit">
-                <button onClick={() => setViewMode('url')} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${viewMode === 'url' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>
+                <button onClick={() => setViewMode('url')} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase transition-all ${viewMode === 'url' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>
                   <LayoutList size={12} /> Analysis by URL / QUERY
                 </button>
-                <button onClick={() => setViewMode('keyword')} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${viewMode === 'keyword' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>
+                <button onClick={() => setViewMode('keyword')} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase transition-all ${viewMode === 'keyword' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>
                   <Key size={12} /> Analysis by Exact Match
                 </button>
               </div>
@@ -332,14 +332,14 @@ const BridgeAnalysisTable: React.FC<{
             
             <div className="flex items-center gap-2 w-full md:w-auto">
                <div className="relative w-full md:w-64">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
                   <input type="text" placeholder={viewMode === 'url' ? "Search URL..." : "Search Keyword..."}
                     value={viewMode === 'url' ? urlFilter : keywordFilter} 
                     onChange={(e) => viewMode === 'url' ? setUrlFilter(e.target.value) : setKeywordFilter(e.target.value)} 
-                    className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none focus:ring-1 ring-indigo-500 transition-all"
+                    className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-bold outline-none focus:ring-1 ring-indigo-500 transition-all"
                   />
                </div>
-               <button onClick={handleExport} className="flex items-center gap-2 px-3 py-2 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md whitespace-nowrap">
+               <button onClick={handleExport} className="flex items-center gap-2 px-3 py-2 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md whitespace-nowrap">
                   <FileText size={12} /> CSV
                 </button>
             </div>
@@ -376,28 +376,28 @@ const BridgeAnalysisTable: React.FC<{
                         </button>
                       </td>
                       <td className="py-3 px-4 text-center" onClick={() => toggleRow(row.url)}>
-                          {expandedRows.has(row.url) ? <ChevronDown size={14} className="text-indigo-500" /> : <ChevronRight size={14} className="text-slate-400" />}
+                          {expandedRows.has(row.url) ? <ChevronDown size={14} className="text-indigo-500" /> : <ChevronRight size={14} className="text-slate-500" />}
                       </td>
                       <td className="py-3 px-4 max-w-xs" onClick={() => toggleRow(row.url)}>
                           <div className="flex flex-col">
-                            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-800 break-all"><ExternalLink size={10} className="text-indigo-400 flex-shrink-0" /> {row.url}</div>
-                            <div className="flex items-center gap-1 text-[9px] text-slate-400 mt-1"><Key size={8} /> Top Query: {row.query}</div>
+                            <div className="flex items-center gap-2 text-[11px] font-bold text-slate-800 break-all"><ExternalLink size={10} className="text-indigo-400 flex-shrink-0" /> {row.url}</div>
+                            <div className="flex items-center gap-1 text-[11px] text-slate-500 mt-1"><Key size={8} /> Top Query: {row.query}</div>
                           </div>
                       </td>
-                      <td className="py-3 px-4 text-center"><span className="text-[10px] font-bold text-slate-600">{row.organicRank ? `#${row.organicRank.toFixed(1)}` : '-'}</span></td>
-                      <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-emerald-600">{row.organicSessions.toLocaleString()}</span></td>
-                      <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-indigo-600">{row.ppcSessions.toLocaleString()}</span></td>
+                      <td className="py-3 px-4 text-center"><span className="text-[11px] font-bold text-slate-600">{row.organicRank ? `#${row.organicRank.toFixed(1)}` : '-'}</span></td>
+                      <td className="py-3 px-4 text-right"><span className="text-[11px] font-bold text-emerald-600">{row.organicSessions.toLocaleString()}</span></td>
+                      <td className="py-3 px-4 text-right"><span className="text-[11px] font-bold text-indigo-600">{row.ppcSessions.toLocaleString()}</span></td>
                       <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className={`h-full ${row.blendedCostRatio > 0.5 ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${row.blendedCostRatio * 100}%` }} /></div>
-                            <span className="text-[9px] font-bold text-slate-600 w-6">{(row.blendedCostRatio * 100).toFixed(0)}%</span>
+                            <span className="text-[11px] font-bold text-slate-600 w-6">{(row.blendedCostRatio * 100).toFixed(0)}%</span>
                           </div>
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="group relative inline-block">
-                            <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tight cursor-help ${row.actionLabel.includes('CRITICAL') ? 'bg-rose-100 text-rose-600' : row.actionLabel === 'INCREASE' ? 'bg-blue-100 text-blue-600' : row.actionLabel === 'REVIEW' ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>{row.actionLabel.split(' ')[0]}</span>
-                            <div className="absolute right-0 top-full mt-2 w-56 p-3 bg-slate-900 text-white text-[10px] rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 border border-white/10 pointer-events-none text-left">
-                                <p className="text-slate-400 leading-relaxed font-medium">{actionInfo.logic}</p>
+                            <span className={`inline-block px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-tight cursor-help ${row.actionLabel.includes('CRITICAL') ? 'bg-rose-100 text-rose-600' : row.actionLabel === 'INCREASE' ? 'bg-blue-100 text-blue-600' : row.actionLabel === 'REVIEW' ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>{row.actionLabel.split(' ')[0]}</span>
+                            <div className="absolute right-0 top-full mt-2 w-56 p-3 bg-slate-900 text-white text-[11px] rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 border border-white/10 pointer-events-none text-left">
+                                <p className="text-slate-500 leading-relaxed font-medium">{actionInfo.logic}</p>
                             </div>
                         </div>
                       </td>
@@ -406,7 +406,7 @@ const BridgeAnalysisTable: React.FC<{
                       <>
                         <tr className="bg-slate-50/50">
                             <td colSpan={8} className="px-12 py-2">
-                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Top 10 GSC Queries for this URL</p>
+                                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Top 10 GSC Queries for this URL</p>
                             </td>
                         </tr>
                         {row.gscTopQueries && row.gscTopQueries.length > 0 ? (
@@ -423,14 +423,14 @@ const BridgeAnalysisTable: React.FC<{
                                 />
                             ))
                         ) : (
-                            <tr><td colSpan={8} className="text-center py-2 text-[10px] text-slate-400 italic">No specific query data available via GSC</td></tr>
+                            <tr><td colSpan={8} className="text-center py-2 text-[11px] text-slate-500 italic">No specific query data available via GSC</td></tr>
                         )}
                         <tr className="bg-slate-50/50 border-b border-slate-100"><td colSpan={8} className="py-1"></td></tr>
                       </>
                     )}
                   </React.Fragment>
                 );
-                }) : <tr><td colSpan={8} className="py-12 text-center text-xs text-slate-400">No data found</td></tr>}
+                }) : <tr><td colSpan={8} className="py-12 text-center text-xs text-slate-500">No data found</td></tr>}
               </tbody>
             </table>
           ) : (
@@ -451,20 +451,20 @@ const BridgeAnalysisTable: React.FC<{
                     const actionInfo = getActionInfo(row.actionLabel);
                     return (
                       <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3 px-4"><div className="flex items-center gap-2"><Key size={10} className="text-slate-400" /><span className="text-[10px] font-bold text-slate-800">{row.keyword}</span></div></td>
-                        <td className="py-3 px-4 text-center">{row.organicRank ? <span className={`px-2 py-0.5 rounded text-[10px] font-black ${row.organicRank <= 3 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>#{row.organicRank.toFixed(1)}</span> : <span className="text-[10px] text-slate-400">-</span>}</td>
-                        <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-emerald-600">{row.organicClicks.toLocaleString()}</span></td>
-                        <td className="py-3 px-4 text-right"><span className={`text-[10px] font-black ${row.paidSessions > 0 ? 'text-indigo-600' : 'text-slate-400'}`}>{row.paidSessions.toLocaleString()}</span></td>
-                         <td className="py-3 px-4 text-right"><span className="text-[10px] font-bold text-slate-600">{row.paidCvr.toFixed(2)}%</span></td>
+                        <td className="py-3 px-4"><div className="flex items-center gap-2"><Key size={10} className="text-slate-500" /><span className="text-[11px] font-bold text-slate-800">{row.keyword}</span></div></td>
+                        <td className="py-3 px-4 text-center">{row.organicRank ? <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${row.organicRank <= 3 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>#{row.organicRank.toFixed(1)}</span> : <span className="text-[11px] text-slate-500">-</span>}</td>
+                        <td className="py-3 px-4 text-right"><span className="text-[11px] font-bold text-emerald-600">{row.organicClicks.toLocaleString()}</span></td>
+                        <td className="py-3 px-4 text-right"><span className={`text-[11px] font-bold ${row.paidSessions > 0 ? 'text-indigo-600' : 'text-slate-500'}`}>{row.paidSessions.toLocaleString()}</span></td>
+                         <td className="py-3 px-4 text-right"><span className="text-[11px] font-bold text-slate-600">{row.paidCvr.toFixed(2)}%</span></td>
                         <td className="py-3 px-4 text-right">
                           <div className="group relative inline-block">
-                              <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tight cursor-help ${row.actionLabel.includes('CRITICAL') ? 'bg-rose-100 text-rose-600' : row.actionLabel.includes('OPPORTUNITY') ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500'}`}>{row.actionLabel.replace(/\(.*\)/, '')}</span>
-                              <div className="absolute right-0 top-full mt-2 w-56 p-3 bg-slate-900 text-white text-[10px] rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 border border-white/10 pointer-events-none text-left"><p className="text-slate-400 leading-relaxed font-medium">{actionInfo.logic}</p></div>
+                              <span className={`inline-block px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-tight cursor-help ${row.actionLabel.includes('CRITICAL') ? 'bg-rose-100 text-rose-600' : row.actionLabel.includes('OPPORTUNITY') ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500'}`}>{row.actionLabel.replace(/\(.*\)/, '')}</span>
+                              <div className="absolute right-0 top-full mt-2 w-56 p-3 bg-slate-900 text-white text-[11px] rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 border border-white/10 pointer-events-none text-left"><p className="text-slate-500 leading-relaxed font-medium">{actionInfo.logic}</p></div>
                           </div>
                         </td>
                       </tr>
                     );
-                }) : <tr><td colSpan={6} className="py-12 text-center text-xs text-slate-400">No keyword data matched</td></tr>}
+                }) : <tr><td colSpan={6} className="py-12 text-center text-xs text-slate-500">No keyword data matched</td></tr>}
               </tbody>
             </table>
           )}
@@ -473,10 +473,10 @@ const BridgeAnalysisTable: React.FC<{
 
     {/* Dynamic Chart for Selected URLs */}
     {selectedUrls.size > 0 && viewMode === 'url' && (
-      <div className="bg-slate-900 p-6 md:p-8 rounded-[32px] border border-slate-800 shadow-2xl relative overflow-hidden animate-in fade-in slide-in-from-top-4">
+      <div className="bg-slate-900 p-6 md:p-8 rounded-2xl border border-slate-800 shadow-2xl relative overflow-hidden">
          <div className="flex justify-between items-center mb-6 z-10 relative">
             <div>
-                <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Sessions Performance (Time Overlay)</h4>
+                <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Sessions Performance (Time Overlay)</h4>
                 <p className="text-[11px] font-bold text-white">Aggregated Performance for {selectedUrls.size} Selected URLs ({dataSourceName} Scope)</p>
             </div>
             <div className="p-2 bg-white/10 rounded-xl">
@@ -489,16 +489,16 @@ const BridgeAnalysisTable: React.FC<{
                 <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
-                        <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
-                        <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700, fill: '#94a3b8'}} />
+                        <XAxis dataKey="date" tick={{fontSize: 12, fontWeight: 700, fill: '#475569'}} axisLine={false} tickLine={false} />
+                        <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700, fill: '#475569'}} />
                         <Tooltip content={<ComparisonTooltip />} />
                         <Legend verticalAlign="top" align="center" iconType="circle" wrapperStyle={{ paddingTop: '10px' }} />
                         
-                        <Line name={chartLabels.organic} type="monotone" dataKey="Organic (Cur)" stroke="#6366f1" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 6 }} />
+                        <Line name={chartLabels.organic} type="monotone" dataKey="Organic (Cur)" stroke="#1D4ED8" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 6 }} />
                         <Line name={chartLabels.paid} type="monotone" dataKey="Paid (Cur)" stroke={chartLabels.paidColor} strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 6 }} />
                         
-                        <Line name="Organic (Prev)" type="monotone" dataKey="Organic (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={{ r: 2 }} />
-                        <Line name="Paid (Prev)" type="monotone" dataKey="Paid (Prev)" stroke={chartLabels.paidColor} strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={{ r: 2 }} />
+                        <Line name="Organic (Prev)" type="monotone" dataKey="Organic (Prev)" stroke="#1D4ED8" strokeWidth={1.5} strokeDasharray="6 4" dot={{ r: 2 }} />
+                        <Line name="Paid (Prev)" type="monotone" dataKey="Paid (Prev)" stroke={chartLabels.paidColor} strokeWidth={1.5} strokeDasharray="6 4" dot={{ r: 2 }} />
                     </LineChart>
                 </ResponsiveContainer>
             ) : <EmptyState text="No timeline data available for selected URLs" />}
@@ -542,16 +542,16 @@ export const SeoPpcBridgeView: React.FC<{
           <div className="bg-slate-100 p-1 rounded-2xl flex items-center gap-1 shadow-inner">
              <button 
                 onClick={() => setActiveDataSource('GA4')}
-                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeDataSource === 'GA4' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`px-6 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wide transition-all flex items-center gap-2 ${activeDataSource === 'GA4' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
              >
                 <img src="https://www.gstatic.com/analytics-suite/header/suite/v2/ic_analytics.svg" className="w-4 h-4" alt="GA4" />
                 GA4 Data (Sessions)
              </button>
              <button 
                 onClick={() => setActiveDataSource('GOOGLE_ADS')}
-                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeDataSource === 'GOOGLE_ADS' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`px-6 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wide transition-all flex items-center gap-2 ${activeDataSource === 'GOOGLE_ADS' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
              >
-                <div className="w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-[8px]">G</div>
+                <div className="w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-[11px]">G</div>
                 Google Ads Data (Paid Search)
              </button>
           </div>
@@ -582,9 +582,9 @@ export const SeoPpcBridgeView: React.FC<{
               headerContent={
                   <div className="flex items-center gap-4 ml-4">
                      <div className="flex items-center gap-2">
-                        <span className="text-[9px] font-bold text-slate-400">Manager:</span>
+                        <span className="text-[11px] font-bold text-slate-500">Manager:</span>
                         <select 
-                            className="bg-slate-50 border border-slate-200 rounded-lg text-[9px] font-bold py-1 px-2 outline-none max-w-[150px]"
+                            className="bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-bold py-1 px-2 outline-none max-w-[150px]"
                             value={selectedGoogleAdsCustomer?.resourceName || ''}
                             onChange={(e) => {
                             const c = availableGoogleAdsCustomers.find(cx => cx.resourceName === e.target.value);

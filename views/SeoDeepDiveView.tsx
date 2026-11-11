@@ -83,12 +83,12 @@ export const SeoDeepDiveView: React.FC<{
   }, [keywords, searchTerm]);
 
 return (
-  <div className="w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-6">
-    <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
+  <div className="w-full max-w-7xl mx-auto space-y-6">
+    <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
-          <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">URL & Keyword Precision Analysis</h4>
+          <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">URL & Keyword Precision Analysis</h4>
           <p className="text-[11px] font-bold text-slate-600">URL hierarchy and top 20 corresponding queries (Aggregated)</p>
         </div>
         
@@ -107,13 +107,13 @@ return (
               }));
               exportToCSV(dataToExport, "SEO_Keywords_Full_Report");
             }}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[10px] font-black uppercase transition-all shadow-lg shadow-indigo-600/20 w-full sm:w-auto"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[11px] font-bold uppercase transition-all shadow-lg shadow-indigo-600/20 w-full sm:w-auto"
           >
             <FileText size={14} /> Export All Keywords
           </button>
 
           <div className="relative w-full sm:w-80">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <input 
               type="text" 
               placeholder="Filter by URL or Keyword..." 
@@ -129,11 +129,11 @@ return (
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/50">
-                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 w-10"></th>
-                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Landing Page (URL)</th>
-                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Clicks</th>
-                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">Impr.</th>
-                <th className="py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 text-right">CTR</th>
+                <th className="py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wide px-4 w-10"></th>
+                <th className="py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wide px-4">Landing Page (URL)</th>
+                <th className="py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wide px-4 text-right">Clicks</th>
+                <th className="py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wide px-4 text-right">Impr.</th>
+                <th className="py-4 text-[11px] font-bold text-slate-500 uppercase tracking-wide px-4 text-right">CTR</th>
               </tr>
             </thead>
             <tbody>
@@ -146,26 +146,26 @@ return (
                     <td className="py-5 px-4 text-center">
                       {expandedUrls.has(page.url) ? 
                         <ChevronUp className="w-4 h-4 text-indigo-500" /> : 
-                        <ChevronDown className="w-4 h-4 text-slate-400" />
+                        <ChevronDown className="w-4 h-4 text-slate-500" />
                       }
                     </td>
                     <td className="py-5 px-4 max-w-md">
                       <div className="flex items-center gap-3">
                         <LinkIcon className="w-3 h-3 text-slate-300 flex-shrink-0" />
-                        <span className="text-[11px] font-black text-slate-800 truncate block">{page.url}</span>
+                        <span className="text-[11px] font-bold text-slate-800 truncate block">{page.url}</span>
                         <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                           <ExternalLink className="w-3 h-3 text-indigo-400" />
                         </div>
                       </div>
                     </td>
                     <td className="py-5 px-4 text-right">
-                      <div className="text-[11px] font-black text-slate-900">{page.clicks.toLocaleString()}</div>
+                      <div className="text-[11px] font-bold text-slate-900">{page.clicks.toLocaleString()}</div>
                     </td>
                     <td className="py-5 px-4 text-right font-bold text-slate-600 text-[11px]">
                       {page.impressions.toLocaleString()}
                     </td>
                     <td className="py-5 px-4 text-right">
-                      <div className="text-[11px] font-black text-slate-900">{page.ctr.toFixed(2)}%</div>
+                      <div className="text-[11px] font-bold text-slate-900">{page.ctr.toFixed(2)}%</div>
                       <div className="w-16 h-1 bg-slate-100 rounded-full mt-1.5 ml-auto overflow-hidden">
                         <div className="h-full bg-indigo-500" style={{ width: `${Math.min(page.ctr * 5, 100)}%` }} />
                       </div>
@@ -178,12 +178,12 @@ return (
                           <table className="w-full border-l-2 border-indigo-200/50">
                             <thead>
                               <tr className="border-b border-indigo-100">
-                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-left">Top Queries (Limit 20)</th>
-                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 w-24">Type</th>
-                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right w-24">Avg. Rank</th>
-                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right w-24">Clicks</th>
-                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right w-24">Impr.</th>
-                                <th className="py-3 text-[8px] font-black text-slate-400 uppercase tracking-widest px-4 text-right w-24">CTR</th>
+                                <th className="py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide px-4 text-left">Top Queries (Limit 20)</th>
+                                <th className="py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide px-4 w-24">Type</th>
+                                <th className="py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide px-4 text-right w-24">Avg. Rank</th>
+                                <th className="py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide px-4 text-right w-24">Clicks</th>
+                                <th className="py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide px-4 text-right w-24">Impr.</th>
+                                <th className="py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wide px-4 text-right w-24">CTR</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -193,22 +193,22 @@ return (
                                     <span className="text-[11px] font-bold text-slate-700">{q.keyword}</span>
                                   </td>
                                   <td className="py-2.5 px-4">
-                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tight ${q.queryType === 'Branded' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>
+                                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-tight ${q.queryType === 'Branded' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>
                                       {q.queryType}
                                     </span>
                                   </td>
                                   <td className="py-2.5 px-4 text-right">
-                                    <span className={`text-[10px] font-bold ${q.avgPosition <= 3 ? 'text-emerald-600' : q.avgPosition <= 10 ? 'text-indigo-600' : 'text-slate-500'}`}>
+                                    <span className={`text-[11px] font-bold ${q.avgPosition <= 3 ? 'text-emerald-600' : q.avgPosition <= 10 ? 'text-indigo-600' : 'text-slate-500'}`}>
                                       {q.avgPosition.toFixed(1)}
                                     </span>
                                   </td>
                                   <td className="py-2.5 px-4 text-right">
-                                    <span className="text-[11px] font-black text-slate-900">{q.clicks.toLocaleString()}</span>
+                                    <span className="text-[11px] font-bold text-slate-900">{q.clicks.toLocaleString()}</span>
                                   </td>
-                                  <td className="py-2.5 px-4 text-right font-bold text-slate-500 text-[10px]">
+                                  <td className="py-2.5 px-4 text-right font-bold text-slate-500 text-[11px]">
                                     {q.impressions.toLocaleString()}
                                   </td>
-                                  <td className="py-2.5 px-4 text-right font-black text-slate-900 text-[10px]">
+                                  <td className="py-2.5 px-4 text-right font-bold text-slate-900 text-[11px]">
                                     {q.ctr.toFixed(2)}%
                                   </td>
                                 </tr>
@@ -225,7 +225,7 @@ return (
                   <td colSpan={5} className="py-20 text-center">
                     <div className="flex flex-col items-center gap-4">
                       <Search className="w-10 h-10 text-slate-200" />
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No matching search terms found</p>
+                      <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">No matching search terms found</p>
                     </div>
                   </td>
                 </tr>

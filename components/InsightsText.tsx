@@ -5,7 +5,7 @@ import React from 'react';
 const renderInline = (line: string) =>
   line.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
     part.startsWith('**') && part.endsWith('**')
-      ? <strong key={i} className="font-black text-white">{part.slice(2, -2)}</strong>
+      ? <strong key={i} className="font-bold text-white">{part.slice(2, -2)}</strong>
       : <React.Fragment key={i}>{part}</React.Fragment>
   );
 
@@ -15,7 +15,7 @@ export const InsightsText: React.FC<{ text: string }> = ({ text }) => (
       const line = raw.trim();
       if (!line) return null;
       const heading = line.match(/^#{1,6}\s+(.*)$/);
-      if (heading) return <p key={i} className="font-black text-white pt-2">{renderInline(heading[1])}</p>;
+      if (heading) return <p key={i} className="font-bold text-white pt-2">{renderInline(heading[1])}</p>;
       const bullet = line.match(/^[-*•]\s+(.*)$/);
       if (bullet) {
         return (

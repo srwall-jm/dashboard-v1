@@ -47,13 +47,15 @@ export const SearchEfficiencyView: React.FC<{
   keywordSignals?: KeywordSignal[];
   periodDays?: number;
   recommendationSettings?: RecommendationSettings;
+  presentation?: boolean; // client view: recommendations only
   clientName?: string;
   periodLabel?: string;
-}> = ({ urlData, keywordData, currencySymbol, globalMetrics, totalGscClicks, isLoading, isBranded, onRefresh, queryTypeFilter, keywordSignals = [], periodDays = 30, recommendationSettings = DEFAULT_SETTINGS, clientName, periodLabel }) => {
+}> = ({ urlData, keywordData, currencySymbol, globalMetrics, totalGscClicks, isLoading, isBranded, onRefresh, queryTypeFilter, keywordSignals = [], periodDays = 30, recommendationSettings = DEFAULT_SETTINGS, presentation = false, clientName, periodLabel }) => {
   const [clusterFilter, setClusterFilter] = useState<'All' | 'Cannibalization Risk' | 'Paid Reliance' | 'Paid Gap'>('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ppcCost', direction: 'desc' });
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
+  const [showLandingPages, setShowLandingPages] = useState(false);
 
   // 0. Keyword recommendations (reduce / hold / increase), the source of every saving figure in this view
   const { recommendations, summary: recSummary } = useMemo(
@@ -285,7 +287,7 @@ export const SearchEfficiencyView: React.FC<{
     {
       name: 'Optimized Spend',
       Spend: metrics.optimizedSpend,
-      fill: '#94a3b8' // Slate 400
+      fill: '#475569' // Slate 400
     }
   ];
 
@@ -371,7 +373,7 @@ export const SearchEfficiencyView: React.FC<{
 
   const SortableHeader = ({ label, sortKey, align = 'right', title }: { label: string, sortKey: keyof UrlEfficiencyRow, align?: 'left' | 'center' | 'right', title?: string }) => (
     <th 
-        className={`py-2 px-2 text-[9px] font-black text-slate-400 uppercase tracking-tight cursor-pointer hover:text-indigo-600 hover:bg-slate-50 transition-colors select-none text-${align}`}
+        className={`py-2 px-2 text-[11px] font-bold text-slate-500 uppercase tracking-tight cursor-pointer hover:text-indigo-600 hover:bg-slate-50 transition-colors select-none text-${align}`}
         onClick={() => handleSort(sortKey)}
         title={title}
     >
@@ -390,53 +392,13 @@ export const SearchEfficiencyView: React.FC<{
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-4">
         <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-slate-500 font-black uppercase tracking-widest text-[10px]">Syncing keyword data...</p>
+        <p className="text-slate-500 font-bold uppercase tracking-wide text-[11px]">Syncing keyword data...</p>
       </div>
     );
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-6">
-      
-      {/* Section 1: Scorecards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-         <div className="bg-gradient-to-br from-slate-600 to-slate-700 p-6 rounded-[32px] text-white shadow-lg shadow-slate-500/20 relative overflow-hidden">
-             <div className="absolute top-0 right-0 p-6 opacity-20">
-                 <DollarSign size={64} />
-             </div>
-             <p className="text-slate-100 font-bold uppercase tracking-widest text-xs mb-2">Total Spend</p>
-             <h3 className="text-4xl font-black tracking-tight">{currencySymbol}{formatCurrency(metrics.totalCost, 0)}</h3>
-         </div>
-         
-         <div className="bg-gradient-to-br from-slate-400 to-slate-500 p-6 rounded-[32px] text-white shadow-lg shadow-slate-400/20 relative overflow-hidden transform hover:scale-[1.02] transition-transform">
-             <div className="absolute top-0 right-0 p-6 opacity-20">
-                 <PiggyBank size={64} />
-             </div>
-             <p className="text-slate-100 font-bold uppercase tracking-widest text-xs mb-2 flex items-center gap-2">
-                 <Zap size={14} /> Spend that can come down
-             </p>
-             <h3 className="text-4xl font-black tracking-tight">{currencySymbol}{formatCurrency(metrics.potentialSavings, 0)}</h3>
-             <p className="text-slate-100 text-sm mt-2 font-medium">In this period, about {currencySymbol}{formatCurrency(recSummary.spendCutMonthly, 0)} a month</p>
-         </div>
-
-         <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 p-6 rounded-[32px] text-white shadow-lg shadow-indigo-500/20 relative overflow-hidden">
-             <div className="absolute top-0 right-0 p-6 opacity-20">
-                 <TrendingDown size={64} />
-             </div>
-             <p className="text-indigo-100 font-bold uppercase tracking-widest text-xs mb-2">Clicks at risk</p>
-             <h3 className="text-4xl font-black tracking-tight">{Math.round(recSummary.clicksAtRisk.low).toLocaleString('en-US')}–{Math.round(recSummary.clicksAtRisk.high).toLocaleString('en-US')}</h3>
-             <p className="text-indigo-200 text-sm mt-2 font-medium">Paid clicks that may be lost with the cut</p>
-         </div>
-
-         <div className="bg-gradient-to-br from-amber-400 to-amber-600 p-6 rounded-[32px] text-white shadow-lg shadow-amber-500/20 relative overflow-hidden">
-             <div className="absolute top-0 right-0 p-6 opacity-20">
-                 <Target size={64} />
-             </div>
-             <p className="text-amber-100 font-bold uppercase tracking-widest text-xs mb-2">Avg. Paid Share</p>
-             <h3 className="text-4xl font-black tracking-tight">{metrics.avgPaidShare.toFixed(1)}%</h3>
-             <p className="text-amber-100 text-sm mt-2 font-medium">Paid vs Organic Traffic</p>
-         </div>
-      </div>
+    <div className="w-full max-w-7xl mx-auto space-y-6">
 
       {/* Section 1b: Keyword recommendations */}
       <KeywordRecommendations
@@ -448,76 +410,35 @@ export const SearchEfficiencyView: React.FC<{
         periodLabel={periodLabel}
         clientName={clientName}
         isLoading={isLoading}
+        presentation={presentation}
       />
 
-      {/* Section 2: Chart */}
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
-          <h4 className="text-sm font-black text-slate-800 mb-6">Spend Optimization</h4>
-          <div className="h-[250px] mb-8" style={{ minHeight: 250 }}>
-              <ResponsiveContainer width="100%" height="100%" minHeight={250}>
-                  <BarChart data={chartData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="name" tick={{fontSize: 12, fontWeight: 700, fill: '#64748b'}} axisLine={false} tickLine={false} />
-                      <YAxis tickFormatter={(val) => `${currencySymbol}${val}`} tick={{fontSize: 12, fontWeight: 700, fill: '#64748b'}} axisLine={false} tickLine={false} />
-                      <Tooltip 
-                          cursor={{fill: '#f8fafc'}}
-                          content={({ active, payload }) => {
-                              if (active && payload && payload.length) {
-                                  return (
-                                      <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-xl border border-slate-800">
-                                          <p className="font-black text-sm mb-1">{payload[0].payload.name}</p>
-                                          <p className="font-bold text-lg text-emerald-400">{currencySymbol}{formatCurrency(payload[0].value as number)}</p>
-                                      </div>
-                                  );
-                              }
-                              return null;
-                          }}
-                      />
-                      <Bar dataKey="Spend" radius={[8, 8, 0, 0]}>
-                          {chartData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.fill} />
-                          ))}
-                      </Bar>
-                  </BarChart>
-              </ResponsiveContainer>
-          </div>
-
-          {/* Top Cannibalized URLs */}
-          <div className="space-y-4">
-              <h5 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Top Cannibalized URLs</h5>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                  {metrics.topCannibalizedUrls.length > 0 ? metrics.topCannibalizedUrls.map((u, i) => (
-                      <div key={i} className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                          <div className="flex justify-between items-start mb-2">
-                              <span className="text-[10px] font-bold text-slate-500 truncate max-w-[150px]" title={u.url}>{u.url}</span>
-                              <span className="text-[10px] font-black text-rose-600">{currencySymbol}{formatCurrency(u.cost, 0)}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                              <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden flex">
-                                  <div className="h-full bg-rose-500" style={{ width: `${u.share}%` }} />
-                                  <div className="h-full bg-emerald-500" style={{ width: `${100 - u.share}%` }} />
-                              </div>
-                              <span className="text-[10px] font-black text-slate-700">{u.share.toFixed(0)}% Paid</span>
-                          </div>
-                      </div>
-                  )) : (
-                      <p className="text-[10px] text-slate-400 italic col-span-full">No major cannibalization detected at URL level.</p>
-                  )}
-              </div>
-          </div>
-      </div>
-
-      {/* Section 3: Detailed Savings Table */}
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm flex flex-col">
+      {/* Analyst detail: landing pages. Not part of what the client sees. */}
+      {!presentation && (
+        <div className="print:hidden space-y-4">
+          <button
+            type="button"
+            onClick={() => setShowLandingPages(v => !v)}
+            aria-expanded={showLandingPages}
+            className="w-full flex items-center justify-between gap-3 px-6 py-4 bg-white rounded-2xl border border-slate-200 text-left hover:border-slate-400 focus-visible:outline-none focus-visible:ring-2 ring-slate-900/30"
+          >
+            <span>
+              <span className="block text-sm font-bold text-slate-900">Analyst detail: landing pages behind these keywords</span>
+              <span className="block text-xs font-medium text-slate-600 mt-0.5">Organic and paid by URL, with the queries of each page. Not shown in client view or print.</span>
+            </span>
+            {showLandingPages ? <ChevronUp size={18} className="text-slate-600 flex-shrink-0" aria-hidden="true" /> : <ChevronDown size={18} className="text-slate-600 flex-shrink-0" aria-hidden="true" />}
+          </button>
+          {showLandingPages && (
+      <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
               <div>
-                <h4 className="text-sm font-black text-slate-800">Detailed Savings Table</h4>
-                <p className="text-xs font-bold text-slate-500 mt-1">Filtered by Synergy Lab Clusters</p>
+                <h4 className="text-base font-bold text-slate-900">Landing pages</h4>
+                <p className="text-xs font-medium text-slate-600 mt-1">Overlap: organic top 3 and ads on the same page. Ads only: no organic top 10. Organic only: no ad spend.</p>
               </div>
               
               <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
                  <div className="relative w-full md:w-64">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                     <input 
                       type="text" 
                       placeholder="Search URL..." 
@@ -529,14 +450,14 @@ export const SearchEfficiencyView: React.FC<{
                  <div className="flex items-center gap-2 w-full md:w-auto">
                    <button 
                     onClick={handleExportUrls} 
-                    className="flex items-center justify-center gap-2 px-3.5 py-2 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-xs font-black uppercase transition-all shadow-md whitespace-nowrap flex-1 md:flex-none"
+                    className="flex items-center justify-center gap-2 px-3.5 py-2 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-xs font-bold uppercase transition-all shadow-md whitespace-nowrap flex-1 md:flex-none"
                     title="Export URL efficiency summary report"
                    >
                       <FileText size={14} /> CSV (URLs)
                     </button>
                    <button 
                     onClick={handleExportKeywords} 
-                    className="flex items-center justify-center gap-2 px-3.5 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl text-xs font-black uppercase transition-all shadow-md whitespace-nowrap flex-1 md:flex-none"
+                    className="flex items-center justify-center gap-2 px-3.5 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl text-xs font-bold uppercase transition-all shadow-md whitespace-nowrap flex-1 md:flex-none"
                     title="Export keyword level breakdown report"
                    >
                       <Key size={14} /> CSV (Keywords)
@@ -548,21 +469,18 @@ export const SearchEfficiencyView: React.FC<{
           {/* Cluster & Query Type Filters */}
           <div className="flex flex-col md:flex-row gap-4 mb-6">
               <div className="flex flex-wrap gap-2">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest w-full mb-1">Clusters</span>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide w-full mb-1">Clusters</span>
                   {['All', 'Cannibalization Risk', 'Paid Reliance', 'Paid Gap'].map(cluster => (
                       <button 
                           key={cluster}
                           onClick={() => setClusterFilter(cluster as any)}
-                          className={`px-4 py-2 text-xs font-black rounded-xl transition-all border ${
+                          className={`px-4 py-2 text-xs font-bold rounded-xl transition-all border ${
                               clusterFilter === cluster 
-                                  ? cluster === 'Cannibalization Risk' ? 'bg-rose-50 text-rose-600 border-rose-200'
-                                  : cluster === 'Paid Reliance' ? 'bg-amber-50 text-amber-600 border-amber-200'
-                                  : cluster === 'Paid Gap' ? 'bg-indigo-50 text-indigo-600 border-indigo-200'
-                                  : 'bg-slate-900 text-white border-slate-900'
+                                  ? 'bg-slate-900 text-white border-slate-900'
                                   : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
                           }`}
                       >
-                          {cluster}
+                          {cluster === 'Cannibalization Risk' ? 'Overlap' : cluster === 'Paid Reliance' ? 'Ads only' : cluster === 'Paid Gap' ? 'Organic only' : cluster}
                       </button>
                   ))}
               </div>
@@ -597,25 +515,22 @@ export const SearchEfficiencyView: React.FC<{
                                   className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors cursor-pointer ${expandedUrl === row.url ? 'bg-slate-50/80' : ''}`}
                                   onClick={() => toggleRow(row.url)}
                               >
-                                  <td className="py-2 px-2 text-slate-400">
+                                  <td className="py-2 px-2 text-slate-500">
                                       <ChevronRight size={14} className={`transition-transform ${expandedUrl === row.url ? 'rotate-90' : ''}`} />
                                   </td>
                                   <td className="py-2 px-2 max-w-[200px] truncate" title={row.url}>
                                       <span className="text-[11px] font-bold text-slate-800">{row.url}</span>
                                   </td>
                                   <td className="py-2 px-2 text-center">
-                                      <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-lg whitespace-nowrap ${
-                                          row.cluster === 'Cannibalization Risk' ? 'bg-rose-100 text-rose-700' :
-                                          row.cluster === 'Paid Reliance' ? 'bg-amber-100 text-amber-700' :
-                                          row.cluster === 'Paid Gap' ? 'bg-indigo-100 text-indigo-700' :
-                                          'bg-slate-100 text-slate-500'
+                                      <span className={`text-[11px] font-bold uppercase px-1.5 py-0.5 rounded-lg whitespace-nowrap ${
+                                          'bg-slate-100 text-slate-700'
                                       }`}>
-                                          {row.cluster === 'Cannibalization Risk' ? 'RISK' : row.cluster === 'Paid Reliance' ? 'RELIANCE' : row.cluster === 'Paid Gap' ? 'GAP' : 'OTHER'}
+                                          {row.cluster === 'Cannibalization Risk' ? 'Overlap' : row.cluster === 'Paid Reliance' ? 'Ads only' : row.cluster === 'Paid Gap' ? 'Organic only' : 'Other'}
                                       </span>
                                   </td>
                                   <td className="py-2 px-2 text-center">
                                       {row.avgOrganicRank ? (
-                                          <span className={`px-1.5 py-0.5 rounded-lg text-[10px] font-black ${row.avgOrganicRank <= 3 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                                          <span className={`px-1.5 py-0.5 rounded-lg text-[11px] font-bold ${row.avgOrganicRank <= 3 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                                               #{row.avgOrganicRank.toFixed(1)}
                                           </span>
                                       ) : '-'}
@@ -638,7 +553,7 @@ export const SearchEfficiencyView: React.FC<{
                                                   style={{ width: `${100 - row.paidShare}%` }} 
                                               />
                                           </div>
-                                          <span className="text-[9px] font-black text-slate-500">{row.paidShare.toFixed(0)}%</span>
+                                          <span className="text-[11px] font-bold text-slate-500">{row.paidShare.toFixed(0)}%</span>
                                       </div>
                                   </td>
                                   <td className="py-2 px-2 text-right">
@@ -667,7 +582,7 @@ export const SearchEfficiencyView: React.FC<{
                                                                              <td colSpan={11} className="p-0">
                                           <div className="p-6 pl-14">
                                               <div className="flex items-center justify-between mb-3">
-                                                   <h5 className="text-xs font-black text-slate-800 uppercase tracking-widest">Top {row.queries.length} Queries for this URL</h5>
+                                                   <h5 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Top {row.queries.length} Queries for this URL</h5>
                                                    {row.queries.length > 0 && (
                                                        <button
                                                            onClick={(e) => {
@@ -683,7 +598,7 @@ export const SearchEfficiencyView: React.FC<{
                                                                const sanitizedUrl = row.url.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
                                                                exportToCSV(csv, `Queries_${sanitizedUrl}`);
                                                            }}
-                                                           className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-lg text-[10px] font-bold shadow-sm transition-all"
+                                                           className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-lg text-[11px] font-bold shadow-sm transition-all"
                                                        >
                                                            <FileText size={12} /> Export URL Queries CSV
                                                        </button>
@@ -692,11 +607,11 @@ export const SearchEfficiencyView: React.FC<{
                                               <table className="w-full text-left bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                                                   <thead className="bg-slate-100/50">
                                                       <tr>
-                                                          <th className="py-2 px-4 text-[10px] font-black text-slate-500 uppercase">Query</th>
-                                                          <th className="py-2 px-4 text-[10px] font-black text-slate-500 uppercase text-center">Org Rank</th>
-                                                          <th className="py-2 px-4 text-[10px] font-black text-slate-500 uppercase text-right">Org Clicks</th>
-                                                          <th className="py-2 px-4 text-[10px] font-black text-slate-500 uppercase text-right">Paid Clicks</th>
-                                                          <th className="py-2 px-4 text-[10px] font-black text-slate-500 uppercase text-right">Cost</th>
+                                                          <th className="py-2 px-4 text-[11px] font-bold text-slate-500 uppercase">Query</th>
+                                                          <th className="py-2 px-4 text-[11px] font-bold text-slate-500 uppercase text-center">Org Rank</th>
+                                                          <th className="py-2 px-4 text-[11px] font-bold text-slate-500 uppercase text-right">Org Clicks</th>
+                                                          <th className="py-2 px-4 text-[11px] font-bold text-slate-500 uppercase text-right">Paid Clicks</th>
+                                                          <th className="py-2 px-4 text-[11px] font-bold text-slate-500 uppercase text-right">Cost</th>
                                                       </tr>
                                                   </thead>
                                                   <tbody>
@@ -723,6 +638,9 @@ export const SearchEfficiencyView: React.FC<{
               </table>
           </div>
       </div>
+          )}
+        </div>
+      )}
 
     </div>
   );

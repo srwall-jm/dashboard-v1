@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+Changed (independent design review)
+- Summary rewritten around the client's decision: headline per month with cuts and increases together, the real cost of each click the ads add, expected loss in proportion, what each increase buys, a net line, a test stop rule and the assumptions.
+- Spend recommendations: duplicated cards, the two-bar chart and the mislabelled "Top cannibalized URLs" block removed; sortable keyword table; the URL table moved to a collapsed analyst detail.
+- Client view and print show two complete tables (Reduce, Increase) with assumptions, no controls, and a header with client, period and date. Print is A4 landscape.
+- One visual system across views: fixed colours for organic, paid and totals, no text below 11px, readable chart axes and previous-period lines, one card style. "Risk" badges renamed to competitor pressure.
+- Accessibility: Settings is a dialog that closes with Escape, named icon buttons, visible focus, reduced motion, better contrast.
+
+Fixed
+- Avg. CPC and Avg. CPA in Google Ads showed no currency symbol.
+
 Added
 - Recommendation rules editable per client in Settings (largest cuts by competition, clicks organic keeps, increase step, minimum clicks). No cut can exceed 90%, and cuts cannot grow as competition rises. Rules are saved with the shared client profile.
 - Shared client profiles stored in Cloudflare KV (`CLIENT_PROFILES`): save the client setup once in Settings and anyone on the team opens it from the Client selector in the menu. No Google tokens are stored. Needs access to be restricted. Setup steps in the README.
