@@ -1658,7 +1658,7 @@ const App: React.FC = () => {
     setIsGoogleAdsKeywordsLoading(true);
     const bridgeRunAtStart = bridgeRun.current;
     const allAccountIds = activeAdsAccounts.map(acc => acc.id);
-    const googleAdsGlobalKeywordMap: Record<string, { clicks: number, conversions: number, cost: number, impressions: number }> = {};
+    const googleAdsGlobalKeywordMap: Record<string, { clicks: number, conversions: number, conversionValue: number, cost: number, impressions: number }> = {};
     const googleAdsKeywordUrlMap: Record<string, { clicks: number, conversions: number, cost: number }> = {};
     
     const buildKwQuery = (withShares: boolean) => `
@@ -1668,6 +1668,7 @@ const App: React.FC = () => {
           metrics.cost_micros,
           metrics.clicks,
           metrics.conversions,
+          metrics.conversions_value,
           metrics.impressions${withShares ? `,
           metrics.search_impression_share,
           metrics.search_rank_lost_impression_share,
@@ -1751,11 +1752,13 @@ const App: React.FC = () => {
                     const costMicros = parseGoogleAdsMetric(metrics?.costMicros || metrics?.cost_micros);
                     const conversions = parseGoogleAdsMetric(metrics?.conversions || metrics?.conversions_val);
                     const impressions = parseGoogleAdsMetric(metrics?.impressions || metrics?.impressions_val);
+                    const conversionValue = parseGoogleAdsMetric(metrics?.conversionsValue || metrics?.conversions_value);
                     const cost = costMicros / 1000000;
 
                     if (!googleAdsGlobalKeywordMap[cleanKw]) {
-                        googleAdsGlobalKeywordMap[cleanKw] = { clicks: 0, conversions: 0, cost: 0, impressions: 0 };
+                        googleAdsGlobalKeywordMap[cleanKw] = { clicks: 0, conversions: 0, conversionValue: 0, cost: 0, impressions: 0 };
                     }
+                    googleAdsGlobalKeywordMap[cleanKw].conversionValue += conversionValue;
                     googleAdsGlobalKeywordMap[cleanKw].clicks += clicks;
                     googleAdsGlobalKeywordMap[cleanKw].conversions += conversions;
                     googleAdsGlobalKeywordMap[cleanKw].impressions += impressions;
@@ -1963,6 +1966,7 @@ const App: React.FC = () => {
                 paidClicks: paid.clicks,
                 paidImpressions: paid.impressions,
                 paidConversions: paid.conversions,
+                paidConversionValue: paid.conversionValue,
                 ...combineShares(kwShareRows[kw] || []),
                 organicRank: organic && organic.impressions > 0 ? organic.weightedRankSum / organic.impressions : null,
                 organicClicks: organic?.clicks || 0,

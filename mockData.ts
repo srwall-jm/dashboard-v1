@@ -293,6 +293,7 @@ export const generateMockKeywordSignals = (): KeywordSignal[] => {
     impressionShare: number | null, rankLostShare: number | null
   ): KeywordSignal => ({
     keyword, isBrand: false, cost: cost / 4, paidClicks, paidImpressions: paidClicks * 12, paidConversions,
+    paidConversionValue: paidConversions * (42 + (keyword.length % 5) * 9), // an order value that differs by keyword
     organicRank, organicClicks, organicImpressions, impressionShare, rankLostShare, topImpressionShare: null,
   });
   const signals: KeywordSignal[] = [

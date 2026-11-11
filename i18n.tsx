@@ -341,6 +341,16 @@ const ES: Record<string, string> = {
   'Every keyword': 'Todas las keywords',
   'Filter, search and sort. The last column records what was agreed.': 'Filtra, busca y ordena. La última columna recoge lo acordado.',
 
+  // ---- conversion value at risk ----
+  'Conversion value that may be lost': 'Valor de conversión que se puede perder',
+  'against {saving} of paid spend saved.': 'frente a {saving} de inversión de pago ahorrada.',
+  'The saving is larger than the value at risk, so it pays at any margin.': 'El ahorro es mayor que el valor en riesgo, así que compensa con cualquier margen.',
+  'The reductions pay for themselves if your margin on that value is below {margin}.': 'Las reducciones compensan si tu margen sobre ese valor es inferior al {margin}.',
+  'Conversion value is what Google Ads records for each conversion: revenue if the account tracks sales. It is not profit.': 'El valor de conversión es lo que Google Ads registra por cada conversión: ingresos si la cuenta mide ventas. No es beneficio.',
+  'about {value} more conversion value': 'unos {value} más de valor de conversión',
+  '{value} of conversion value': '{value} de valor de conversión',
+  'Conversion value at risk is the value Google Ads records per paid click on each keyword, applied to the clicks that may be lost. It is revenue only if the account tracks sales, and it is never profit: compare it with the saving using your own margin.': 'El valor de conversión en riesgo es el valor que Google Ads registra por clic de pago en cada keyword, aplicado a los clics que se pueden perder. Solo son ingresos si la cuenta mide ventas, y nunca es beneficio: compáralo con el ahorro usando tu propio margen.',
+
   // ---- why each keyword gets its recommendation ----
   'reason.reduceTerms': 'El {share} de la inversión de esta keyword está en búsquedas donde posicionas en el top {top} (posición media {rank}){brand}, presión {pressure} en la subasta. Recortar un {cut} y mantener el {keep} como mínimo, para que un competidor no ocupe el espacio de anuncio. Probar por pasos y vigilar los clics totales (pago + orgánico).',
   'reason.mostlyOtherSearches': 'Solo el {share} de la inversión de esta keyword está en búsquedas donde posicionas en el top {top}. El resto depende del anuncio, así que recortar la keyword perdería esas búsquedas. Mueve las búsquedas que ya ganas a su propia keyword de concordancia exacta antes de reducir.',

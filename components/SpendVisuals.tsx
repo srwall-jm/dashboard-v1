@@ -91,7 +91,7 @@ export const MoneyMoves: React.FC<Shared> = ({ summary, currencySymbol, periodDa
     });
   }
   legend.push({ style: FILL.untouched, label: tr('All other keywords'), value: money(untouched) });
-  if (hasIncrease) legend.push({ style: FILL.added, label: tr('Added where organic is beyond page one'), value: `+${money(added)}`, note: i18n.keywords(summary.counts.INCREASE) });
+  if (hasIncrease) legend.push({ style: FILL.added, label: tr('Added where organic is beyond page one'), value: `+${money(added)}`, note: `${i18n.keywords(summary.counts.INCREASE)}${summary.extraValue >= 1 ? ` · ${tr('about {value} more conversion value', { value: money(summary.extraValue) })}` : ''}` });
 
   return (
     <section className="grid grid-cols-12 rounded-2xl overflow-hidden border border-slate-200 break-inside-avoid" aria-labelledby="money-moves">
@@ -171,6 +171,7 @@ export const ClicksPrice: React.FC<Shared> = ({ summary, currencySymbol }) => {
   const i18n = useI18n();
   const { tr, int, pct, range } = i18n;
   const money2 = (v: number) => i18n.money(currencySymbol, v, 2);
+  const money = (v: number) => i18n.money(currencySymbol, v);
 
   const still = summary.clicksRecovered.low;
   const either = Math.max(0, summary.clicksRecovered.high - summary.clicksRecovered.low);
@@ -220,6 +221,20 @@ export const ClicksPrice: React.FC<Shared> = ({ summary, currencySymbol }) => {
                 <div className="h-full rounded-[3px] bg-slate-200" style={{ flexGrow: Math.max(0, allSearch - summary.clicksAtRisk.high), flexBasis: 0 }} />
                 <div className="h-full rounded-[3px]" style={{ flexGrow: summary.clicksAtRisk.high, flexBasis: 0, minWidth: 6, ...FILL.lost }} />
               </div>
+            </div>
+          )}
+
+          {summary.valueAtRisk.high >= 1 && (
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <p className="text-[13px] font-semibold text-slate-700">{tr('Conversion value that may be lost')}</p>
+              <p className="jf-figure text-3xl text-slate-900 tabular-nums">{tr('{low} to {high}', { low: money(summary.valueAtRisk.low), high: money(summary.valueAtRisk.high) })}</p>
+              <p className="text-sm font-medium text-slate-700 mt-1">
+                {tr('against {saving} of paid spend saved.', { saving: money(summary.spendCut) })}{' '}
+                {summary.breakEvenMargin && (summary.breakEvenMargin.low >= 1
+                  ? tr('The saving is larger than the value at risk, so it pays at any margin.')
+                  : tr('The reductions pay for themselves if your margin on that value is below {margin}.', { margin: pct(summary.breakEvenMargin.low) }))}
+              </p>
+              <p className="text-xs text-slate-600 mt-1">{tr('Conversion value is what Google Ads records for each conversion: revenue if the account tracks sales. It is not profit.')}</p>
             </div>
           )}
 
@@ -360,6 +375,7 @@ export const KeywordBars: React.FC<Shared & { plan?: Plan; planResults?: Record<
           <p className="text-xs text-slate-600 mt-0.5">
             {tr('Organic position {rank}', { rank: rank === null ? '—' : dec(rank, 1) })}
             {isReduce ? ` · ${tr('may lose {clicks} clicks', { clicks: range(r.clicksAtRisk) })}` : ''}
+            {isReduce && r.valueAtRisk.high >= 1 ? ` · ${tr('{value} of conversion value', { value: tr('{low} to {high}', { low: money(r.valueAtRisk.low), high: money(r.valueAtRisk.high) }) })}` : ''}
           </p>
           {item && (item.status !== 'none' || item.doNotReduce) && (
             <p className="text-xs font-semibold text-slate-700 mt-1">

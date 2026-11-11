@@ -339,3 +339,31 @@ describe('keywords judged by their search terms', () => {
     expect(r.suggestedSpend).toBeGreaterThanOrEqual(500);
   });
 });
+
+describe('conversion value at risk', () => {
+  it('values the clicks that may be lost at the keyword value per paid click', () => {
+    const r = recommendKeyword(signal({ paidConversionValue: 5000 }), 40);
+    expect(r.valueAtRisk.low).toBeCloseTo(1250);
+    expect(r.valueAtRisk.high).toBeCloseTo(1875);
+    const s = summarizeRecommendations([r], 30);
+    expect(s.hasConversionValue).toBe(true);
+    // 500 saved against 1,875 to 1,250 of value: pays below a 27% margin in the worst case
+    expect(s.breakEvenMargin!.low).toBeCloseTo(500 / 1875);
+    expect(s.breakEvenMargin!.high).toBeCloseTo(0.4);
+  });
+
+  it('stays at zero, with no break-even, when the account records no value', () => {
+    const r = recommendKeyword(signal(), 40);
+    expect(r.valueAtRisk).toEqual({ low: 0, high: 0 });
+    const s = summarizeRecommendations([r], 30);
+    expect(s.hasConversionValue).toBe(false);
+    expect(s.breakEvenMargin).toBeNull();
+  });
+
+  it('estimates the value an increase buys at the current return', () => {
+    const r = recommendKeyword(signal({ organicRank: 22, organicClicks: 0, rankLostShare: 0.35, cost: 400, paidClicks: 200, paidConversions: 20, paidConversionValue: 2000 }), 50);
+    expect(r.action).toBe('INCREASE');
+    expect(r.expectedExtraValue).toBeCloseTo(2000 * DEFAULT_SETTINGS.increaseStep);
+    expect(summarizeRecommendations([r], 30).extraValue).toBeCloseTo(2000 * DEFAULT_SETTINGS.increaseStep);
+  });
+});

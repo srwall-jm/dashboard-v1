@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+Added (conversion value at risk)
+- Google Ads conversion value is read per keyword. The tab shows the conversion value of the clicks that may be lost next to the saving, and the margin below which the reductions pay for themselves. Shown per keyword and in the CSV; hidden when the account records no conversion value.
+
 Changed (Spend recommendations, visual)
 - The tab now opens with pictures instead of five figure cards: the monthly amount that can come down next to a bar of where the spend goes (comes down, stays on the reduced keywords, untouched, added); what the saving may cost in clicks, with the uncertain part hatched; spend by organic position, to show why these keywords; and the first keywords to act on as bars with the part that always stays, ordered safest first or largest saving first.
 - Solid bars are figures from the accounts, striped bars are estimates, dashed outlines are clicks that may be lost, so the page reads without colour and in print.

@@ -24,6 +24,8 @@ export interface KeywordSignal {
   paidClicks: number;
   paidImpressions: number;
   paidConversions: number;
+  // The value Google Ads records for those conversions (revenue, when the account tracks it). 0 or absent when it does not.
+  paidConversionValue?: number;
   impressionShare: number | null; // 0 to 1
   rankLostShare: number | null; // 0 to 1, impressions lost to ad rank
   topImpressionShare: number | null; // 0 to 1
@@ -140,6 +142,11 @@ export interface KeywordRecommendation {
   // Paid clicks removed by the cut that are expected to be lost.
   clicksAtRisk: Range;
   conversionsAtRisk: Range;
+  paidConversionValue: number;
+  // Conversion value of the clicks that may be lost, at the keyword's own value per paid click.
+  valueAtRisk: Range;
+  // INCREASE only: conversion value the extra spend buys at today's return. An estimate.
+  expectedExtraValue: number | null;
   // The search terms behind the keyword, when they were read.
   searchTerms: SearchTermCover | null;
   // The same reason as `reason`, as a case and its figures, so it can be written in other languages.
@@ -220,6 +227,7 @@ export const recommendKeyword = (
   const reduceRank = cover ? (cover.topOrganicRank ?? signal.organicRank ?? settings.maxRankForReduce) : (signal.organicRank ?? settings.maxRankForReduce);
   const recovery = getRecoveryRate(strongOrganic ? reduceRank : signal.organicRank, settings);
   const cpa = signal.paidConversions > 0 ? signal.cost / signal.paidConversions : null;
+  const conversionValue = signal.paidConversionValue && signal.paidConversionValue > 0 ? signal.paidConversionValue : 0;
 
   const base: KeywordRecommendation = {
     keyword: signal.keyword,
@@ -245,6 +253,9 @@ export const recommendKeyword = (
     clicksRecovered: { low: 0, high: 0 },
     clicksAtRisk: { low: 0, high: 0 },
     conversionsAtRisk: { low: 0, high: 0 },
+    paidConversionValue: conversionValue,
+    valueAtRisk: { low: 0, high: 0 },
+    expectedExtraValue: null,
     incrementalCpc: avgCpc > 0 && recovery < 1 ? avgCpc / (1 - recovery) : null,
     expectedExtraConversions: null,
   };
@@ -281,6 +292,7 @@ export const recommendKeyword = (
     const recoveryLow = recovery * settings.conservativeFactor;
     const cvr = signal.paidClicks > 0 ? signal.paidConversions / signal.paidClicks : 0;
     const atRisk: Range = { low: clicksRemoved * (1 - recovery), high: clicksRemoved * (1 - recoveryLow) };
+    const valuePerClick = signal.paidClicks > 0 ? conversionValue / signal.paidClicks : 0;
 
     return {
       ...base,
@@ -292,6 +304,7 @@ export const recommendKeyword = (
       clicksRecovered: { low: clicksRemoved * recoveryLow, high: clicksRemoved * recovery },
       clicksAtRisk: atRisk,
       conversionsAtRisk: { low: atRisk.low * cvr, high: atRisk.high * cvr },
+      valueAtRisk: { low: atRisk.low * valuePerClick, high: atRisk.high * valuePerClick },
       reason: cover
         ? `${pct(share)} of this keyword's spend is on searches where you rank in the top ${settings.maxRankForReduce} (average position ${rankText(reduceRank)})${signal.isBrand ? ', brand term' : ''}, ${pressureText[pressure]}. Cut ${pct(cut)} and keep ${pct(1 - cut)} as the minimum, so a competitor cannot take the ad slot. Test in steps and watch total clicks (paid + organic).`
         : `Organic position ${rankText(reduceRank)}${signal.isBrand ? ', brand term' : ''}, ${pressureText[pressure]}. Cut ${pct(cut)} and keep ${pct(1 - cut)} as the minimum, so a competitor cannot take the ad slot. Test in steps and watch total clicks (paid + organic).`,
@@ -339,6 +352,7 @@ export const recommendKeyword = (
         changePct: settings.increaseStep,
         suggestedSpend: signal.cost * (1 + settings.increaseStep),
         expectedExtraConversions: cpa !== null && cpa > 0 ? (signal.cost * settings.increaseStep) / cpa : null,
+        expectedExtraValue: conversionValue > 0 ? conversionValue * settings.increaseStep : null,
         reason: `Organic position ${rankText(rank)}, so paid is the only real presence. It converts at or below the account average cost per conversion, and ${pct(signal.rankLostShare)} of searches are missed because the ad did not show or was outranked. Raise ${pct(settings.increaseStep)} and review.`,
         why: { code: 'increase', params: { rank, lost: signal.rankLostShare, step: settings.increaseStep } },
       };
@@ -396,6 +410,13 @@ export interface RecommendationSummary {
   clicksRecovered: Range;
   clicksAtRisk: Range;
   conversionsAtRisk: Range;
+  // Conversion value of the clicks that may be lost. Zero when the account records no conversion value.
+  valueAtRisk: Range;
+  // The reductions pay for themselves while the margin on that value is below this (saving / value at risk).
+  // Null without conversion value. Above 1 means they pay at any margin.
+  breakEvenMargin: Range | null;
+  extraValue: number; // conversion value the extra spend is expected to buy
+  hasConversionValue: boolean; // the keywords analysed carry conversion value at all
   spendToIncrease: number; // extra spend proposed on INCREASE keywords
   extraConversions: number; // conversions that extra spend is expected to buy
   netChange: number; // spendCut - spendToIncrease: what is saved after moving budget
@@ -424,6 +445,10 @@ export const summarizeRecommendations = (recs: KeywordRecommendation[], periodDa
     clicksRecovered: { low: 0, high: 0 },
     clicksAtRisk: { low: 0, high: 0 },
     conversionsAtRisk: { low: 0, high: 0 },
+    valueAtRisk: { low: 0, high: 0 },
+    breakEvenMargin: null,
+    extraValue: 0,
+    hasConversionValue: false,
     spendToIncrease: 0,
     extraConversions: 0,
     netChange: 0,
@@ -448,9 +473,13 @@ export const summarizeRecommendations = (recs: KeywordRecommendation[], periodDa
     summary.clicksAtRisk.high += r.clicksAtRisk.high;
     summary.conversionsAtRisk.low += r.conversionsAtRisk.low;
     summary.conversionsAtRisk.high += r.conversionsAtRisk.high;
+    summary.valueAtRisk.low += r.valueAtRisk.low;
+    summary.valueAtRisk.high += r.valueAtRisk.high;
+    if (r.paidConversionValue > 0) summary.hasConversionValue = true;
     if (r.action === 'INCREASE') {
       summary.spendToIncrease += r.suggestedSpend - r.currentSpend;
       summary.extraConversions += r.expectedExtraConversions || 0;
+      summary.extraValue += r.expectedExtraValue || 0;
     }
     if (r.action === 'REDUCE') {
       summary.reduceSpend += r.currentSpend;
@@ -472,6 +501,10 @@ export const summarizeRecommendations = (recs: KeywordRecommendation[], periodDa
   const searchClicks = summary.reducePaidClicks + summary.reduceOrganicClicks;
   if (searchClicks > 0 && summary.counts.REDUCE > 0) {
     summary.lossShareOfSearch = { low: summary.clicksAtRisk.low / searchClicks, high: summary.clicksAtRisk.high / searchClicks };
+  }
+  if (summary.spendCut > 0 && summary.valueAtRisk.low > 0) {
+    // More value lost means a lower margin is enough to wipe out the saving, so the range flips.
+    summary.breakEvenMargin = { low: summary.spendCut / summary.valueAtRisk.high, high: summary.spendCut / summary.valueAtRisk.low };
   }
   summary.spendCutMonthly = (summary.spendCut * 30) / days;
   summary.spendCutShare = summary.spendAnalysed > 0 ? summary.spendCut / summary.spendAnalysed : 0;
@@ -554,6 +587,8 @@ export const keepAsIs = (r: KeywordRecommendation, reason: string, why: KeywordR
   clicksRecovered: { low: 0, high: 0 },
   clicksAtRisk: { low: 0, high: 0 },
   conversionsAtRisk: { low: 0, high: 0 },
+  valueAtRisk: { low: 0, high: 0 },
+  expectedExtraValue: null,
   expectedExtraConversions: null,
   reason,
   why,

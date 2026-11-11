@@ -48,7 +48,12 @@ export const PressureBadge: React.FC<{ pressure: KeywordRecommendation['pressure
 type I18n = ReturnType<typeof useI18n>;
 
 const effectText = (r: KeywordRecommendation, money: (v: number) => string, i18n: I18n): string => {
-  if (r.action === 'REDUCE') return i18n.tr('May lose {clicks} clicks', { clicks: i18n.range(r.clicksAtRisk) });
+  if (r.action === 'REDUCE') {
+    const clicks = i18n.tr('May lose {clicks} clicks', { clicks: i18n.range(r.clicksAtRisk) });
+    return r.valueAtRisk.high >= 1
+      ? `${clicks} · ${i18n.tr('{value} of conversion value', { value: i18n.tr('{low} to {high}', { low: money(r.valueAtRisk.low), high: money(r.valueAtRisk.high) }) })}`
+      : clicks;
+  }
   if (r.action === 'INCREASE') {
     const extra = r.suggestedSpend - r.currentSpend;
     return r.expectedExtraConversions && r.expectedExtraConversions >= 0.5
@@ -314,6 +319,11 @@ export const KeywordRecommendations: React.FC<{
       'Clicks that still arrive (high)': Math.round(r.clicksRecovered.high),
       'Clicks you may lose (low)': Math.round(r.clicksAtRisk.low),
       'Clicks you may lose (high)': Math.round(r.clicksAtRisk.high),
+      'Paid conversions': r.paidConversions.toFixed(1),
+      'Paid conversion value': r.paidConversionValue.toFixed(2),
+      'Conversion value you may lose (low)': r.valueAtRisk.low.toFixed(2),
+      'Conversion value you may lose (high)': r.valueAtRisk.high.toFixed(2),
+      'Expected extra conversion value': r.expectedExtraValue === null ? '' : r.expectedExtraValue.toFixed(2),
       'Expected extra conversions': r.expectedExtraConversions === null ? '' : r.expectedExtraConversions.toFixed(1),
       'Ad shown on % of searches': r.impressionShare === null ? '' : Math.round(r.impressionShare * 100),
       'Searches where the ad did not show or was outranked %': r.rankLostShare === null ? '' : Math.round(r.rankLostShare * 100),
@@ -442,6 +452,7 @@ export const KeywordRecommendations: React.FC<{
             <li>{tr('The cut depends on auction pressure (how often your ad did not show or was outranked): up to {low} when low, {medium} when medium, {high} when high. Brand terms: {brandLow}, {brandMedium} and {brandHigh} under high pressure. Unknown pressure counts as medium.', { low: pct(s.maxCut.nonBrand.low), medium: pct(s.maxCut.nonBrand.medium), high: pct(s.maxCut.nonBrand.high), brandLow: pct(s.maxCut.brand.low), brandMedium: pct(s.maxCut.brand.medium), brandHigh: s.maxCut.brand.high > 0 ? pct(s.maxCut.brand.high) : tr('no cut at all') })}</li>
             <li>{tr('Clicks that still arrive: {rank1} of removed paid clicks at organic position 1, {rank2to4} at positions 2 to 4 (upper end; the lower end is half).', { rank1: pct(s.recovery.rank1), rank2to4: pct(s.recovery.rank2to4) })} {customRules ? tr('These rates are set per client in Settings.') : tr('These rates come from a Google study across industries from 2012. Your own test results will replace them.')}</li>
             <li>{tr('Increase is proposed when organic is beyond position {rank} or absent, ads convert at or below the account average cost per conversion, and the ad did not show or was outranked on at least {share} of searches. Extra conversions assume today\'s cost per conversion holds.', { rank: s.minRankForIncrease, share: pct(s.minRankLostForIncrease) })}</li>
+            <li>{tr('Conversion value at risk is the value Google Ads records per paid click on each keyword, applied to the clicks that may be lost. It is revenue only if the account tracks sales, and it is never profit: compare it with the saving using your own margin.')}</li>
             <li>{tr('These are estimates to design a test, not a forecast. Change spend in steps and compare total clicks (paid + organic) before and after.')}</li>
           </ul>
         </div>
