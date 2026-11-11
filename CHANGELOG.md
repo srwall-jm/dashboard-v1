@@ -3,6 +3,7 @@
 ## Unreleased
 
 Added
+- Google Ads accounts are chosen per client in Settings. Only the ticked accounts are read; the whole manager account is never added up. With several accounts and none chosen, no paid data loads and a notice asks to pick them.
 - Summary page as the landing page: headline saving, context figures, top keywords to reduce and to increase, how to act.
 - Navigation with section names grouped as Summary, Decide and Understand. Header shows what each section answers.
 - Client view (hides menu, filters and settings) and Print / PDF.

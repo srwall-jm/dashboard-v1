@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, Cpu, Settings2, Database, ExternalLink, Search, LogOut, AlertCircle } from 'lucide-react';
 import { Ga4Property, GscSite, GoogleAdsCustomer } from '../types';
+import { AdsAccountPicker } from './AdsAccountPicker';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -33,6 +34,10 @@ interface SettingsModalProps {
   availableGoogleAdsCustomers: GoogleAdsCustomer[];
   selectedGoogleAdsCustomer?: GoogleAdsCustomer | null;
   onGoogleAdsCustomerChange?: (customer: GoogleAdsCustomer | null) => void;
+  googleAdsSubAccounts?: GoogleAdsCustomer[];
+  pinnedGoogleAdsAccountIds?: string[];
+  onPinnedGoogleAdsAccountsChange?: (ids: string[]) => void;
+  googleAdsClientLabel?: string;
   setGa4Auth: (auth: any) => void;
   setGscAuth: (auth: any) => void;
   setGoogleAdsAuth: (auth: any) => void;
@@ -52,6 +57,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   ga4Search, setGa4Search, gscSearch, setGscSearch, googleAdsSearch, setGoogleAdsSearch,
   availableProperties, availableSites, availableGoogleAdsCustomers,
   selectedGoogleAdsCustomer, onGoogleAdsCustomerChange,
+  googleAdsSubAccounts = [], pinnedGoogleAdsAccountIds = [], onPinnedGoogleAdsAccountsChange, googleAdsClientLabel,
   setGa4Auth, setGscAuth, setGoogleAdsAuth,
   filteredProperties, filteredSites, filteredGoogleAdsCustomers
 }) => {
@@ -152,6 +158,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   )}
                </div>
             </div>
+
+            {/* Google Ads accounts that count for this client */}
+            {googleAdsAuth?.token && googleAdsSubAccounts.length > 1 && onPinnedGoogleAdsAccountsChange && (
+              <AdsAccountPicker
+                accounts={googleAdsSubAccounts}
+                selectedIds={pinnedGoogleAdsAccountIds}
+                onChange={onPinnedGoogleAdsAccountsChange}
+                clientLabel={googleAdsClientLabel}
+              />
+            )}
 
             {/* Developer Token Input - NEW */}
             <div className="mt-8 pt-6 border-t border-slate-100">
