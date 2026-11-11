@@ -62,24 +62,24 @@ export const DateRangeSelector: React.FC<{
     <div className="relative" ref={dropdownRef}>
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-3 px-4 py-2 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-indigo-300 transition-all text-[10px] font-bold h-full"
+        className="flex items-center gap-3 px-4 py-2 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-indigo-300 transition-all text-[11px] font-bold h-full"
       >
         <Calendar className="w-3.5 h-3.5 text-indigo-500" />
         <span className="text-slate-900">{filters.dateRange.start}</span>
         <span className="text-slate-300">/</span>
         <span className="text-slate-900">{filters.dateRange.end}</span>
-        <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-3 h-3 text-slate-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
-        <div className="absolute top-full mt-2 left-0 w-[480px] bg-white rounded-3xl shadow-2xl border border-slate-200 z-[100] overflow-hidden flex animate-in fade-in zoom-in-95 duration-200">
+        <div className="absolute top-full mt-2 left-0 w-[480px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] overflow-hidden flex">
           <div className="w-1/2 border-r border-slate-100 bg-slate-50/50 max-h-[420px] overflow-y-auto custom-scrollbar">
             <div className="p-2 grid grid-cols-1 gap-0.5">
               {ranges.map((r) => (
                 <button
                   key={r.label}
                   onClick={() => handleRangeSelect(r)}
-                  className="px-4 py-2 text-left text-[10px] font-black uppercase text-slate-600 hover:bg-white hover:text-indigo-600 hover:shadow-sm rounded-xl transition-all"
+                  className="px-4 py-2 text-left text-[11px] font-bold uppercase text-slate-600 hover:bg-white hover:text-indigo-600 hover:shadow-sm rounded-xl transition-all"
                 >
                   {r.label}
                 </button>
@@ -88,24 +88,24 @@ export const DateRangeSelector: React.FC<{
           </div>
           <div className="w-1/2 p-6 flex flex-col gap-6">
             <div>
-              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Custom Range</h4>
+              <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-4">Custom Range</h4>
               <div className="space-y-4">
                 <div className="space-y-1.5">
-                  <label className="text-[8px] font-black text-slate-500 uppercase">Start Date</label>
+                  <label className="text-[11px] font-bold text-slate-500 uppercase">Start Date</label>
                   <input 
                     type="date" 
                     value={localRange.start} 
                     onChange={e => setLocalRange({...localRange, start: e.target.value})}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none focus:ring-1 ring-indigo-500"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-bold outline-none focus:ring-1 ring-indigo-500"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[8px] font-black text-slate-500 uppercase">End Date</label>
+                  <label className="text-[11px] font-bold text-slate-500 uppercase">End Date</label>
                   <input 
                     type="date" 
                     value={localRange.end} 
                     onChange={e => setLocalRange({...localRange, end: e.target.value})}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none focus:ring-1 ring-indigo-500"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-bold outline-none focus:ring-1 ring-indigo-500"
                   />
                 </div>
               </div>
@@ -122,12 +122,12 @@ export const DateRangeSelector: React.FC<{
                       onChange={e => setFilters({...filters, comparison: {...filters.comparison, enabled: e.target.checked}})} 
                       className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" 
                     />
-                    <label htmlFor="comp_enabled_drop" className="text-[10px] font-black uppercase text-slate-600 tracking-tight cursor-pointer">Compare</label>
+                    <label htmlFor="comp_enabled_drop" className="text-[11px] font-bold uppercase text-slate-600 tracking-tight cursor-pointer">Compare</label>
                   </div>
                 </div>
                 {filters.comparison.enabled && (
                   <select 
-                    className="w-full bg-white border border-slate-200 rounded-xl text-[10px] font-bold p-2 outline-none focus:ring-1 ring-indigo-500 shadow-sm" 
+                    className="w-full bg-white border border-slate-200 rounded-xl text-[11px] font-bold p-2 outline-none focus:ring-1 ring-indigo-500 shadow-sm" 
                     value={filters.comparison.type} 
                     onChange={e => setFilters({...filters, comparison: {...filters.comparison, type: e.target.value as any}})}
                   >
@@ -139,7 +139,7 @@ export const DateRangeSelector: React.FC<{
 
               <button 
                 onClick={applyCustomRange}
-                className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-colors shadow-lg"
+                className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-[11px] font-bold uppercase tracking-wide hover:bg-slate-800 transition-colors shadow-lg"
               >
                 Apply Range
               </button>

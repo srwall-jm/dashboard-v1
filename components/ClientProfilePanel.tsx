@@ -25,10 +25,10 @@ export const ClientProfilePanel: React.FC<{
 
   if (!available) {
     return (
-      <section className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+      <section className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
         <div className="flex items-center gap-2 mb-2 text-slate-900">
           <Users size={16} />
-          <h3 className="text-sm font-black uppercase tracking-widest">Shared clients</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wide">Shared clients</h3>
         </div>
         <p className="text-xs text-slate-500">
           {unavailableReason === 'storage'
@@ -80,10 +80,10 @@ export const ClientProfilePanel: React.FC<{
   };
 
   return (
-    <section className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+    <section className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
       <div className="flex items-center gap-2 mb-1 text-slate-900">
         <Users size={16} />
-        <h3 className="text-sm font-black uppercase tracking-widest">Shared clients</h3>
+        <h3 className="text-sm font-bold uppercase tracking-wide">Shared clients</h3>
       </div>
       <p className="text-xs text-slate-500 mb-4">
         Save the setup below (GA4 property, Search Console site, Google Ads accounts, brand regex) as a client the whole team can open.
@@ -114,19 +114,19 @@ export const ClientProfilePanel: React.FC<{
         <button
           onClick={save}
           disabled={busy || !trimmed || !id}
-          className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-40"
+          className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-700 text-white rounded-xl text-[11px] font-bold uppercase tracking-wide disabled:opacity-40"
         >
           <Save size={12} /> {isUpdate ? `Update "${existing!.name}"` : 'Save as new client'}
         </button>
         {activeProfile && (confirmDelete ? (
           <>
-            <button onClick={remove} disabled={busy} className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-40">
+            <button onClick={remove} disabled={busy} className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[11px] font-bold uppercase tracking-wide disabled:opacity-40">
               Delete for everyone
             </button>
-            <button onClick={() => setConfirmDelete(false)} className="px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-500">Cancel</button>
+            <button onClick={() => setConfirmDelete(false)} className="px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">Cancel</button>
           </>
         ) : (
-          <button onClick={() => setConfirmDelete(true)} disabled={busy} className="flex items-center gap-2 px-3 py-2.5 border border-slate-200 text-slate-500 hover:border-rose-300 hover:text-rose-600 rounded-xl text-[10px] font-black uppercase tracking-widest">
+          <button onClick={() => setConfirmDelete(true)} disabled={busy} className="flex items-center gap-2 px-3 py-2.5 border border-slate-200 text-slate-500 hover:border-rose-300 hover:text-rose-600 rounded-xl text-[11px] font-bold uppercase tracking-wide">
             <Trash2 size={12} /> Delete
           </button>
         ))}
@@ -139,7 +139,7 @@ export const ClientProfilePanel: React.FC<{
         <p className={`text-[11px] font-bold mt-3 ${message.kind === 'ok' ? 'text-emerald-700' : 'text-rose-700'}`}>{message.text}</p>
       )}
       {activeProfile?.updatedBy && (
-        <p className="text-[10px] text-slate-400 mt-3">
+        <p className="text-[11px] text-slate-500 mt-3">
           Last saved by {activeProfile.updatedBy}{activeProfile.updatedAt ? ` on ${activeProfile.updatedAt.slice(0, 10)}` : ''}.
         </p>
       )}

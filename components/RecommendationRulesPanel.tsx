@@ -13,7 +13,7 @@ const PercentField: React.FC<{
   onChange: (share: number) => void;
 }> = ({ label, value, max, onChange }) => (
   <label className="block">
-    <span className="block text-[10px] font-bold text-slate-500 mb-1">{label}</span>
+    <span className="block text-[11px] font-bold text-slate-500 mb-1">{label}</span>
     <span className="relative block">
       <input
         type="number"
@@ -27,7 +27,7 @@ const PercentField: React.FC<{
         }}
         className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold p-2.5 pr-7 outline-none focus:ring-2 ring-amber-400 tabular-nums"
       />
-      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">%</span>
+      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-500">%</span>
     </span>
   </label>
 );
@@ -48,12 +48,12 @@ export const RecommendationRulesPanel: React.FC<{
       <div className="flex items-center justify-between gap-2 mb-2 text-slate-900">
         <div className="flex items-center gap-2">
           <div className="p-2 bg-slate-100 rounded-lg"><SlidersHorizontal size={16} className="text-indigo-600" /></div>
-          <h3 className="text-sm font-black uppercase tracking-widest">Recommendation rules</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wide">Recommendation rules</h3>
         </div>
         <button
           onClick={() => onChange(null)}
           disabled={isDefaultSettings(settings)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:border-slate-400 disabled:opacity-40"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-[11px] font-bold uppercase tracking-wide text-slate-500 hover:border-slate-400 disabled:opacity-40"
         >
           <RotateCcw size={11} /> Defaults
         </button>
@@ -66,7 +66,7 @@ export const RecommendationRulesPanel: React.FC<{
 
       <div className="bg-white p-5 rounded-2xl border border-slate-100 space-y-5">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-900 mb-2">Largest cut, non-brand keywords</p>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-900 mb-2">Largest cut, non-brand keywords</p>
           <div className="grid grid-cols-3 gap-3">
             <PercentField label="Low competition" value={values.cutNonBrandLow} max={maxCutPct} onChange={v => set('cutNonBrandLow', v)} />
             <PercentField label="Medium" value={values.cutNonBrandMedium} max={maxCutPct} onChange={v => set('cutNonBrandMedium', v)} />
@@ -74,7 +74,7 @@ export const RecommendationRulesPanel: React.FC<{
           </div>
         </div>
         <div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-900 mb-2">Largest cut, brand keywords</p>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-900 mb-2">Largest cut, brand keywords</p>
           <div className="grid grid-cols-3 gap-3">
             <PercentField label="Low competition" value={values.cutBrandLow} max={maxCutPct} onChange={v => set('cutBrandLow', v)} />
             <PercentField label="Medium" value={values.cutBrandMedium} max={maxCutPct} onChange={v => set('cutBrandMedium', v)} />
@@ -82,17 +82,17 @@ export const RecommendationRulesPanel: React.FC<{
           </div>
         </div>
         <div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-900 mb-2">Clicks organic keeps when paid is cut</p>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-900 mb-2">Clicks organic keeps when paid is cut</p>
           <div className="grid grid-cols-3 gap-3">
             <PercentField label="Organic position 1" value={values.recoveryRank1} max={95} onChange={v => set('recoveryRank1', v)} />
             <PercentField label="Positions 2 to 4" value={values.recoveryRank2to4} max={95} onChange={v => set('recoveryRank2to4', v)} />
           </div>
-          <p className="text-[10px] text-slate-400 mt-1.5">Replace the defaults with this client's own test results when you have them.</p>
+          <p className="text-[11px] text-slate-500 mt-1.5">Replace the defaults with this client's own test results when you have them.</p>
         </div>
         <div className="grid grid-cols-3 gap-3">
           <PercentField label="Step when increasing" value={values.increaseStep} max={100} onChange={v => set('increaseStep', v)} />
           <label className="block">
-            <span className="block text-[10px] font-bold text-slate-500 mb-1">Minimum paid clicks</span>
+            <span className="block text-[11px] font-bold text-slate-500 mb-1">Minimum paid clicks</span>
             <input
               type="number"
               min={1}

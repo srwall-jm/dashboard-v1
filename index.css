@@ -7,13 +7,30 @@ body {
   background-color: #f8fafc;
 }
 
-/* Print / save as PDF: white page, no clipped tables, cards kept whole. */
+/* Print / save as PDF: a landscape page on white, whole tables, no controls. */
 @media print {
-  @page { margin: 14mm; }
+  @page { size: A4 landscape; margin: 12mm; }
   body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   main { overflow: visible !important; }
   .overflow-x-auto { overflow: visible !important; }
-  .shadow-sm, .shadow-lg, .shadow-xl, .shadow-2xl { box-shadow: none !important; }
-  .break-inside-avoid, tr { break-inside: avoid; }
-  .animate-in { animation: none !important; }
+  [class*="shadow"] { box-shadow: none !important; }
+  .break-inside-avoid, tr, .recharts-wrapper { break-inside: avoid; }
+  thead { display: table-header-group; }
+  table { min-width: 0 !important; width: 100%; }
+  /* Full URLs and keywords: on paper nothing can be hovered. */
+  .truncate { overflow: visible; white-space: normal; text-overflow: clip; overflow-wrap: anywhere; max-width: none; }
+  /* Controls have no meaning on paper. */
+  button, input, select { display: none !important; }
 }
+
+/* Respect "reduce motion": no spinning, pulsing or sliding. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* A visible focus ring for keyboard users wherever the default outline was removed. */
+:focus-visible { outline: 2px solid #0f172a; outline-offset: 2px; }

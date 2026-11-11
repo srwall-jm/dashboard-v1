@@ -109,6 +109,8 @@ export interface KeywordRecommendation {
   conversionsAtRisk: Range;
   // What an ad click that organic would not have got really costs.
   incrementalCpc: number | null;
+  // INCREASE only: conversions the extra spend buys at today's cost per conversion. An estimate.
+  expectedExtraConversions: number | null;
 }
 
 export const getPressure = (signal: KeywordSignal, settings: RecommendationSettings = DEFAULT_SETTINGS): Pressure => {
@@ -134,10 +136,10 @@ const pct = (value: number) => `${Math.round(value * 100)}%`;
 const rankText = (rank: number) => rank.toFixed(1);
 
 const pressureText: Record<Pressure, string> = {
-  low: 'low competitive pressure',
-  medium: 'medium competitive pressure',
-  high: 'high competitive pressure',
-  unknown: 'competitive pressure unknown, treated as medium',
+  low: 'low competitor pressure',
+  medium: 'medium competitor pressure',
+  high: 'high competitor pressure',
+  unknown: 'competitor pressure unknown, treated as medium',
 };
 
 export const recommendKeyword = (
@@ -176,6 +178,7 @@ export const recommendKeyword = (
     clicksAtRisk: { low: 0, high: 0 },
     conversionsAtRisk: { low: 0, high: 0 },
     incrementalCpc: avgCpc > 0 && recovery < 1 ? avgCpc / (1 - recovery) : null,
+    expectedExtraConversions: null,
   };
 
   if (signal.cost <= 0 || signal.paidClicks < settings.minPaidClicks) {
@@ -199,7 +202,7 @@ export const recommendKeyword = (
       return {
         ...base,
         action: 'HOLD',
-        reason: `Brand term at organic position ${rankText(rank!)} with ${pressureText[pressure]} (${pct(signal.rankLostShare || 0)} of impressions lost to ad rank). Keep spend to defend the brand.`,
+        reason: `Brand term at organic position ${rankText(rank!)} with ${pressureText[pressure]} (${pct(signal.rankLostShare || 0)} of searches missed because competitors outrank the ad). Keep spend to defend the brand.`,
       };
     }
 
@@ -218,7 +221,7 @@ export const recommendKeyword = (
       clicksRecovered: { low: clicksRemoved * recoveryLow, high: clicksRemoved * recovery },
       clicksAtRisk: atRisk,
       conversionsAtRisk: { low: atRisk.low * cvr, high: atRisk.high * cvr },
-      reason: `Organic position ${rankText(rank!)}${signal.isBrand ? ', brand term' : ''}, ${pressureText[pressure]}. Cut ${pct(cut)} and keep ${pct(1 - cut)} as a defensive floor. Test in steps and watch total clicks (paid + organic).`,
+      reason: `Organic position ${rankText(rank!)}${signal.isBrand ? ', brand term' : ''}, ${pressureText[pressure]}. Cut ${pct(cut)} and keep ${pct(1 - cut)} as the minimum, so a competitor cannot take the ad slot. Test in steps and watch total clicks (paid + organic).`,
     };
   }
 
@@ -238,7 +241,8 @@ export const recommendKeyword = (
         action: 'INCREASE',
         changePct: settings.increaseStep,
         suggestedSpend: signal.cost * (1 + settings.increaseStep),
-        reason: `${rank === null ? 'No organic ranking' : `Organic position ${rankText(rank)}`}, so paid is the only real presence. It converts at or below the account average cost per conversion, and ${pct(signal.rankLostShare)} of impressions are lost to ad rank. Raise ${pct(settings.increaseStep)} and review.`,
+        expectedExtraConversions: cpa !== null && cpa > 0 ? (signal.cost * settings.increaseStep) / cpa : null,
+        reason: `${rank === null ? 'No organic ranking' : `Organic position ${rankText(rank)}`}, so paid is the only real presence. It converts at or below the account average cost per conversion, and ${pct(signal.rankLostShare)} of searches are missed because competitors outrank the ad. Raise ${pct(settings.increaseStep)} and review.`,
       };
     }
     if (!efficient) {
@@ -251,7 +255,7 @@ export const recommendKeyword = (
     return {
       ...base,
       action: 'HOLD',
-      reason: `Paid is the only real presence here and already captures most available impressions (${pct(signal.rankLostShare || 0)} lost to ad rank). No room to grow by raising bids.`,
+      reason: `Paid is the only real presence here and already shows on most searches (only ${pct(signal.rankLostShare || 0)} missed to competitors). No room to grow by raising bids.`,
     };
   }
 
@@ -291,6 +295,20 @@ export interface RecommendationSummary {
   clicksAtRisk: Range;
   conversionsAtRisk: Range;
   spendToIncrease: number; // extra spend proposed on INCREASE keywords
+  extraConversions: number; // conversions that extra spend is expected to buy
+  netChange: number; // spendCut - spendToIncrease: what is saved after moving budget
+  // On the keywords to reduce:
+  reduceSpend: number; // current paid spend
+  reducePaidClicks: number;
+  reduceOrganicClicks: number;
+  nominalCpc: number | null; // what an ad click appears to cost
+  // What each click the ads really add costs, once the clicks organic would have got anyway are discounted.
+  addedClickCost: Range | null;
+  // Clicks at risk as a share of all search clicks (paid + organic) on those keywords.
+  lossShareOfSearch: Range | null;
+  // Keywords with enough data to be judged, and the share of spend they cover.
+  judgedKeywords: number;
+  judgedSpendShare: number;
   counts: Record<RecAction, number>;
 }
 
@@ -305,8 +323,19 @@ export const summarizeRecommendations = (recs: KeywordRecommendation[], periodDa
     clicksAtRisk: { low: 0, high: 0 },
     conversionsAtRisk: { low: 0, high: 0 },
     spendToIncrease: 0,
+    extraConversions: 0,
+    netChange: 0,
+    reduceSpend: 0,
+    reducePaidClicks: 0,
+    reduceOrganicClicks: 0,
+    nominalCpc: null,
+    addedClickCost: null,
+    lossShareOfSearch: null,
+    judgedKeywords: 0,
+    judgedSpendShare: 0,
     counts: { REDUCE: 0, HOLD: 0, INCREASE: 0, NO_DATA: 0 },
   };
+  let judgedSpend = 0;
   recs.forEach(r => {
     summary.spendAnalysed += r.currentSpend;
     summary.counts[r.action] += 1;
@@ -317,8 +346,31 @@ export const summarizeRecommendations = (recs: KeywordRecommendation[], periodDa
     summary.clicksAtRisk.high += r.clicksAtRisk.high;
     summary.conversionsAtRisk.low += r.conversionsAtRisk.low;
     summary.conversionsAtRisk.high += r.conversionsAtRisk.high;
-    if (r.action === 'INCREASE') summary.spendToIncrease += r.suggestedSpend - r.currentSpend;
+    if (r.action === 'INCREASE') {
+      summary.spendToIncrease += r.suggestedSpend - r.currentSpend;
+      summary.extraConversions += r.expectedExtraConversions || 0;
+    }
+    if (r.action === 'REDUCE') {
+      summary.reduceSpend += r.currentSpend;
+      summary.reducePaidClicks += r.paidClicks;
+      summary.reduceOrganicClicks += r.organicClicks;
+    }
+    if (r.action !== 'NO_DATA') {
+      summary.judgedKeywords += 1;
+      judgedSpend += r.currentSpend;
+    }
   });
+  summary.netChange = summary.spendCut - summary.spendToIncrease;
+  summary.judgedSpendShare = summary.spendAnalysed > 0 ? judgedSpend / summary.spendAnalysed : 0;
+  summary.nominalCpc = summary.reducePaidClicks > 0 ? summary.reduceSpend / summary.reducePaidClicks : null;
+  if (summary.spendCut > 0 && summary.clicksAtRisk.low > 0) {
+    // More clicks lost means each added click was cheaper, so the range flips.
+    summary.addedClickCost = { low: summary.spendCut / summary.clicksAtRisk.high, high: summary.spendCut / summary.clicksAtRisk.low };
+  }
+  const searchClicks = summary.reducePaidClicks + summary.reduceOrganicClicks;
+  if (searchClicks > 0 && summary.counts.REDUCE > 0) {
+    summary.lossShareOfSearch = { low: summary.clicksAtRisk.low / searchClicks, high: summary.clicksAtRisk.high / searchClicks };
+  }
   summary.spendCutMonthly = (summary.spendCut * 30) / days;
   summary.spendCutShare = summary.spendAnalysed > 0 ? summary.spendCut / summary.spendAnalysed : 0;
   return summary;

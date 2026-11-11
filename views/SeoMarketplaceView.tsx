@@ -11,7 +11,7 @@ import { ComparisonTooltip } from '../components/ComparisonTooltip';
 import { EmptyState } from '../components/EmptyState';
 
 const CountryShareAnalysis = ({ data, currencySymbol, onRefresh, isLoading }: { data: any[], currencySymbol: string, onRefresh?: () => void, isLoading?: boolean }) => {
-  const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#f97316', '#3b82f6'];
+  const COLORS = ['#1D4ED8', '#10b981', '#D97706', '#ec4899', '#8b5cf6', '#06b6d4', '#f97316', '#3b82f6'];
 
   const totalSessions = useMemo(() => data.reduce((acc, curr) => acc + curr.traffic, 0) || 1, [data]);
   const totalRevenue = useMemo(() => data.reduce((acc, curr) => acc + curr.revenue, 0) || 1, [data]);
@@ -37,12 +37,12 @@ const CountryShareAnalysis = ({ data, currencySymbol, onRefresh, isLoading }: { 
   })).sort((a,b) => b.efficiency - a.efficiency), [data]);
 
   const renderDonut = (shareData: any[], title: string, metric: string, isCurrency = false) => (
-    <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm h-full flex flex-col">
+    <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm h-full flex flex-col">
       <div className="flex justify-between items-center mb-6">
-        <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{title}</h4>
+        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">{title}</h4>
         <button 
           onClick={() => exportToCSV(shareData, `${title.replace(/ /g, "_")}`)} 
-          className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+          className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
         >
           <FileText size={12} /> Export CSV
         </button>
@@ -70,11 +70,11 @@ const CountryShareAnalysis = ({ data, currencySymbol, onRefresh, isLoading }: { 
                   const d = payload[0].payload;
                   return (
                     <div className="bg-slate-900 text-white p-3 rounded-xl border border-white/10 shadow-xl">
-                      <p className="text-[9px] font-black uppercase tracking-widest mb-1">{d.country}</p>
+                      <p className="text-[11px] font-bold uppercase tracking-wide mb-1">{d.country}</p>
                       <p className="text-[11px] font-bold">
                         {isCurrency ? `${currencySymbol}${d.value.toLocaleString()}` : d.value.toLocaleString()} {metric}
                       </p>
-                      <p className="text-[9px] text-slate-400">{d.percent.toFixed(1)}% contribution</p>
+                      <p className="text-[11px] text-slate-500">{d.percent.toFixed(1)}% contribution</p>
                     </div>
                   );
                 }
@@ -84,13 +84,13 @@ const CountryShareAnalysis = ({ data, currencySymbol, onRefresh, isLoading }: { 
           </PieChart>
         </ResponsiveContainer>
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Market</span>
-          <span className="text-sm font-black text-slate-900">Distribution</span>
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Market</span>
+          <span className="text-sm font-bold text-slate-900">Distribution</span>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-6 border-t border-slate-50 pt-6">
         {shareData.slice(0, 8).map((item, i) => (
-          <div key={i} className="flex items-center justify-between text-[9px] font-bold">
+          <div key={i} className="flex items-center justify-between text-[11px] font-bold">
             <div className="flex items-center gap-1.5 truncate mr-2">
               <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
               <span className="text-slate-600 truncate">{item.country}</span>
@@ -103,21 +103,21 @@ const CountryShareAnalysis = ({ data, currencySymbol, onRefresh, isLoading }: { 
   );
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-6">
+    <div className="w-full max-w-7xl mx-auto space-y-6">
        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {renderDonut(sessionShare, 'Volume Contribution (Sessions)', 'Sessions')}
           {renderDonut(revenueShare, 'Value Contribution (Revenue)', 'Revenue', true)}
        </div>
-       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+       <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex justify-between items-center mb-8">
             <div>
-              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Country Efficiency Leaderboard</h4>
+              <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Country Efficiency Leaderboard</h4>
               <p className="text-[11px] font-bold text-slate-600">Average revenue generated per organic session per country</p>
             </div>
             <div className="flex items-center gap-4">
               <button 
                 onClick={() => exportToCSV(efficiencyRank, "Country_Efficiency_Leaderboard")} 
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
               >
                 <FileText size={12} /> Export CSV
               </button>
@@ -130,14 +130,14 @@ const CountryShareAnalysis = ({ data, currencySymbol, onRefresh, isLoading }: { 
             <ResponsiveContainer width="100%" height="100%">
               <BarChart layout="vertical" data={efficiencyRank} margin={{ left: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                <XAxis type="number" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val}`} />
-                <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 800, fill: '#1e293b'}} />
+                <XAxis type="number" axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val}`} />
+                <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 800, fill: '#1e293b'}} />
                 <Tooltip cursor={{fill: 'transparent'}} content={({ active, payload }: any) => {
                     if (active && payload && payload.length) {
                       const d = payload[0].payload;
                       return (
                         <div className="bg-slate-900 text-white p-3 rounded-xl border border-white/10 shadow-xl">
-                          <p className="text-[9px] font-black uppercase tracking-widest mb-1">{d.name}</p>
+                          <p className="text-[11px] font-bold uppercase tracking-wide mb-1">{d.name}</p>
                           <p className="text-[11px] font-bold text-emerald-400">{currencySymbol}{d.efficiency.toFixed(2)} per session</p>
                         </div>
                       );
@@ -146,7 +146,7 @@ const CountryShareAnalysis = ({ data, currencySymbol, onRefresh, isLoading }: { 
                 }} />
                 <Bar dataKey="efficiency" radius={[0, 12, 12, 0]} barSize={24}>
                   {efficiencyRank.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.efficiency > (totalRevenue / totalSessions) ? '#10b981' : '#6366f1'} />
+                    <Cell key={`cell-${index}`} fill={entry.efficiency > (totalRevenue / totalSessions) ? '#10b981' : '#1D4ED8'} />
                   ))}
                 </Bar>
               </BarChart>
@@ -259,7 +259,7 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
   }, [data]);
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-6">
+    <div className="w-full max-w-7xl mx-auto space-y-6">
 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-6 gap-4">        <KpiCard title="GSC Clicks" value={gscStats.current.clicks} comparison={comparisonEnabled ? gscStats.changes.clicks : undefined} icon={<MousePointer2 />} color="sky" />
         <KpiCard title="GSC Impressions" value={gscStats.current.impressions} comparison={comparisonEnabled ? gscStats.changes.impressions : undefined} icon={<Eye />} color="sky" />
         <KpiCard title="GSC Avg. CTR" value={`${gscStats.current.ctr.toFixed(2)}%`} comparison={comparisonEnabled ? gscStats.changes.ctr : undefined} icon={<Percent />} isPercent color="sky" />
@@ -268,22 +268,22 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
         <KpiCard title="Organic Conv. Rate" value={`${organicGa4.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? organicGa4.changes.cr : undefined} icon={<ShoppingBag />} isPercent color="emerald" />
       </div>
 
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden w-full mt-8">
+      <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm overflow-hidden w-full mt-8">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Brand vs Generic Search (Time Overlay)</h4>
+            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Brand vs Generic Search (Time Overlay)</h4>
             <p className="text-[11px] font-bold text-slate-600">Overlapping periods by relative position in time</p>
           </div>
           <div className="flex items-center gap-4">
              <button 
                 onClick={() => exportToCSV(brandedTrendData, "Brand_vs_Generic_Trend")} 
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
               >
                 <FileText size={12} /> Export CSV
               </button>
             <div className="flex bg-slate-100 p-1 rounded-xl">
-               <button onClick={() => setBrandedMetric('clicks')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'clicks' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Clicks</button>
-               <button onClick={() => setBrandedMetric('impressions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${brandedMetric === 'impressions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Impr.</button>
+               <button onClick={() => setBrandedMetric('clicks')} className={`px-4 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-all ${brandedMetric === 'clicks' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Clicks</button>
+               <button onClick={() => setBrandedMetric('impressions')} className={`px-4 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-all ${brandedMetric === 'impressions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Impr.</button>
             </div>
           </div>
         </div>
@@ -291,18 +291,18 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
           {brandedTrendData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={brandedTrendData}>
-                <defs><linearGradient id="colorBrand" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/><stop offset="95%" stopColor="#6366f1" stopOpacity={0}/></linearGradient></defs>
+                <defs><linearGradient id="colorBrand" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#1D4ED8" stopOpacity={0.1}/><stop offset="95%" stopColor="#1D4ED8" stopOpacity={0}/></linearGradient></defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} tickFormatter={(val) => val.split('-').slice(1).join('/')} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
+                <XAxis dataKey="date" tick={{fontSize: 12, fontWeight: 700}} axisLine={false} tickLine={false} tickFormatter={(val) => val.split('-').slice(1).join('/')} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} />
                 <Tooltip content={<ComparisonTooltip />} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
-                <Area name="Branded (Cur)" type="monotone" dataKey="Branded (Cur)" stroke="#6366f1" fillOpacity={1} fill="url(#colorBrand)" strokeWidth={3} />
+                <Area name="Branded (Cur)" type="monotone" dataKey="Branded (Cur)" stroke="#1D4ED8" fillOpacity={1} fill="url(#colorBrand)" strokeWidth={3} />
                 <Area name="Non-Branded (Cur)" type="monotone" dataKey="Non-Branded (Cur)" stroke="#94a3b8" fillOpacity={0} strokeWidth={3} />
                 {comparisonEnabled && (
                   <>
-                    <Line name="Branded (Prev)" type="monotone" dataKey="Branded (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
-                    <Line name="Non-Branded (Prev)" type="monotone" dataKey="Non-Branded (Prev)" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
+                    <Line name="Branded (Prev)" type="monotone" dataKey="Branded (Prev)" stroke="#1D4ED8" strokeWidth={1.5} strokeDasharray="6 4" dot={false} />
+                    <Line name="Non-Branded (Prev)" type="monotone" dataKey="Non-Branded (Prev)" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="6 4" dot={false} />
                   </>
                 )}
               </AreaChart>
@@ -313,18 +313,18 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
 
       <div className="mt-8 space-y-4">
         <div className="flex items-center gap-3 px-2">
-          <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px] shadow-lg shadow-indigo-600/20"><Globe size={14} /></div>
-          <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Market Distribution & Efficiency Analysis</h4>
+          <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-[11px] shadow-lg shadow-indigo-600/20"><Globe size={14} /></div>
+          <h4 className="text-[11px] font-bold text-slate-800 uppercase tracking-wide">Market Distribution & Efficiency Analysis</h4>
         </div>
         <CountryShareAnalysis data={countryPerformanceData} currencySymbol={currencySymbol} onRefresh={onRefresh} isLoading={isLoading} />
       </div>
 
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm mt-8">
+      <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm mt-8">
         <div className="flex justify-between items-center mb-8">
-          <div><h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Market Efficiency Analysis (Current Period)</h4><p className="text-[11px] font-bold text-slate-600">Traffic vs Revenue | Size = Revenue Contribution</p></div>
+          <div><h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Market Efficiency Analysis (Current Period)</h4><p className="text-[11px] font-bold text-slate-600">Traffic vs Revenue | Size = Revenue Contribution</p></div>
           <button 
             onClick={() => exportToCSV(countryPerformanceData, "Market_Efficiency_Analysis")} 
-            className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+            className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
           >
             <FileText size={12} /> Export CSV
           </button>
@@ -334,19 +334,19 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
             <ResponsiveContainer width="100%" height="100%">
               <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis type="number" dataKey="traffic" name="Traffic" unit=" sess." axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
-                <YAxis type="number" dataKey="revenue" name="Revenue" unit={` ${currencySymbol}`} axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} />
+                <XAxis type="number" dataKey="traffic" name="Traffic" unit=" sess." axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} />
+                <YAxis type="number" dataKey="revenue" name="Revenue" unit={` ${currencySymbol}`} axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} />
                 <ZAxis type="number" dataKey="revenue" range={[100, 2000]} name="Market Value" unit={` ${currencySymbol}`} />
                 <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }: any) => { 
                   if (active && payload && payload.length) { 
                     const d = payload[0].payload; 
                     return (
                       <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10">
-                        <p className="text-[10px] font-black uppercase tracking-widest mb-2 border-b border-white/10 pb-2">{d.country}</p>
+                        <p className="text-[11px] font-bold uppercase tracking-wide mb-2 border-b border-white/10 pb-2">{d.country}</p>
                         <div className="space-y-1">
-                          <p className="text-[9px] flex justify-between gap-4"><span>Traffic:</span> <span className="font-bold">{d.traffic.toLocaleString()} sess.</span></p>
-                          <p className="text-[9px] flex justify-between gap-4"><span>Revenue:</span> <span className="font-bold text-emerald-400">{currencySymbol}{d.revenue.toLocaleString()}</span></p>
-                          <p className="text-[9px] flex justify-between gap-4"><span>Efficiency:</span> <span className="font-bold text-indigo-400">{currencySymbol}{(d.revenue / d.traffic).toFixed(2)}/sess.</span></p>
+                          <p className="text-[11px] flex justify-between gap-4"><span>Traffic:</span> <span className="font-bold">{d.traffic.toLocaleString()} sess.</span></p>
+                          <p className="text-[11px] flex justify-between gap-4"><span>Revenue:</span> <span className="font-bold text-emerald-400">{currencySymbol}{d.revenue.toLocaleString()}</span></p>
+                          <p className="text-[11px] flex justify-between gap-4"><span>Efficiency:</span> <span className="font-bold text-indigo-400">{currencySymbol}{(d.revenue / d.traffic).toFixed(2)}/sess.</span></p>
                         </div>
                       </div>
                     ); 
@@ -355,7 +355,7 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
                 }} />
                 <Scatter name="Organic Markets" data={countryPerformanceData}>
                   {countryPerformanceData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.revenue > 10000 ? '#10b981' : entry.revenue > 5000 ? '#6366f1' : '#f59e0b'} fillOpacity={0.6} strokeWidth={2} stroke={entry.revenue > 10000 ? '#059669' : entry.revenue > 5000 ? '#4f46e5' : '#d97706'} />
+                    <Cell key={`cell-${index}`} fill={entry.revenue > 10000 ? '#10b981' : entry.revenue > 5000 ? '#1D4ED8' : '#D97706'} fillOpacity={0.6} strokeWidth={2} stroke={entry.revenue > 10000 ? '#059669' : entry.revenue > 5000 ? '#4f46e5' : '#d97706'} />
                   ))}
                 </Scatter>
               </ScatterChart>

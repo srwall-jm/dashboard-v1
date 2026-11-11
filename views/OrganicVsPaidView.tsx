@@ -12,9 +12,9 @@ import { EmptyState } from '../components/EmptyState';
 
 const UnifiedFunnel = ({ title, data }: any) => {
   return (
-    <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm h-full">
+    <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm h-full">
       <div className="flex justify-between items-center mb-8">
-        <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{title}</h4>
+        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">{title}</h4>
       </div>
       <div className="space-y-8">
         {data.map((stage: any, i: number) => {
@@ -25,17 +25,17 @@ const UnifiedFunnel = ({ title, data }: any) => {
           return (
             <div key={stage.stage} className="relative">
               <div className="flex justify-between items-end mb-2">
-                <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight">{stage.stage}</span>
+                <span className="text-[11px] font-bold text-slate-800 uppercase tracking-tight">{stage.stage}</span>
                 <div className="flex flex-col items-end">
-                  <span className="text-[11px] font-black text-slate-900">{total.toLocaleString()} Total</span>
+                  <span className="text-[11px] font-bold text-slate-900">{total.toLocaleString()} Total</span>
                   <div className="flex gap-3 mt-1">
                     <div className="flex items-center gap-1.5">
                       <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full" />
-                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">Org: <span className="text-slate-900">{stage.organic.toLocaleString()}</span> ({organicPercent.toFixed(1)}%)</span>
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-tighter">Org: <span className="text-slate-900">{stage.organic.toLocaleString()}</span> ({organicPercent.toFixed(1)}%)</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <div className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
-                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">Paid: <span className="text-slate-900">{stage.paid.toLocaleString()}</span> ({paidPercent.toFixed(1)}%)</span>
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-tighter">Paid: <span className="text-slate-900">{stage.paid.toLocaleString()}</span> ({paidPercent.toFixed(1)}%)</span>
                     </div>
                   </div>
                 </div>
@@ -45,13 +45,13 @@ const UnifiedFunnel = ({ title, data }: any) => {
                   className="h-full bg-indigo-600 rounded-l-xl transition-all duration-1000 ease-out flex items-center justify-center min-w-[1%]" 
                   style={{ width: `${organicPercent}%` }}
                 >
-                  {organicPercent > 15 && <span className="text-[9px] font-black text-white whitespace-nowrap">ORGANIC</span>}
+                  {organicPercent > 15 && <span className="text-[11px] font-bold text-white whitespace-nowrap">ORGANIC</span>}
                 </div>
                 <div 
                   className="h-full bg-amber-500 rounded-r-xl transition-all duration-1000 ease-out flex items-center justify-center min-w-[1%]" 
                   style={{ width: `${paidPercent}%` }}
                 >
-                   {paidPercent > 15 && <span className="text-[9px] font-black text-white whitespace-nowrap">PAID</span>}
+                   {paidPercent > 15 && <span className="text-[11px] font-bold text-white whitespace-nowrap">PAID</span>}
                 </div>
               </div>
               {i < data.length - 1 && (
@@ -71,12 +71,12 @@ const UnifiedFunnel = ({ title, data }: any) => {
 const EcommerceFunnel = ({ title, data, color }: any) => {
   const max = data[0].value || 1;
   return (
-    <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+    <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
       <div className="flex justify-between items-center mb-8">
-        <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{title}</h4>
+        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">{title}</h4>
         <button 
           onClick={() => exportToCSV(data, `${title.replace(/ /g, "_")}_Funnel`)} 
-          className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+          className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
         >
           <FileText size={12} /> Export CSV
         </button>
@@ -87,11 +87,11 @@ const EcommerceFunnel = ({ title, data, color }: any) => {
           return (
             <div key={stage.stage} className="relative">
               <div className="flex justify-between items-center mb-1.5">
-                <span className="text-[10px] font-black text-slate-800 uppercase tracking-tight">{stage.stage}</span>
-                <span className="text-[10px] font-bold text-slate-500">{stage.value.toLocaleString()}</span>
+                <span className="text-[11px] font-bold text-slate-800 uppercase tracking-tight">{stage.stage}</span>
+                <span className="text-[11px] font-bold text-slate-500">{stage.value.toLocaleString()}</span>
               </div>
               <div className="h-9 bg-slate-50 rounded-xl overflow-hidden border border-slate-100 p-1">
-                <div className={`h-full bg-${color}-600 rounded-lg transition-all duration-1000 ease-out flex items-center justify-end px-3 min-w-[5%]`} style={{ width: `${width}%` }}><span className="text-[8px] font-black text-white">{width.toFixed(1)}%</span></div>
+                <div className={`h-full bg-${color}-600 rounded-lg transition-all duration-1000 ease-out flex items-center justify-end px-3 min-w-[5%]`} style={{ width: `${width}%` }}><span className="text-[11px] font-bold text-white">{width.toFixed(1)}%</span></div>
               </div>
               {i < data.length - 1 && (<div className="absolute left-1/2 -bottom-4.5 -translate-x-1/2 z-10 flex flex-col items-center"><div className="w-[1px] h-3 bg-slate-200"></div><ChevronDown className="w-3 h-3 text-slate-300 -mt-1" /></div>)}
             </div>
@@ -123,15 +123,15 @@ const ShareOfSearchAnalysis = ({ stats, currencySymbol }: { stats: any, currency
     ];
   }, [stats]);
 
-  const COLORS = ['#6366f1', '#94a3b8']; 
+  const COLORS = ['#1D4ED8', '#94a3b8']; 
 
   const renderDonut = (data: any[], title: string, metric: string, isCurrency = false) => (
-    <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm flex flex-col items-center h-full">
+    <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center h-full">
       <div className="w-full flex justify-between items-center mb-6">
-        <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest self-start">{title}</h4>
+        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide self-start">{title}</h4>
         <button 
           onClick={() => exportToCSV(data, `${title.replace(/ /g, "_")}`)} 
-          className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+          className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
         >
           <FileText size={12} /> Export CSV
         </button>
@@ -159,11 +159,11 @@ const ShareOfSearchAnalysis = ({ stats, currencySymbol }: { stats: any, currency
                   const d = payload[0].payload;
                   return (
                     <div className="bg-slate-900 text-white p-3 rounded-xl border border-white/10 shadow-xl">
-                      <p className="text-[9px] font-black uppercase tracking-widest mb-1">{d.name}</p>
+                      <p className="text-[11px] font-bold uppercase tracking-wide mb-1">{d.name}</p>
                       <p className="text-[11px] font-bold">
                         {isCurrency ? `${currencySymbol}${d.value.toLocaleString()}` : d.value.toLocaleString()} {metric}
                       </p>
-                      <p className="text-[9px] text-slate-400">{d.percent.toFixed(1)}% weight</p>
+                      <p className="text-[11px] text-slate-500">{d.percent.toFixed(1)}% weight</p>
                     </div>
                   );
                 }
@@ -173,13 +173,13 @@ const ShareOfSearchAnalysis = ({ stats, currencySymbol }: { stats: any, currency
           </PieChart>
         </ResponsiveContainer>
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="text-xl font-black text-slate-900">{data[0].percent.toFixed(1)}%</span>
-          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Search Share</span>
+          <span className="text-xl font-bold text-slate-900">{data[0].percent.toFixed(1)}%</span>
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Search Share</span>
         </div>
       </div>
       <div className="w-full space-y-3 mt-4">
         {data.map((item, i) => (
-          <div key={i} className="flex justify-between items-center text-[10px] font-bold">
+          <div key={i} className="flex justify-between items-center text-[11px] font-bold">
             <div className="flex items-center gap-2">
               <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[i] }} />
               <span className="text-slate-600">{item.name}</span>
@@ -268,7 +268,7 @@ const CountryPerformanceTable = ({ title, data, type, currencySymbol, comparison
         {isCurrency ? `${currencySymbol}${value.toLocaleString()}` : isPercent ? `${value.toFixed(2)}%` : value.toLocaleString()}
       </span>
       {comparisonEnabled && (
-        <div className={`flex items-center text-[9px] font-black ${change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+        <div className={`flex items-center text-[11px] font-bold ${change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
           {change >= 0 ? <ArrowUpRight className="w-2.5 h-2.5 mr-0.5" /> : <ArrowDownRight className="w-2.5 h-2.5 mr-0.5" />}
           {Math.abs(change).toFixed(1)}%
         </div>
@@ -277,15 +277,15 @@ const CountryPerformanceTable = ({ title, data, type, currencySymbol, comparison
   );
 
   return (
-    <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full w-full">
+    <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full w-full">
       <div className="flex justify-between items-center mb-8">
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-xl ${type === 'Organic' ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-600'}`}>
             <Globe size={18} />
           </div>
-          <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-widest">{title}</h4>
+          <h4 className="text-[11px] font-bold text-slate-800 uppercase tracking-wide">{title}</h4>
         </div>
-        <button onClick={handleDownload} className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md">
+        <button onClick={handleDownload} className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md">
           <FileText size={12} /> Export CSV
         </button>
       </div>
@@ -294,17 +294,17 @@ const CountryPerformanceTable = ({ title, data, type, currencySymbol, comparison
         <table className="w-full text-left border-collapse min-w-[700px]">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50/50">
-              <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Country</th>
-              <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Sessions</th>
-              <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Conv. Rate</th>
-              <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Revenue</th>
-              <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Sales</th>
+              <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wide">Country</th>
+              <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wide text-right">Sessions</th>
+              <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wide text-right">Conv. Rate</th>
+              <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wide text-right">Revenue</th>
+              <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wide text-right">Sales</th>
             </tr>
           </thead>
           <tbody>
             {countryStats.slice(0, 10).map((item, idx) => (
               <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                <td className="py-4 px-4 font-black text-slate-800 text-[11px]">{item.country}</td>
+                <td className="py-4 px-4 font-bold text-slate-800 text-[11px]">{item.country}</td>
                 <td className="py-4 px-4 text-right">
                   <RenderValueWithComparison value={item.sessions} change={item.changes.sessions} />
                 </td>
@@ -503,15 +503,15 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
   ], [stats.paid.current]);
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-6">
+    <div className="w-full max-w-7xl mx-auto space-y-6">
       
       {/* 1, 2, 3: Global Share Analysis (Market Dominance) */}
       <div className="space-y-4">
         <div className="flex items-center gap-3 px-2">
-          <div className="w-7 h-7 bg-violet-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px] shadow-lg shadow-violet-600/20">
+          <div className="w-7 h-7 bg-violet-600 rounded-lg flex items-center justify-center text-white font-bold text-[11px] shadow-lg shadow-violet-600/20">
             <PieIcon size={14} />
           </div>
-          <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Global Search Share (Market Dominance)</h4>
+          <h4 className="text-[11px] font-bold text-slate-800 uppercase tracking-wide">Global Search Share (Market Dominance)</h4>
         </div>
         <ShareOfSearchAnalysis stats={stats} currencySymbol={currencySymbol} />
       </div>
@@ -520,7 +520,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
         {[ {type: 'ORG', color: 'indigo', label: 'Organic', s: stats.organic}, {type: 'PAID', color: 'amber', label: 'Paid', s: stats.paid} ].map(ch => (
           <div key={ch.type} className="space-y-4">
-            <div className="flex items-center gap-3 px-2"><div className={`w-7 h-7 bg-${ch.color}-600 rounded-lg flex items-center justify-center text-white font-bold text-[9px]`}>{ch.type}</div><h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{ch.label} Performance</h4></div>
+            <div className="flex items-center gap-3 px-2"><div className={`w-7 h-7 bg-${ch.color}-600 rounded-lg flex items-center justify-center text-white font-bold text-[11px]`}>{ch.type}</div><h4 className="text-[11px] font-bold text-slate-800 uppercase tracking-wide">{ch.label} Performance</h4></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <KpiCard title="Sessions" value={ch.s.current.sessions} comparison={comparisonEnabled ? ch.s.changes.sessions : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sessions : undefined} icon={<TrendingUp />} color={ch.color} />
               <KpiCard title="Conv. Rate" value={`${(Number(ch.s.current.cr) || 0).toFixed(2)}%`} comparison={comparisonEnabled ? ch.s.changes.cr : undefined} icon={<Percent />} isPercent color={ch.color} />
@@ -537,22 +537,22 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
       </div>
 
       {/* 7: Global Search Share Trend */}
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Global Search Share Trend (Time Overlay)</h4>
+            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Global Search Share Trend (Time Overlay)</h4>
             <p className="text-[11px] font-bold text-slate-600">Overlapping periods by relative position in time</p>
           </div>
           <div className="flex items-center gap-4">
              <button 
                 onClick={() => exportToCSV(chartData, "Global_Share_Trend")} 
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
               >
                 <FileText size={12} /> Export CSV
               </button>
             <div className="flex bg-slate-100 p-1 rounded-xl">
-               <button onClick={() => setWeightMetric('sessions')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'sessions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Sessions %</button>
-               <button onClick={() => setWeightMetric('revenue')} className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${weightMetric === 'revenue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Revenue %</button>
+               <button onClick={() => setWeightMetric('sessions')} className={`px-4 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-all ${weightMetric === 'sessions' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Sessions %</button>
+               <button onClick={() => setWeightMetric('revenue')} className={`px-4 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-all ${weightMetric === 'revenue' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Share Revenue %</button>
             </div>
           </div>
         </div>
@@ -561,13 +561,13 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${val.toFixed(1)}%`} />
+                <XAxis dataKey="date" tick={{fontSize: 12, fontWeight: 700}} axisLine={false} tickLine={false} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} tickFormatter={(val) => `${val.toFixed(1)}%`} />
                 <Tooltip content={<ComparisonTooltip percent />} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
                 <Line name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Cur)`} type="monotone" dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Cur)' : 'Search Share Revenue (Cur)'} stroke="#8b5cf6" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
                 {comparisonEnabled && (
-                  <Line name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Prev)`} type="monotone" dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Prev)' : 'Search Share Revenue (Prev)'} stroke="#8b5cf6" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
+                  <Line name={`${weightMetric === 'sessions' ? 'Share Sessions' : 'Share Revenue'} (Prev)`} type="monotone" dataKey={weightMetric === 'sessions' ? 'Search Share Sessions (Prev)' : 'Search Share Revenue (Prev)'} stroke="#8b5cf6" strokeWidth={1.5} strokeDasharray="6 4" dot={false} />
                 )}
               </LineChart>
             </ResponsiveContainer>
@@ -576,10 +576,10 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
       </div>
 
       {/* 8: Global Search Impressions */}
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Global Search Impressions</h4>
+            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Global Search Impressions</h4>
             <p className="text-[11px] font-bold text-slate-600">Combined GSC (Organic) and Google Ads (Paid) daily impressions</p>
           </div>
           <div className="flex items-center gap-4">
@@ -587,7 +587,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
               <button 
                 onClick={onFetchAdsData}
                 disabled={isAdsLoading}
-                className="flex items-center gap-2 px-3 py-1.5 bg-amber-500 text-white hover:bg-amber-600 rounded-xl text-[9px] font-black uppercase transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-3 py-1.5 bg-amber-500 text-white hover:bg-amber-600 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isAdsLoading ? (
                   <>
@@ -602,7 +602,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
             )}
             <button 
               onClick={() => exportToCSV(impressionsData, "Global_Search_Impressions")} 
-              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
             >
               <FileText size={12} /> Export CSV
             </button>
@@ -613,22 +613,22 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={impressionsData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
+                <XAxis dataKey="date" tick={{fontSize: 12, fontWeight: 700}} axisLine={false} tickLine={false} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} />
                 <Tooltip 
                   content={({ active, payload, label }: any) => {
                     if (active && payload && payload.length) {
                       return (
-                        <div className="bg-slate-900 text-white p-4 rounded-[20px] shadow-2xl border border-white/10 min-w-[180px]">
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 border-b border-white/5 pb-2">{label}</p>
+                        <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10 min-w-[180px]">
+                          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-3 border-b border-white/5 pb-2">{label}</p>
                           <div className="space-y-2.5">
                             {payload.map((entry: any, index: number) => (
                               <div key={index} className="flex justify-between items-center gap-4">
                                 <div className="flex items-center gap-2">
                                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-                                  <span className="text-[10px] font-bold text-white uppercase">{entry.name}</span>
+                                  <span className="text-[11px] font-bold text-white uppercase">{entry.name}</span>
                                 </div>
-                                <span className="text-[11px] font-black">{entry.value.toLocaleString()}</span>
+                                <span className="text-[11px] font-bold">{entry.value.toLocaleString()}</span>
                               </div>
                             ))}
                           </div>
@@ -649,7 +649,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
                    name="Organic Impressions" 
                    type="monotone" 
                    dataKey="Organic Impressions" 
-                   stroke="#6366f1" 
+                   stroke="#1D4ED8" 
                    strokeWidth={3} 
                    dot={false}
                    hide={!visibleSeries.has('Organic Impressions')}
@@ -658,7 +658,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
                    name="Ads Impressions" 
                    type="monotone" 
                    dataKey="Ads Impressions" 
-                   stroke="#f59e0b" 
+                   stroke="#D97706" 
                    strokeWidth={3} 
                    dot={false}
                    hide={!visibleSeries.has('Ads Impressions')}
@@ -680,21 +680,21 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
       </div>
 
       {/* 9: Sessions Performance */}
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+      <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Sessions Performance (Time Overlay)</h4>
+            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Sessions Performance (Time Overlay)</h4>
             <p className="text-[11px] font-bold text-slate-600">Overlapping periods by relative position in time</p>
           </div>
           <div className="flex items-center gap-4">
             <button 
               onClick={() => exportToCSV(chartData, "Sessions_Performance_Overlay")} 
-              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
             >
               <FileText size={12} /> Export CSV
             </button>
             <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
-              {['daily', 'weekly', 'monthly'].map(g => <button key={g} onClick={() => setGrouping(g as any)} className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg transition-all ${grouping === g ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>{g === 'daily' ? 'Day' : g === 'weekly' ? 'Week' : 'Month'}</button>)}
+              {['daily', 'weekly', 'monthly'].map(g => <button key={g} onClick={() => setGrouping(g as any)} className={`px-3 py-1 text-[11px] font-bold uppercase rounded-lg transition-all ${grouping === g ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>{g === 'daily' ? 'Day' : g === 'weekly' ? 'Week' : 'Month'}</button>)}
             </div>
           </div>
         </div>
@@ -703,18 +703,18 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
+                <XAxis dataKey="date" tick={{fontSize: 12, fontWeight: 700}} axisLine={false} tickLine={false} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} />
                 <Tooltip content={<ComparisonTooltip />} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
                 
-                <Line name="Organic (Cur)" type="monotone" dataKey="Organic (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
-                <Line name="Paid (Cur)" type="monotone" dataKey="Paid (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                <Line name="Organic (Cur)" type="monotone" dataKey="Organic (Cur)" stroke="#1D4ED8" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                <Line name="Paid (Cur)" type="monotone" dataKey="Paid (Cur)" stroke="#D97706" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
                 
                 {comparisonEnabled && (
                   <>
-                    <Line name="Organic (Prev)" type="monotone" dataKey="Organic (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
-                    <Line name="Paid (Prev)" type="monotone" dataKey="Paid (Prev)" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
+                    <Line name="Organic (Prev)" type="monotone" dataKey="Organic (Prev)" stroke="#1D4ED8" strokeWidth={1.5} strokeDasharray="6 4" dot={false} />
+                    <Line name="Paid (Prev)" type="monotone" dataKey="Paid (Prev)" stroke="#D97706" strokeWidth={1.5} strokeDasharray="6 4" dot={false} />
                   </>
                 )}
               </LineChart>
@@ -724,15 +724,15 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
       </div>
 
       {/* 10: Revenue Evolution */}
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+      <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Revenue Evolution (Time Overlay)</h4>
+            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Revenue Evolution (Time Overlay)</h4>
             <p className="text-[11px] font-bold text-slate-600">Overlapping periods by relative position in time | Currency: {currencySymbol}</p>
           </div>
           <button 
             onClick={() => exportToCSV(chartData, "Revenue_Evolution_Overlay")} 
-            className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+            className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
           >
             <FileText size={12} /> Export CSV
           </button>
@@ -742,18 +742,18 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} />
+                <XAxis dataKey="date" tick={{fontSize: 12, fontWeight: 700}} axisLine={false} tickLine={false} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} />
                 <Tooltip content={<ComparisonTooltip currency currencySymbol={currencySymbol} />} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
                 
-                <Line name="Organic Rev (Cur)" type="monotone" dataKey="Organic Rev (Cur)" stroke="#6366f1" strokeWidth={3} dot={false} />
-                <Line name="Paid Rev (Cur)" type="monotone" dataKey="Paid Rev (Cur)" stroke="#f59e0b" strokeWidth={3} dot={false} />
+                <Line name="Organic Rev (Cur)" type="monotone" dataKey="Organic Rev (Cur)" stroke="#1D4ED8" strokeWidth={3} dot={false} />
+                <Line name="Paid Rev (Cur)" type="monotone" dataKey="Paid Rev (Cur)" stroke="#D97706" strokeWidth={3} dot={false} />
                 
                 {comparisonEnabled && (
                   <>
-                    <Line name="Organic Rev (Prev)" type="monotone" dataKey="Organic Rev (Prev)" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
-                    <Line name="Paid Rev (Prev)" type="monotone" dataKey="Paid Rev (Prev)" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" opacity={0.3} dot={false} />
+                    <Line name="Organic Rev (Prev)" type="monotone" dataKey="Organic Rev (Prev)" stroke="#1D4ED8" strokeWidth={1.5} strokeDasharray="6 4" dot={false} />
+                    <Line name="Paid Rev (Prev)" type="monotone" dataKey="Paid Rev (Prev)" stroke="#D97706" strokeWidth={1.5} strokeDasharray="6 4" dot={false} />
                   </>
                 )}
               </LineChart>

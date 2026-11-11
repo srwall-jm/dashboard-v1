@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { X, Cpu, Settings2, Database, ExternalLink, Search, LogOut, AlertCircle } from 'lucide-react';
 import { Ga4Property, GscSite, GoogleAdsCustomer } from '../types';
 import { AdsAccountPicker } from './AdsAccountPicker';
@@ -67,21 +67,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   setGa4Auth, setGscAuth, setGoogleAdsAuth,
   filteredProperties, filteredSites, filteredGoogleAdsCustomers
 }) => {
+  // Escape closes the dialog, like any other.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
       
-      <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Header */}
         <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-white z-10">
           <div>
-            <h2 className="text-xl font-black text-slate-900 tracking-tight">Configuration</h2>
+            <h2 className="text-xl font-bold text-slate-900 tracking-tight" id="settings-title">Settings</h2>
             <p className="text-xs text-slate-500 font-medium">Manage data sources and analysis preferences</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500 hover:text-slate-600" aria-label="Close settings">
             <X size={20} />
           </button>
         </div>
@@ -92,29 +100,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {clientProfilePanel}
 
           {/* Section 1: Data Connectors */}
-          <section className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+          <section className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
             <div className="flex items-center gap-2 mb-4 text-slate-900">
-               <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Data Connectors</h3>
+               <h3 className="text-sm font-bold uppercase tracking-wide text-slate-900">Data Connectors</h3>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                {/* GA4 */}
                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col justify-between">
                   <div>
-                    <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider block mb-2">Google Analytics 4</label>
+                    <label className="text-[11px] font-bold uppercase text-slate-500 tracking-wider block mb-2">Google Analytics 4</label>
                   </div>
                   {!ga4Auth?.token ? (
-                    <button onClick={handleConnectGa4} className="mt-4 w-full py-2.5 bg-[#F8B133] hover:bg-[#e09e2d] text-black rounded-xl text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Connect GA4</button>
+                    <button onClick={handleConnectGa4} className="mt-4 w-full py-2.5 bg-[#F8B133] hover:bg-[#e09e2d] text-black rounded-xl text-[11px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Connect GA4</button>
                   ) : (
                     <div className="space-y-2 mt-2">
                       <div className="relative">
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
-                        <input type="text" placeholder="Search Property..." value={ga4Search} onChange={e => setGa4Search(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[10px] pl-8 pr-2 py-2 outline-none focus:border-indigo-500" />
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500" />
+                        <input type="text" placeholder="Search Property..." value={ga4Search} onChange={e => setGa4Search(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[11px] pl-8 pr-2 py-2 outline-none focus:border-indigo-500" />
                       </div>
-                      <select className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[10px] p-2 outline-none cursor-pointer" value={ga4Auth?.property?.id || ''} onChange={e => setGa4Auth({...ga4Auth, property: availableProperties.find(p => p.id === e.target.value) || null})}>
+                      <select className="w-full bg-slate-50 border border-slate-200 rounded-xl text-[11px] p-2 outline-none cursor-pointer" value={ga4Auth?.property?.id || ''} onChange={e => setGa4Auth({...ga4Auth, property: availableProperties.find(p => p.id === e.target.value) || null})}>
                         {filteredProperties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                       </select>
-                      <div className="flex items-center gap-1.5 text-[9px] text-emerald-600 font-bold px-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> Connected</div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-emerald-600 font-bold px-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> Connected</div>
                     </div>
                   )}
                </div>
@@ -122,20 +130,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                {/* GSC */}
                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col justify-between">
                   <div>
-                    <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider block mb-2">Search Console</label>
+                    <label className="text-[11px] font-bold uppercase text-slate-500 tracking-wider block mb-2">Search Console</label>
                   </div>
                   {!gscAuth?.token ? (
-                    <button onClick={handleConnectGsc} className="mt-4 w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Connect GSC</button>
+                    <button onClick={handleConnectGsc} className="mt-4 w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Connect GSC</button>
                   ) : (
                     <div className="space-y-2 mt-2">
                        <div className="relative">
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
-                        <input type="text" placeholder="Search Site..." value={gscSearch} onChange={e => setGscSearch(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl text-[10px] pl-8 pr-2 py-2 outline-none focus:border-emerald-500" />
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500" />
+                        <input type="text" placeholder="Search Site..." value={gscSearch} onChange={e => setGscSearch(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl text-[11px] pl-8 pr-2 py-2 outline-none focus:border-emerald-500" />
                       </div>
-                      <select className="w-full bg-white border border-slate-200 rounded-xl text-[10px] p-2 outline-none cursor-pointer" value={gscAuth?.site?.siteUrl || ''} onChange={e => setGscAuth({...gscAuth, site: availableSites.find(s => s.siteUrl === e.target.value) || null})}>
+                      <select className="w-full bg-white border border-slate-200 rounded-xl text-[11px] p-2 outline-none cursor-pointer" value={gscAuth?.site?.siteUrl || ''} onChange={e => setGscAuth({...gscAuth, site: availableSites.find(s => s.siteUrl === e.target.value) || null})}>
                         {filteredSites.map(s => <option key={s.siteUrl} value={s.siteUrl}>{s.siteUrl}</option>)}
                       </select>
-                      <div className="flex items-center gap-1.5 text-[9px] text-emerald-600 font-bold px-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> Connected</div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-emerald-600 font-bold px-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> Connected</div>
                     </div>
                   )}
                </div>
@@ -143,15 +151,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                {/* Google Ads */}
                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col justify-between">
                   <div>
-                    <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider block mb-2">Google Ads</label>
+                    <label className="text-[11px] font-bold uppercase text-slate-500 tracking-wider block mb-2">Google Ads</label>
                   </div>
                   {!googleAdsAuth?.token ? (
-                    <button onClick={handleConnectGoogleAds} className="mt-4 w-full py-2.5 bg-[#F8B133] hover:bg-[#e09e2d] text-black rounded-xl text-[10px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Connect Google Ads</button>
+                    <button onClick={handleConnectGoogleAds} className="mt-4 w-full py-2.5 bg-[#F8B133] hover:bg-[#e09e2d] text-black rounded-xl text-[11px] font-bold transition-colors flex items-center justify-center gap-2"><ExternalLink className="w-3 h-3" /> Connect Google Ads</button>
                   ) : (
                     <div className="space-y-3 mt-2">
                        <div className="space-y-1">
                          <select 
-                             className="w-full bg-white border border-slate-200 rounded-xl text-[10px] p-2 outline-none cursor-pointer" 
+                             className="w-full bg-white border border-slate-200 rounded-xl text-[11px] p-2 outline-none cursor-pointer" 
                              value={selectedGoogleAdsCustomer?.resourceName || ''} 
                              onChange={e => {
                                  const cust = availableGoogleAdsCustomers.find(c => c.resourceName === e.target.value) || null;
@@ -161,7 +169,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                              {filteredGoogleAdsCustomers.map(c => <option key={c.resourceName} value={c.resourceName}>{c.descriptiveName} ({c.id})</option>)}
                          </select>
                        </div>
-                       <div className="flex items-center gap-1.5 text-[9px] text-emerald-600 font-bold px-1 pt-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> Connected</div>
+                       <div className="flex items-center gap-1.5 text-[11px] text-emerald-600 font-bold px-1 pt-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> Connected</div>
                     </div>
                   )}
                </div>
@@ -182,7 +190,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="mt-8 pt-6 border-t border-slate-100">
                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                    <div className="w-full sm:w-1/3">
-                       <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest block mb-1">Google Ads Developer Token</label>
+                       <label className="text-[11px] font-bold uppercase text-slate-500 tracking-wide block mb-1">Google Ads Developer Token</label>
                    </div>
                    <div className="w-full sm:w-2/3">
                        <p className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] font-bold text-emerald-800">
@@ -195,10 +203,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="mt-8 pt-6 border-t border-slate-100">
                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                    <div className="w-full sm:w-1/3">
-                       <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest block mb-1">Google Ads Developer Token</label>
-                       <p className="text-[9px] text-slate-400">Required for API requests to Google Ads. One token for the whole agency, not one per client.</p>
+                       <label className="text-[11px] font-bold uppercase text-slate-500 tracking-wide block mb-1">Google Ads Developer Token</label>
+                       <p className="text-[11px] text-slate-500">Required for API requests to Google Ads. One token for the whole agency, not one per client.</p>
                        {developerTokenWaitingForAccess && (
-                         <p className="text-[9px] text-amber-700 font-bold mt-1">A token is stored in Cloudflare but is not used until access to the site is restricted.</p>
+                         <p className="text-[11px] text-amber-700 font-bold mt-1">A token is stored in Cloudflare but is not used until access to the site is restricted.</p>
                        )}
                    </div>
                    <div className="w-full sm:w-2/3">
@@ -209,11 +217,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                            className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs p-3 focus:ring-2 ring-amber-400 outline-none transition-all font-mono" 
                            placeholder="Enter your Developer Token..." 
                        />
-                       <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-[9px] text-amber-800 leading-relaxed shadow-inner">
+                       <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800 leading-relaxed shadow-inner">
                            <p className="font-bold mb-1 flex items-center gap-1 text-amber-900"><AlertCircle size={10} /> Account Access Warning:</p>
                            If you encounter a <span className="font-mono bg-amber-100 px-1 rounded">DEVELOPER_TOKEN_PROHIBITED</span> error, your Developer Token may be a "Test Token" restricted to its own project. Ensure your token has "Basic" or "Standard" access level in Google Ads API Center.
                        </div>
-                       <p className="text-[9px] text-slate-400 mt-1.5 flex items-center gap-1">
+                       <p className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-1">
                            <Settings2 size={10} /> Saved locally for this session or client.
                        </p>
                    </div>
@@ -226,7 +234,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="mt-6 pt-6 border-t border-slate-100">
                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                    <div className="w-full sm:w-1/3">
-                       <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest block mb-1">Google Ads OAuth Client ID</label>
+                       <label className="text-[11px] font-bold uppercase text-slate-500 tracking-wide block mb-1">Google Ads OAuth Client ID</label>
                    </div>
                    <div className="w-full sm:w-2/3">
                        <p className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] font-bold text-emerald-800">
@@ -239,8 +247,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="mt-6 pt-6 border-t border-slate-100">
                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                    <div className="w-full sm:w-1/3">
-                       <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest block mb-1">Google Ads OAuth Client ID</label>
-                       <p className="text-[9px] text-slate-400">Must belong to the same Cloud project as this Developer Token.</p>
+                       <label className="text-[11px] font-bold uppercase text-slate-500 tracking-wide block mb-1">Google Ads OAuth Client ID</label>
+                       <p className="text-[11px] text-slate-500">Must belong to the same Cloud project as this Developer Token.</p>
                    </div>
                    <div className="w-full sm:w-2/3">
                        <input 
@@ -250,7 +258,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                            className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs p-3 focus:ring-2 ring-amber-400 outline-none transition-all font-mono" 
                            placeholder="xxxxxxxx.apps.googleusercontent.com" 
                        />
-                       <p className="text-[9px] text-slate-400 mt-1.5 flex items-center gap-1">
+                       <p className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-1">
                            <Settings2 size={10} /> Changes take effect the next time you press "Connect Google Ads". Each Developer Token is permanently paired to the Cloud project of the Client ID used the first time it succeeds, so always use the agency's own token and Client ID together. They are the same for every client.
                        </p>
                    </div>
@@ -265,25 +273,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <section>
             <div className="flex items-center gap-2 mb-4 text-slate-900">
               <div className="p-2 bg-slate-100 rounded-lg"><Cpu size={16} className="text-indigo-600" /></div>
-              <h3 className="text-sm font-black uppercase tracking-widest">AI Analysis Engines</h3>
+              <h3 className="text-sm font-bold uppercase tracking-wide">AI Analysis Engines</h3>
             </div>
             
             <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
                 <div className="flex flex-col sm:flex-row gap-6">
                     <div className="w-full sm:w-1/3">
-                        <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest block mb-2">Active Provider</label>
+                        <label className="text-[11px] font-bold uppercase text-slate-500 tracking-wide block mb-2">Active Provider</label>
                         <div className="flex bg-white rounded-xl p-1 shadow-sm border border-slate-200">
-                            <button onClick={() => setAiProvider('gemini')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${aiProvider === 'gemini' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Gemini</button>
-                            <button onClick={() => setAiProvider('openai')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${aiProvider === 'openai' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>OpenAI</button>
+                            <button onClick={() => setAiProvider('gemini')} className={`flex-1 py-2 text-[11px] font-bold uppercase rounded-lg transition-all ${aiProvider === 'gemini' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Gemini</button>
+                            <button onClick={() => setAiProvider('openai')} className={`flex-1 py-2 text-[11px] font-bold uppercase rounded-lg transition-all ${aiProvider === 'openai' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>OpenAI</button>
                         </div>
                     </div>
                     
                     <div className="w-full sm:w-2/3">
                         {aiProvider === 'openai' ? (
                             <div className="space-y-2">
-                                <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest block">OpenAI API Key</label>
+                                <label className="text-[11px] font-bold uppercase text-slate-500 tracking-wide block">OpenAI API Key</label>
                                 <input type="password" value={openaiKey} onChange={e => setOpenaiKey(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl text-xs p-3 focus:ring-2 ring-emerald-500 outline-none transition-all" placeholder="sk-..." />
-                                <p className="text-[9px] text-slate-400">Your key is stored locally in your browser.</p>
+                                <p className="text-[11px] text-slate-500">Your key is stored locally in your browser.</p>
                             </div>
                         ) : (
                             <div className="h-full flex flex-col justify-center">
@@ -306,18 +314,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <section>
             <div className="flex items-center gap-2 mb-4 text-slate-900">
               <div className="p-2 bg-slate-100 rounded-lg"><Settings2 size={16} className="text-indigo-600" /></div>
-              <h3 className="text-sm font-black uppercase tracking-widest">SEO Definitions</h3>
+              <h3 className="text-sm font-bold uppercase tracking-wide">SEO Definitions</h3>
             </div>
             
             <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest block mb-2">Branded Keyword Regex</label>
+                <label className="text-[11px] font-bold uppercase text-slate-500 tracking-wide block mb-2">Branded Keyword Regex</label>
                 <div className="flex gap-4">
                     <input type="text" value={brandRegexStr} onChange={e => setBrandRegexStr(e.target.value)} className="flex-1 bg-white border border-slate-200 rounded-xl text-xs p-3 font-mono outline-none focus:ring-2 ring-indigo-500" placeholder="brand|shop|store" />
-                    <div className="w-24 flex-shrink-0 flex items-center justify-center bg-white border border-slate-200 rounded-xl text-[10px] font-black text-slate-400 uppercase">
+                    <div className="w-24 flex-shrink-0 flex items-center justify-center bg-white border border-slate-200 rounded-xl text-[11px] font-bold text-slate-500 uppercase">
                         Regex
                     </div>
                 </div>
-                <p className="text-[9px] text-slate-400 mt-2">Use a pipe | to separate terms. Case insensitive. Used to categorize queries as "Branded" or "Non-Branded".</p>
+                <p className="text-[11px] text-slate-500 mt-2">Use a pipe | to separate terms. Case insensitive. Used to categorize queries as "Branded" or "Non-Branded".</p>
             </div>
           </section>
 
@@ -325,10 +333,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         
         {/* Footer */}
         <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-between">
-            <button onClick={handleLogout} className="px-6 py-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2">
+            <button onClick={handleLogout} className="px-6 py-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-bold uppercase tracking-wide transition-all flex items-center gap-2">
                 <LogOut size={14} /> Log Out
             </button>
-            <button onClick={onClose} className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg hover:shadow-xl">
+            <button onClick={onClose} className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold uppercase tracking-wide transition-all shadow-lg hover:shadow-xl">
                 Done
             </button>
         </div>

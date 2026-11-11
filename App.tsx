@@ -2165,7 +2165,7 @@ const App: React.FC = () => {
         {/* Left Side: Dark Background with Content */}
         <div className="hidden md:flex flex-1 bg-black text-white p-16 flex-col justify-between">
             <div className="space-y-6">
-                <h1 className="text-5xl font-black leading-tight tracking-tighter">
+                <h1 className="text-5xl font-bold leading-tight tracking-tighter">
                   One Search is a unified search methodology developed by Jellyfish that integrates Paid Search (PPC) and Organic Search (SEO) into a single, cohesive strategy.
                 </h1>
             </div>
@@ -2189,7 +2189,7 @@ const App: React.FC = () => {
           <div className="w-full max-w-sm space-y-8">
             <div className="text-center flex flex-col items-center gap-3">
                <img src="/logo.png" alt="OneSearch Logo" className="w-16 h-16 rounded-2xl object-cover" />
-               <span className="text-xl font-black tracking-tight">OneSearch™</span>
+               <span className="text-xl font-bold tracking-tight">OneSearch™</span>
             </div>
             
             <div className="space-y-3">
@@ -2209,6 +2209,9 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-[#f8fafc] flex flex-col md:flex-row">
       <button 
         onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
+        aria-label={isSidebarOpen ? 'Close menu' : 'Open menu'}
+        aria-expanded={isSidebarOpen}
+        aria-controls="main-nav"
         className={`xl:hidden print:hidden fixed bottom-6 right-6 z-50 p-4 bg-slate-950 text-white rounded-full shadow-2xl active:scale-95 transition-transform ${clientView ? 'hidden' : ''}`}
       >
         {isSidebarOpen ? <X /> : <Menu />}
@@ -2300,7 +2303,7 @@ const App: React.FC = () => {
           <div className="flex items-center gap-6">
             <div className={`items-center gap-2 print:flex ${isSidebarOpen && !clientView ? 'hidden' : 'flex'}`}>
               <img src="/logo.png" alt="OneSearch Logo" className="w-8 h-8 rounded-xl object-cover" />
-              <h1 className="text-xl font-black text-slate-800 tracking-tighter">OneSearch</h1>
+              <h1 className="text-xl font-bold text-slate-800 tracking-tighter">OneSearch</h1>
             </div>
             
             <div className={`h-6 w-px bg-slate-200 print:block ${isSidebarOpen && !clientView ? 'hidden' : 'block'}`} />                
@@ -2310,34 +2313,53 @@ const App: React.FC = () => {
                 onClick={() => setIsSidebarOpen(true)} 
                 className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-indigo-300 transition-all shadow-sm text-slate-600 hover:text-indigo-600 group" 
                 title="Open menu"
+                aria-label="Open menu"
               >
                 <Menu size={20} className="group-hover:scale-110 transition-transform" />
               </button>
             )}
             <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className={`w-2 h-2 rounded-full ${isAnythingLoading ? 'bg-amber-500 animate-ping' : 'bg-emerald-500'}`} />
-                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+              <div className={`items-center gap-2 mb-2 print:hidden ${clientView ? 'hidden' : 'flex'}`} role="status">
+                <span className={`w-2 h-2 rounded-full ${isAnythingLoading ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} aria-hidden="true" />
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
                   {isLoadingGa4 ? 'Syncing GA4...' : isLoadingGsc ? 'Syncing GSC...' : isLoadingGoogleAds ? 'Syncing Google Ads...' : isLoadingBridge ? 'Joining Data...' : isLoadingAi ? 'Scanning AI...' : 'Dashboard Active'}
                 </span>
               </div>
-              <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">{TAB_META[activeTab].title}</h2>
+              <h2 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tighter">{TAB_META[activeTab].title}</h2>
               <p className="text-sm font-medium text-slate-500 mt-1">
-                {clientView ? [clientName, periodLabel].filter(Boolean).join(' · ') : TAB_META[activeTab].question}
+                <span className="print:hidden">{clientView ? [clientName, periodLabel].filter(Boolean).join(' · ') : TAB_META[activeTab].question}</span>
+                <span className="hidden print:inline">
+                  {[clientName || 'Client not named', `${periodLabel} (${periodDays} days)`, `Prepared with OneSearch on ${formatDate(new Date())}`].join(' · ')}
+                </span>
               </p>
             </div>
 
             <div className="ml-auto flex items-center gap-2 print:hidden">
+              {clientView && (
+                <div className="flex rounded-lg border border-slate-200 bg-white p-0.5" role="group" aria-label="Page">
+                  {([[DashboardTab.SUMMARY, 'Summary'], [DashboardTab.SEARCH_EFFICIENCY, 'Keyword detail']] as const).map(([tab, label]) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      aria-pressed={activeTab === tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${activeTab === tab ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
               <button
                 onClick={() => setClientView(v => !v)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors ${clientView ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'}`}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wide border transition-colors ${clientView ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'}`}
                 title="Hide menu, filters and settings to present this page"
               >
                 <Presentation size={14} /> {clientView ? 'Exit client view' : 'Client view'}
               </button>
               <button
                 onClick={() => window.print()}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest bg-white text-slate-600 border border-slate-200 hover:border-slate-400 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wide bg-white text-slate-600 border border-slate-200 hover:border-slate-400 transition-colors"
                 title="Print this page or save it as PDF"
               >
                 <Printer size={14} /> Print / PDF
@@ -2348,11 +2370,11 @@ const App: React.FC = () => {
           <div className={`flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-4 w-full print:hidden ${clientView ? 'hidden' : 'flex'}`}>
             <DateRangeSelector filters={filters} setFilters={setFilters} />
             
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white p-1.5 rounded-3xl border border-slate-200 shadow-sm">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm">
               <div className="flex items-center gap-2 px-3 py-1.5 sm:border-r border-slate-100">
-                 <Filter className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                 <Filter className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
                  <select 
-                   className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" 
+                   className="bg-transparent text-[11px] font-bold uppercase outline-none cursor-pointer w-full" 
                    value={filters.ga4Dimension} 
                    onChange={e => setFilters({...filters, ga4Dimension: e.target.value})}
                  >
@@ -2361,9 +2383,9 @@ const App: React.FC = () => {
                  </select>
               </div>
               <div className="flex items-center gap-2 px-3 py-1.5 sm:border-r border-slate-100">
-                 <Globe className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                 <Globe className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
                  <select 
-                   className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" 
+                   className="bg-transparent text-[11px] font-bold uppercase outline-none cursor-pointer w-full" 
                    value={filters.country} 
                    onChange={e => setFilters({...filters, country: e.target.value})}
                  >
@@ -2372,9 +2394,9 @@ const App: React.FC = () => {
                  </select>
               </div>
               <div className="flex items-center gap-2 px-3 py-1.5">
-                 <Tag className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                 <Tag className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
                  <select 
-                   className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer w-full" 
+                   className="bg-transparent text-[11px] font-bold uppercase outline-none cursor-pointer w-full" 
                    value={filters.queryType} 
                    onChange={e => setFilters({...filters, queryType: e.target.value as any})}
                  >
@@ -2388,7 +2410,7 @@ const App: React.FC = () => {
                   <button 
                     onClick={handleManualRefresh}
                     disabled={isAnythingLoading}
-                    className="flex items-center gap-2 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[10px] font-black transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                    className="flex items-center gap-2 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[11px] font-bold transition-all shadow-sm active:scale-95 disabled:opacity-50"
                   >
                     <RefreshCw size={12} className={isAnythingLoading ? 'animate-spin' : ''} />
                     {isAnythingLoading ? 'SYNCING...' : 'REFRESH'}
@@ -2399,7 +2421,7 @@ const App: React.FC = () => {
         </header>
         
         {error && (
-          <div className="mb-8 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-3 text-rose-700 shadow-sm animate-in fade-in slide-in-from-top-4">
+          <div className="mb-8 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-3 text-rose-700 shadow-sm">
             <div className="flex items-center gap-3">
               <AlertCircle className="w-5 h-5 flex-shrink-0" />
               <p className="font-bold text-xs">{error}</p>
@@ -2414,7 +2436,7 @@ const App: React.FC = () => {
           <div className="mb-8 p-4 bg-amber-50 border border-amber-300 rounded-2xl flex items-start gap-3 text-amber-900 shadow-sm">
             <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
             <div className="space-y-1">
-              <p className="font-black text-xs uppercase tracking-widest">Incomplete data</p>
+              <p className="font-bold text-xs uppercase tracking-wide">Incomplete data</p>
               {Object.entries(dataWarnings).map(([key, message]) => (
                 <p key={key} className="font-bold text-xs">{message}</p>
               ))}
@@ -2426,7 +2448,7 @@ const App: React.FC = () => {
           <div className="mb-8 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3 text-rose-800 shadow-sm print:hidden">
             <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
             <div className="space-y-1">
-              <p className="font-black text-xs uppercase tracking-widest">Access is not restricted yet</p>
+              <p className="font-bold text-xs uppercase tracking-wide">Access is not restricted yet</p>
               <p className="font-bold text-xs">Anyone with a Google account can open this dashboard. Set up Cloudflare Access to limit it to @jellyfish.com (README, "Restricting access").</p>
             </div>
           </div>
@@ -2442,7 +2464,7 @@ const App: React.FC = () => {
         )}
         
         {tabInsights[activeTab as string] && (
-          <div className="mb-10 bg-slate-900 rounded-[32px] p-8 md:p-10 text-white shadow-2xl relative animate-in fade-in zoom-in-95 duration-500 overflow-hidden">
+          <div className="mb-10 bg-slate-900 rounded-2xl p-8 md:p-10 text-white shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 right-0 p-12 opacity-10 pointer-events-none">
               {aiProvider === 'openai' ? <Cpu className="w-48 h-48 text-emerald-500" /> : <Sparkles className="w-48 h-48 text-indigo-500" />}
             </div>
@@ -2450,10 +2472,10 @@ const App: React.FC = () => {
               <div className="flex items-center gap-3">
                 {aiProvider === 'openai' ? <Cpu className="w-5 h-5 text-emerald-400" /> : <Sparkles className="w-5 h-5 text-indigo-400" />}
                 <div className="flex flex-col">
-                  <h3 className="text-xl font-black">
+                  <h3 className="text-xl font-bold">
                     Strategic Report: {activeTab === DashboardTab.ORGANIC_VS_PAID ? "Channels" : activeTab === DashboardTab.SEO_BY_COUNTRY ? "Markets" : activeTab === DashboardTab.PPC_SEO_BRIDGE ? "The Bridge" : activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE ? "Paid Search" : activeTab === DashboardTab.AI_TRAFFIC_MONITOR ? "AI Intelligence" : "Deep Dive"}
                   </h3>
-                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
                     Generated by {aiProvider === 'openai' ? 'OpenAI' : 'Google Gemini'}
                   </p>
                 </div>
@@ -2477,6 +2499,9 @@ const App: React.FC = () => {
               channelStats={channelStats}
               globalMetrics={googleAdsGlobalMetrics}
               currencySymbol={currencySymbol}
+              settings={recommendationSettings}
+              periodDays={periodDays}
+              isSample={isShowingSampleData}
               comparisonEnabled={filters.comparison.enabled}
               isLoading={isGoogleAdsKeywordsLoading || isLoadingBridge}
               onOpenRecommendations={() => setActiveTab(DashboardTab.SEARCH_EFFICIENCY)}
@@ -2569,6 +2594,7 @@ const App: React.FC = () => {
                  keywordSignals={keywordSignals}
                  periodDays={periodDays}
                  recommendationSettings={recommendationSettings}
+                 presentation={clientView}
                  clientName={clientName}
                  periodLabel={periodLabel}
               />
@@ -2588,7 +2614,7 @@ const App: React.FC = () => {
           <button 
             onClick={handleGenerateInsights} 
             disabled={loadingInsights || isAnythingLoading || (realDailyData.length === 0 && realKeywordData.length === 0)} 
-            className={`flex items-center gap-3 px-10 py-4 ${aiProvider === 'openai' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20' : 'bg-slate-950 hover:bg-slate-800 shadow-slate-900/20'} text-white rounded-3xl text-xs font-black shadow-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50`}
+            className={`flex items-center gap-3 px-10 py-4 ${aiProvider === 'openai' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20' : 'bg-slate-950 hover:bg-slate-800 shadow-slate-900/20'} text-white rounded-2xl text-xs font-bold shadow-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50`}
           >
             {loadingInsights ? (
               <RefreshCw className="w-4 h-4 animate-spin" />
@@ -2601,33 +2627,33 @@ const App: React.FC = () => {
       </main>
       {isLoadingBridge && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[32px] p-10 max-w-md w-full shadow-2xl text-center space-y-6 animate-in zoom-in-95">
+          <div className="bg-white rounded-2xl p-10 max-w-md w-full shadow-2xl text-center space-y-6">
             <div className="relative w-28 h-28 mx-auto">
               <div className="absolute inset-0 border-8 border-slate-100 rounded-full"></div>
               <div 
                 className="absolute inset-0 border-8 border-indigo-600 rounded-full border-t-transparent animate-spin"
                 style={{ animationDuration: '1.2s' }}
               ></div>
-              <div className="absolute inset-0 flex items-center justify-center font-black text-xl text-slate-900">
+              <div className="absolute inset-0 flex items-center justify-center font-bold text-xl text-slate-900">
                 {loadingProgress}%
               </div>
             </div>
             <div className="space-y-3">
-              <h3 className="text-2xl font-black text-slate-900 tracking-tight text-balance">Syncing campaigns</h3>
+              <h3 className="text-2xl font-bold text-slate-900 tracking-tight text-balance">Syncing campaigns</h3>
               <div className="space-y-4">
                 <p className="text-slate-500 text-sm font-medium">
                   Processing <strong>{activeAdsAccounts.length} account{activeAdsAccounts.length !== 1 ? 's' : ''}</strong>.
                 </p>
                 
                 {availableGoogleAdsSubAccounts.length === 1 && (
-                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 text-[10px] leading-relaxed text-left">
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 text-[11px] leading-relaxed text-left">
                     <p className="font-bold mb-1 flex items-center gap-1"><AlertCircle size={12} /> Expected more accounts?</p>
                     If this is an MCC with sub-accounts, make sure the Developer Token has <strong>Basic</strong> or <strong>Standard</strong> access. 
                     <strong>Test</strong> level tokens can only reach their own Google Cloud project.
                   </div>
                 )}
                 
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest bg-slate-50 py-2 rounded-lg">
+                <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide bg-slate-50 py-2 rounded-lg">
                   Joining Google Ads + GSC + GA4
                 </p>
               </div>
@@ -2638,7 +2664,7 @@ const App: React.FC = () => {
                 style={{ width: `${loadingProgress}%` }}
               ></div>
             </div>
-            <p className="text-[10px] text-slate-400 font-bold italic animate-pulse">Please keep this tab open...</p>
+            <p className="text-[11px] text-slate-500 font-bold italic animate-pulse">Please keep this tab open...</p>
           </div>
         </div>
       )}

@@ -44,24 +44,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
+      id="main-nav"
+      aria-label="Sections"
+      // Off screen means out of the tab order too.
+      inert={!isOpen}
       className={`print:hidden fixed inset-y-0 left-0 w-60 bg-slate-950 text-white flex flex-col z-50 shadow-2xl transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
     >
       <div className="flex items-center justify-between px-4 pt-5 pb-4">
         <div className="flex items-center gap-3">
           <img src="/logo.png" alt="OneSearch logo" className="w-9 h-9 rounded-xl object-cover" />
           <div>
-            <p className="text-sm font-black tracking-tight leading-none">OneSearch</p>
-            <p className="text-[10px] font-bold text-slate-500 mt-1">Paid and organic as one channel</p>
+            <p className="text-sm font-bold tracking-tight leading-none">OneSearch</p>
+            <p className="text-[11px] font-bold text-slate-400 mt-1">Paid and organic as one channel</p>
           </div>
         </div>
-        <button onClick={() => setIsOpen(false)} className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-white/10" title="Hide menu">
+        <button onClick={() => setIsOpen(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10" title="Hide menu" aria-label="Hide menu">
           <PanelLeftClose size={16} />
         </button>
       </div>
 
       {clients.length > 0 && onSelectClient && (
         <div className="px-4 pb-4">
-          <label htmlFor="client-switcher" className="block mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-600">Client</label>
+          <label htmlFor="client-switcher" className="block mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">Client</label>
           <select
             id="client-switcher"
             value={activeClientId || ''}
@@ -77,7 +81,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <nav className="flex-1 overflow-y-auto px-3 pb-4 space-y-5">
         {NAV_GROUPS.map((group, gi) => (
           <div key={gi}>
-            {group.heading && <p className="px-3 mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-600">{group.heading}</p>}
+            {group.heading && <p className="px-3 mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">{group.heading}</p>}
             <div className="space-y-1">
               {group.items.map(({ tab, icon }) => {
                 const active = activeTab === tab;
@@ -104,7 +108,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {user?.name && (
           <div className="px-3 py-2">
             <p className="text-xs font-bold text-white truncate">{user.name}</p>
-            {user.email && <p className="text-[10px] text-slate-500 truncate">{user.email}</p>}
+            {user.email && <p className="text-[11px] text-slate-400 truncate">{user.email}</p>}
           </div>
         )}
         <button

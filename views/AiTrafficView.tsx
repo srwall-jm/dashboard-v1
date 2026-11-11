@@ -77,7 +77,7 @@ export const AiTrafficView: React.FC<{
         .sort((a, b) => b.sessions - a.sessions);
   }, [data]);
 
-  const COLORS = ['#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#06b6d4'];
+  const COLORS = ['#8b5cf6', '#10b981', '#D97706', '#ec4899', '#3b82f6', '#06b6d4'];
 
   const [hiddenSources, setHiddenSources] = React.useState<string[]>([]);
 
@@ -91,12 +91,12 @@ export const AiTrafficView: React.FC<{
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-6">
+    <div className="w-full max-w-7xl mx-auto space-y-6">
       
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-2">
         <div>
-          <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+          <h4 className="text-[11px] font-bold text-slate-800 uppercase tracking-wide flex items-center gap-2">
             <Bot size={14} className="text-indigo-600" />
             AI Traffic Analysis
           </h4>
@@ -122,7 +122,7 @@ export const AiTrafficView: React.FC<{
 
       {/* Section B: Individual LLM Breakdown */}
       <div>
-        <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 px-2">Traffic by Engine</h4>
+        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-4 px-2">Traffic by Engine</h4>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <KpiCard 
             title="ChatGPT" 
@@ -152,10 +152,10 @@ export const AiTrafficView: React.FC<{
       </div>
 
       {/* Section C: Trend Chart */}
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+      <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">AI Traffic Over Time</h4>
+            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">AI Traffic Over Time</h4>
             <p className="text-[11px] font-bold text-slate-600">Session Volume by Source</p>
           </div>
         </div>
@@ -164,8 +164,8 @@ export const AiTrafficView: React.FC<{
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={trendData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" tick={{fontSize: 9, fontWeight: 700}} axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 700}} />
+                <XAxis dataKey="date" tick={{fontSize: 12, fontWeight: 700}} axisLine={false} tickLine={false} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} />
                 <Tooltip 
                     contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px', color: '#fff' }}
                     itemStyle={{ color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
@@ -191,15 +191,15 @@ export const AiTrafficView: React.FC<{
       </div>
 
       {/* Section D: Landing Page Table */}
-      <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex justify-between items-center mb-8">
             <div>
-              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Landing Page Impact</h4>
+              <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Landing Page Impact</h4>
               <p className="text-[11px] font-bold text-slate-600">Which content are LLMs referencing?</p>
             </div>
              <button 
                 onClick={() => exportToCSV(tableData, "AI_Landing_Page_Impact")} 
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[9px] font-black uppercase transition-all shadow-md"
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
               >
                 <FileText size={12} /> Export CSV
               </button>
@@ -208,10 +208,10 @@ export const AiTrafficView: React.FC<{
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/50">
-                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Landing Page</th>
-                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Sessions</th>
-                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Eng. Rate</th>
-                <th className="py-3 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Quality</th>
+                <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wide">Landing Page</th>
+                <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wide text-right">Sessions</th>
+                <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wide text-right">Eng. Rate</th>
+                <th className="py-3 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wide text-right">Quality</th>
               </tr>
             </thead>
             <tbody>

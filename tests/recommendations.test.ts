@@ -217,3 +217,47 @@ describe('rules adjusted per client', () => {
     expect(recommendKeyword(signal(), 40, cautious).changePct).toBeCloseTo(-0.1);
   });
 });
+
+describe('the figures that make the argument', () => {
+  const recs = recommendKeywords([
+    signal(), // reduce: 1000 spend, 500 paid clicks, 900 organic clicks, cut 50%
+    signal({ keyword: 'only ads', organicRank: null, organicClicks: 0, organicImpressions: 0, rankLostShare: 0.35, cost: 400, paidClicks: 200, paidConversions: 20 }),
+    signal({ keyword: 'tiny', paidClicks: 3, cost: 6, paidConversions: 0 }),
+  ]);
+  const s = summarizeRecommendations(recs, 30);
+
+  it('prices each click the ads really add above the nominal CPC', () => {
+    expect(s.nominalCpc).toBeCloseTo(2);
+    // 500 cut for 125 to 187.5 clicks lost
+    expect(s.addedClickCost!.low).toBeCloseTo(500 / 187.5);
+    expect(s.addedClickCost!.high).toBeCloseTo(4);
+    expect(s.addedClickCost!.low).toBeGreaterThan(s.nominalCpc!);
+  });
+
+  it('puts the loss in proportion to all search clicks on those keywords', () => {
+    expect(s.lossShareOfSearch!.low).toBeCloseTo(125 / 1400);
+    expect(s.lossShareOfSearch!.high).toBeCloseTo(187.5 / 1400);
+  });
+
+  it('says what an increase buys and what is left after moving budget', () => {
+    const up = recs.find(r => r.keyword === 'only ads')!;
+    expect(up.action).toBe('INCREASE');
+    // 80 more at 20 per conversion
+    expect(up.expectedExtraConversions).toBeCloseTo(4);
+    expect(s.spendToIncrease).toBeCloseTo(80);
+    expect(s.extraConversions).toBeCloseTo(4);
+    expect(s.netChange).toBeCloseTo(420);
+  });
+
+  it('reports how much was judged', () => {
+    expect(s.judgedKeywords).toBe(2);
+    expect(s.judgedSpendShare).toBeCloseTo(1400 / 1406);
+  });
+
+  it('leaves the argument empty when there is nothing to reduce', () => {
+    const none = summarizeRecommendations(recommendKeywords([signal({ organicRank: 7 })]), 30);
+    expect(none.addedClickCost).toBeNull();
+    expect(none.lossShareOfSearch).toBeNull();
+    expect(none.netChange).toBe(0);
+  });
+});
