@@ -2,6 +2,7 @@ import React from 'react';
 import { Layers, Globe, Target, LogOut, Bot, Settings, Megaphone, Zap, LayoutDashboard, PanelLeftClose } from 'lucide-react';
 import { DashboardTab } from '../types';
 import { TAB_META } from '../navigation';
+import type { ClientProfile } from '../clientProfiles';
 
 const NAV_GROUPS: { heading: string | null; items: { tab: DashboardTab; icon: React.ReactNode }[] }[] = [
   { heading: null, items: [{ tab: DashboardTab.SUMMARY, icon: <LayoutDashboard /> }] },
@@ -26,10 +27,14 @@ interface SidebarProps {
   user: any;
   handleLogout: () => void;
   setIsSettingsOpen: (isOpen: boolean) => void;
+  clients?: ClientProfile[];
+  activeClientId?: string | null;
+  onSelectClient?: (id: string | null) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
-  isOpen, setIsOpen, activeTab, setActiveTab, user, handleLogout, setIsSettingsOpen
+  isOpen, setIsOpen, activeTab, setActiveTab, user, handleLogout, setIsSettingsOpen,
+  clients = [], activeClientId = null, onSelectClient
 }) => {
   const go = (tab: DashboardTab) => {
     setActiveTab(tab);
@@ -53,6 +58,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <PanelLeftClose size={16} />
         </button>
       </div>
+
+      {clients.length > 0 && onSelectClient && (
+        <div className="px-4 pb-4">
+          <label htmlFor="client-switcher" className="block mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-600">Client</label>
+          <select
+            id="client-switcher"
+            value={activeClientId || ''}
+            onChange={e => onSelectClient(e.target.value || null)}
+            className="w-full bg-white/5 border border-white/10 rounded-xl text-[13px] font-bold text-white px-3 py-2.5 outline-none cursor-pointer focus:border-[#F8B133]"
+          >
+            <option value="" className="text-black">Choose a client...</option>
+            {clients.map(c => <option key={c.id} value={c.id} className="text-black">{c.name}</option>)}
+          </select>
+        </div>
+      )}
 
       <nav className="flex-1 overflow-y-auto px-3 pb-4 space-y-5">
         {NAV_GROUPS.map((group, gi) => (

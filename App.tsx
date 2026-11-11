@@ -10,10 +10,12 @@ import { ga4RunReportAll, gscQueryAll, isAuthExpired } from './dataFetch';
 import { generateMockBridgeData, generateMockAiTrafficData, generateMockKeywordSignals } from './mockData';
 import { KeywordSignal, ShareRow, combineShares, buildRecommendations } from './recommendations';
 import { TAB_META } from './navigation';
+import { ClientProfile, ClientProfileInput, ClientProfileList, fetchClientProfiles, saveClientProfile, deleteClientProfile } from './clientProfiles';
 import { PinnedAdsAccounts, clientKeyOf, resolveAdsAccounts, loadPinnedAdsAccounts, savePinnedAdsAccounts } from './adsAccounts';
 import { SummaryView } from './views/SummaryView';
 // Import New Components and Views
 import { Sidebar } from './components/Sidebar';
+import { ClientProfilePanel } from './components/ClientProfilePanel';
 import { SettingsModal } from './components/SettingsModal';
 import { InsightsText } from './components/InsightsText';
 import { DateRangeSelector } from './components/DateRangeSelector';
@@ -175,6 +177,112 @@ const App: React.FC = () => {
       return next;
     });
   };
+
+  // --- Shared client profiles (Cloudflare KV). A profile fills in the client setup for anyone on the team. ---
+  const [clientProfiles, setClientProfiles] = useState<ClientProfileList>({ available: false, reason: 'offline', clients: [] });
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(() => localStorage.getItem('active_client_profile'));
+  const activeProfile = clientProfiles.clients.find(p => p.id === activeProfileId) || null;
+  // Parts of a profile still waiting for a Google connection before they can be applied.
+  const pendingProfile = useRef<{ ga4: Ga4Property | null; gsc: string | null; managerId: string | null } | null>(null);
+  const [pendingProfileTick, setPendingProfileTick] = useState(0);
+
+  useEffect(() => {
+    if (accessSession.status === 'loading') return;
+    let cancelled = false;
+    fetchClientProfiles().then(list => { if (!cancelled) setClientProfiles(list); });
+    return () => { cancelled = true; };
+  }, [accessSession.status]);
+
+  const applyClientProfile = (profile: ClientProfile | null) => {
+    setActiveProfileId(profile?.id || null);
+    if (profile) localStorage.setItem('active_client_profile', profile.id); else localStorage.removeItem('active_client_profile');
+    if (!profile) { pendingProfile.current = null; return; }
+
+    if (profile.brandRegex) setBrandRegexStr(profile.brandRegex);
+    if (profile.adsAccountIds.length > 0) {
+      const key = clientKeyOf(profile.ga4PropertyId, profile.gscSiteUrl);
+      setPinnedAdsAccounts(prev => {
+        const next = { ...prev, [key]: profile.adsAccountIds };
+        savePinnedAdsAccounts(next);
+        return next;
+      });
+    }
+    pendingProfile.current = {
+      ga4: profile.ga4PropertyId ? { id: profile.ga4PropertyId, name: profile.ga4PropertyName || profile.ga4PropertyId } : null,
+      gsc: profile.gscSiteUrl || null,
+      managerId: profile.adsManagerId || null,
+    };
+    setPendingProfileTick(t => t + 1);
+  };
+
+  // A profile chosen in an earlier visit is applied again once the list has loaded.
+  const restoredProfile = useRef(false);
+  useEffect(() => {
+    if (restoredProfile.current || !clientProfiles.available) return;
+    restoredProfile.current = true;
+    if (activeProfile) applyClientProfile(activeProfile);
+  }, [clientProfiles.available, activeProfile?.id]);
+
+  // Applies each part of the chosen profile as soon as its Google connection is there.
+  useEffect(() => {
+    const pending = pendingProfile.current;
+    if (!pending) return;
+    if (pending.ga4 && ga4Auth?.token) {
+      if (ga4Auth.property?.id !== pending.ga4.id) {
+        const next = { token: ga4Auth.token, property: pending.ga4 };
+        setGa4Auth(next);
+        sessionStorage.setItem('ga4_auth', JSON.stringify(next));
+      }
+      pending.ga4 = null;
+    }
+    if (pending.gsc && gscAuth?.token) {
+      if (gscAuth.site?.siteUrl !== pending.gsc) {
+        const next = { token: gscAuth.token, site: { siteUrl: pending.gsc } };
+        setGscAuth(next);
+        sessionStorage.setItem('gsc_auth', JSON.stringify(next));
+      }
+      pending.gsc = null;
+    }
+    if (pending.managerId && availableGoogleAdsCustomers.length > 0) {
+      const manager = availableGoogleAdsCustomers.find(c => c.id.replace(/-/g, '') === pending.managerId);
+      if (manager && selectedGoogleAdsCustomer?.id !== manager.id) handleGoogleAdsCustomerChange(manager);
+      pending.managerId = null;
+    }
+    if (!pending.ga4 && !pending.gsc && !pending.managerId) pendingProfile.current = null;
+  }, [pendingProfileTick, ga4Auth?.token, gscAuth?.token, availableGoogleAdsCustomers]);
+
+  // Built when Settings renders, once every value below exists.
+  const buildCurrentProfileInput = (): ClientProfileInput => ({
+    name: activeProfile?.name || '',
+    ga4PropertyId: ga4Auth?.property?.id || '',
+    ga4PropertyName: ga4Auth?.property?.name || '',
+    gscSiteUrl: gscAuth?.site?.siteUrl || '',
+    adsManagerId: (selectedGoogleAdsCustomer?.id || '').replace(/-/g, ''),
+    adsAccountIds: activeAdsAccounts.map(a => a.id),
+    brandRegex: brandRegexStr,
+  });
+
+  const handleSaveClientProfile = async (id: string, profile: ClientProfileInput) => {
+    const saved = await saveClientProfile(id, profile);
+    setClientProfiles(prev => ({
+      ...prev,
+      clients: [...prev.clients.filter(p => p.id !== saved.id), saved].sort((a, b) => a.name.localeCompare(b.name)),
+    }));
+    setActiveProfileId(saved.id);
+    localStorage.setItem('active_client_profile', saved.id);
+  };
+
+  const handleDeleteClientProfile = async (id: string) => {
+    await deleteClientProfile(id);
+    setClientProfiles(prev => ({ ...prev, clients: prev.clients.filter(p => p.id !== id) }));
+    if (activeProfileId === id) {
+      setActiveProfileId(null);
+      localStorage.removeItem('active_client_profile');
+    }
+  };
+
+  const handleSelectClientProfile = (id: string | null) =>
+    applyClientProfile(clientProfiles.clients.find(p => p.id === id) || null);
 
   useEffect(() => {
     if (!googleAdsAuth?.token || availableGoogleAdsSubAccounts.length === 0) {
@@ -1996,7 +2104,7 @@ const App: React.FC = () => {
   
   const periodDays = Math.round((parseLocalDate(filters.dateRange.end).getTime() - parseLocalDate(filters.dateRange.start).getTime()) / 86400000) + 1;
   const periodLabel = `${filters.dateRange.start} to ${filters.dateRange.end}`;
-  const clientName = (gscAuth?.site?.siteUrl || '').replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').replace(/\/$/, '') || ga4Auth?.property?.name || '';
+  const clientName = activeProfile?.name || (gscAuth?.site?.siteUrl || '').replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').replace(/\/$/, '') || ga4Auth?.property?.name || '';
   const summaryRecs = useMemo(
     () => buildRecommendations(keywordSignals, isBranded, filters.queryType, periodDays),
     [keywordSignals, brandRegexStr, filters.queryType, periodDays]
@@ -2095,6 +2203,9 @@ const App: React.FC = () => {
         user={user} 
         handleLogout={handleLogout}
         setIsSettingsOpen={setIsSettingsOpen}
+        clients={clientProfiles.available ? clientProfiles.clients : []}
+        activeClientId={activeProfile?.id || null}
+        onSelectClient={handleSelectClientProfile}
       />
       
       <SettingsModal 
@@ -2135,6 +2246,18 @@ const App: React.FC = () => {
         pinnedGoogleAdsAccountIds={activeAdsAccounts.map(a => a.id)}
         onPinnedGoogleAdsAccountsChange={handlePinnedAdsAccountsChange}
         googleAdsClientLabel={clientName}
+        clientProfilePanel={
+          <ClientProfilePanel
+            available={clientProfiles.available}
+            unavailableReason={clientProfiles.reason}
+            profiles={clientProfiles.clients}
+            activeProfile={activeProfile}
+            current={buildCurrentProfileInput()}
+            onSave={handleSaveClientProfile}
+            onDelete={handleDeleteClientProfile}
+            onSelect={handleSelectClientProfile}
+          />
+        }
         setGa4Auth={setGa4Auth} 
         setGscAuth={setGscAuth} 
         setGoogleAdsAuth={setGoogleAdsAuth}

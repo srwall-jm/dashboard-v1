@@ -47,7 +47,7 @@ In the dashboard, open Settings and:
 3. Tick the Google Ads accounts that belong to the client. With a manager account, nothing is read until this is done.
 4. Set the branded keyword regex for the client.
 
-These values are saved in the browser, so today each person sets them up once per browser.
+These values are saved in the browser. With shared client profiles set up, save them once as a client in Settings and the rest of the team picks it from the menu.
 
 ## Restricting access
 
@@ -73,8 +73,20 @@ One-time setup, by someone who administers the Cloudflare account (menu names ma
 
 Both variables must be set for the check to switch on. Once they are, a request without a valid Access token is rejected, so set them only after steps 1 to 4 work. To let a specific client in later, add their email to the Access policy and their domain to `ALLOWED_EMAIL_DOMAINS`.
 
+## Shared client profiles
+
+A client profile holds what the team needs to open a client without setting it up again: GA4 property, Search Console site, Google Ads manager and accounts, and the brand regex. It is saved from Settings ("Shared clients") and picked from the "Client" selector at the top of the menu. Profiles never hold Google tokens: each person still connects with their own Google account.
+
+Profiles are stored in a Cloudflare KV namespace and are only served once access is restricted (see "Restricting access").
+
+One-time setup, by someone who administers the Cloudflare account:
+
+1. Storage & Databases > KV: create a namespace, for example `onesearch-client-profiles`.
+2. Pages project > Settings > Bindings: add a KV namespace binding named `CLIENT_PROFILES` pointing to it, for Production and Preview.
+3. Redeploy. "Shared clients" in Settings then shows the save form instead of a "not set up" note.
+
 ## Known limits
 
 - Without Cloudflare Access configured (see "Restricting access"), the login screen identifies the user but does not restrict who can sign in.
 - Google connections last about 1 hour and are asked for again in a new tab.
-- Client settings are per browser, not shared across the team.
+- Without shared client profiles set up (see above), client settings are per browser, not shared across the team.
