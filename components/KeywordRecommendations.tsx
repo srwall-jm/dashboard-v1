@@ -9,6 +9,7 @@ import { Plan, PlanItem, PlanStatus, EMPTY_ITEM, PLAN_STATUS_LABEL, planKeyOf, c
 import { exportToCSV } from '../utils';
 import { useI18n } from '../i18n';
 import { KeywordResult, measurementWindow, todayIso } from '../planResults';
+import { SearchTermsBar } from './SpendVisuals';
 
 const ACTION_ICON: Record<RecAction, React.ReactNode> = {
   REDUCE: <ArrowDownRight size={13} aria-hidden="true" />,
@@ -162,7 +163,8 @@ const RecTable: React.FC<{
   plan?: Plan; // shown as a column when given
   onPlanChange?: (keyword: string, item: PlanItem) => void; // editable when given
   planResults?: Record<string, KeywordResult>;
-}> = ({ rows, money, sort, onSort, caption, plan, onPlanChange, planResults }) => {
+  settings?: RecommendationSettings;
+}> = ({ rows, money, sort, onSort, caption, plan, onPlanChange, planResults, settings }) => {
   const i18n = useI18n();
   const { tr } = i18n;
   const header = (label: string, key: SortKey | null, align: 'left' | 'right' = 'left') => {
@@ -220,12 +222,7 @@ const RecTable: React.FC<{
               <td className="py-3 px-3"><PressureBadge pressure={r.pressure} impressionShare={r.impressionShare} rankLostShare={r.rankLostShare} /></td>
               <td className="py-3 px-3 text-xs text-slate-600 max-w-[340px]">
                 {i18n.reason(r)}
-                {r.searchTerms && r.searchTerms.terms.length > 0 && (
-                  <span className="block mt-1.5 text-[11px] text-slate-500">
-                    <span className="font-semibold text-slate-600">{tr('Searches behind it:')}</span>{' '}
-                    {r.searchTerms.terms.slice(0, 3).map(t => `${t.term} (${t.organicRank === null ? tr('no organic data') : tr('position {rank}', { rank: i18n.dec(t.organicRank, 1) })})`).join(' · ')}
-                  </span>
-                )}
+                <SearchTermsBar rec={r} settings={settings} />
               </td>
               {plan && (
                 <td className="py-3 px-3">
@@ -239,14 +236,6 @@ const RecTable: React.FC<{
     </table>
   );
 };
-
-const Card: React.FC<{ label: string; value: string; note: React.ReactNode }> = ({ label, value, note }) => (
-  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 break-inside-avoid">
-    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">{label}</p>
-    <p className="jf-figure text-3xl text-slate-900 mt-1 tabular-nums">{value}</p>
-    <p className="text-xs font-medium text-slate-600 mt-1">{note}</p>
-  </div>
-);
 
 export const KeywordRecommendations: React.FC<{
   recommendations: KeywordRecommendation[];
@@ -355,13 +344,8 @@ export const KeywordRecommendations: React.FC<{
     <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200">
       <div className="flex flex-col md:flex-row justify-between items-start gap-4 mb-6">
         <div>
-          <h3 className="jf-display text-2xl text-slate-900">{tr('Where paid spend can move')}</h3>
-          <p className="text-xs font-medium text-slate-600 mt-1">
-            {[clientName, periodLabel, tr('{n} days', { n: periodDays })].filter(Boolean).join(' · ')}
-          </p>
-          <p className="text-sm text-slate-600 mt-2 max-w-2xl">
-            {tr('Keyword by keyword: reduce where you already rank at the top organically, increase where organic is beyond page one and ads have room. No keyword goes to zero: we keep a minimum everywhere so a competitor cannot take your ad slot.')}
-          </p>
+          <h3 className="jf-display text-2xl text-slate-900">{tr('Every keyword')}</h3>
+          <p className={`${interactiveClass} text-xs font-medium text-slate-600 mt-1`}>{tr('Filter, search and sort. The last column records what was agreed.')}</p>
         </div>
         <button
           type="button"
@@ -372,64 +356,6 @@ export const KeywordRecommendations: React.FC<{
           <FileText size={14} aria-hidden="true" /> {tr('Export CSV')}
         </button>
       </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
-        <Card
-          label={tr('Can come down')}
-          value={money(summary.spendCut)}
-          note={tr('in this period · about {monthly} a month · {share} of keyword spend', { monthly: money(summary.spendCutMonthly), share: pct(summary.spendCutShare) })}
-        />
-        <Card
-          label={tr('Real cost per added click')}
-          value={summary.addedClickCost ? tr('{low} to {high}', { low: money2(summary.addedClickCost.low), high: money2(summary.addedClickCost.high) }) : '—'}
-          note={summary.addedClickCost && summary.nominalCpc !== null
-            ? tr('An ad click here looks like it costs {cpc}, but part of those clicks would arrive through the organic result anyway.', { cpc: money2(summary.nominalCpc) })
-            : tr('Shown when there are keywords to reduce.')}
-        />
-        <Card
-          label={tr('Clicks you may lose')}
-          value={range(summary.clicksAtRisk)}
-          note={<>
-            {summary.lossShareOfSearch
-              ? tr('{share} of all search clicks on these keywords', { share: tr('{low} to {high}', { low: pct(summary.lossShareOfSearch.low), high: pct(summary.lossShareOfSearch.high) }) })
-              : tr('paid clicks organic is not expected to pick up')}
-            {summary.conversionsAtRisk.high >= 0.5 ? tr(' · {conversions} conversions', { conversions: range(summary.conversionsAtRisk) }) : ''}. {tr('This is the price of the saving.')}
-          </>}
-        />
-        <Card
-          label={tr('Clicks that still arrive')}
-          value={range(summary.clicksRecovered)}
-          note={tr('of the paid clicks removed, expected to come through your organic result instead')}
-        />
-        <Card
-          label={tr('Add budget')}
-          value={summary.counts.INCREASE > 0 ? money(summary.spendToIncrease) : '—'}
-          note={summary.counts.INCREASE > 0
-            ? <>{tr('on {keywords} where organic is beyond page one', { keywords: i18n.keywords(summary.counts.INCREASE) })}{summary.extraConversions >= 0.5 ? tr(' · about {n} more conversions', { n: int(summary.extraConversions) }) : ''}</>
-            : tr('No keyword meets the conditions in this period.')}
-        />
-      </div>
-
-      {plan && hasRecs && (
-        <p className="mb-4 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-700">
-          <span className="font-bold text-slate-900">{tr('Agreed plan')}:</span>{' '}
-          {planHasEntries
-            ? tr('{agreed} agreed · {applied} applied · {reverted} reverted · {held} marked do not reduce.', { agreed: planCounts.agreed, applied: planCounts.applied, reverted: planCounts.reverted, held: planCounts.doNotReduce })
-            : tr('nothing recorded yet. Use the last column to note what was agreed with the client and when it was applied.')}{' '}
-          <span className="print:hidden text-slate-500">{planShared ? tr('Shared with the team.') : tr('Saved in this browser only.')}</span>
-          {onMeasurePlan && !presentation && planCounts.applied > 0 && (
-            <button
-              type="button"
-              onClick={onMeasurePlan}
-              disabled={isMeasuringPlan}
-              className="print:hidden ml-2 px-3 py-1 rounded-lg bg-slate-900 text-white text-[11px] font-semibold hover:bg-slate-700 disabled:opacity-50"
-            >
-              {isMeasuringPlan ? tr('Measuring…') : tr('Measure applied changes')}
-            </button>
-          )}
-          {planMeasureNote && <span className="block mt-1.5 text-slate-600">{planMeasureNote}</span>}
-        </p>
-      )}
 
       {!hasRecs ? (
         <p className="text-sm text-slate-600 py-8 text-center" role="status">
@@ -469,7 +395,7 @@ export const KeywordRecommendations: React.FC<{
               <p className="text-sm text-slate-600 py-8 text-center">{tr('No keywords in this group.')}</p>
             ) : (
               <div className="overflow-x-auto">
-                <RecTable rows={rows.slice(0, visible)} money={money} sort={sort} onSort={handleSort} caption={tr('Keyword recommendations')} plan={plan} onPlanChange={onPlanChange} planResults={planResults} />
+                <RecTable rows={rows.slice(0, visible)} money={money} sort={sort} onSort={handleSort} caption={tr('Keyword recommendations')} plan={plan} onPlanChange={onPlanChange} planResults={planResults} settings={s} />
                 {rows.length > visible && (
                   <button type="button" onClick={() => setVisible(v => v + PAGE)} className="mt-4 text-xs font-semibold text-slate-700 underline underline-offset-2 hover:text-slate-900">
                     {tr('Show {n} more of {total}', { n: Math.min(PAGE, rows.length - visible), total: int(rows.length) })}
@@ -485,13 +411,13 @@ export const KeywordRecommendations: React.FC<{
               <h4 className="jf-display text-xl text-slate-900 mb-2">{tr('Reduce')}: {i18n.keywords(reduceRows.length)}</h4>
               {reduceRows.length === 0
                 ? <p className="text-sm text-slate-600">{tr('No keyword meets the conditions for a reduction in this period.')}</p>
-                : <div className="overflow-x-auto"><RecTable rows={reduceRows} money={money} caption={tr('Keywords to reduce')} plan={planHasEntries ? plan : undefined} planResults={planResults} /></div>}
+                : <div className="overflow-x-auto"><RecTable rows={reduceRows} money={money} caption={tr('Keywords to reduce')} plan={planHasEntries ? plan : undefined} planResults={planResults} settings={s} /></div>}
             </section>
             <section>
               <h4 className="jf-display text-xl text-slate-900 mb-2">{tr('Increase')}: {i18n.keywords(increaseRows.length)}</h4>
               {increaseRows.length === 0
                 ? <p className="text-sm text-slate-600">{tr('No keyword meets the conditions for an increase in this period.')}</p>
-                : <div className="overflow-x-auto"><RecTable rows={increaseRows} money={money} caption={tr('Keywords to increase')} plan={planHasEntries ? plan : undefined} planResults={planResults} /></div>}
+                : <div className="overflow-x-auto"><RecTable rows={increaseRows} money={money} caption={tr('Keywords to increase')} plan={planHasEntries ? plan : undefined} planResults={planResults} settings={s} /></div>}
             </section>
           </div>
         </>

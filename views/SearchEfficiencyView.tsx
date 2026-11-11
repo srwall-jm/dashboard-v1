@@ -15,6 +15,8 @@ import { KeywordSignal, buildRecommendations, RecommendationSettings, DEFAULT_SE
 import { Plan, PlanItem, doNotReduceMap } from '../plan';
 import type { KeywordResult } from '../planResults';
 import { KeywordRecommendations } from '../components/KeywordRecommendations';
+import { MoneyMoves, RuleAndCaveat, ClicksPrice, PositionBands, KeywordBars, PlanProgress } from '../components/SpendVisuals';
+import { useI18n } from '../i18n';
 
 interface UrlEfficiencyRow {
   url: string;
@@ -67,6 +69,7 @@ export const SearchEfficiencyView: React.FC<{
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ppcCost', direction: 'desc' });
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
   const [showLandingPages, setShowLandingPages] = useState(false);
+  const { tr } = useI18n();
 
   // 0. Keyword recommendations (reduce / hold / increase), the source of every saving figure in this view
   const { recommendations, summary: recSummary } = useMemo(
@@ -398,7 +401,40 @@ export const SearchEfficiencyView: React.FC<{
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">
 
-      {/* Section 1b: Keyword recommendations */}
+      <header>
+        <h2 className="jf-display text-3xl text-slate-900">{tr('Where paid spend can move')}</h2>
+        <p className="text-xs font-medium text-slate-600 mt-1">
+          {[clientName, periodLabel, tr('{n} days', { n: periodDays })].filter(Boolean).join(' · ')}
+        </p>
+      </header>
+
+      {/* The pictures: the answer, what it costs, why these keywords, where to start */}
+      {recommendations.length > 0 && (() => {
+        const shared = { recommendations, summary: recSummary, settings: recommendationSettings, currencySymbol, periodDays };
+        return (
+          <>
+            <MoneyMoves {...shared} />
+            <RuleAndCaveat />
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <ClicksPrice {...shared} />
+              <PositionBands {...shared} />
+            </div>
+            <KeywordBars {...shared} plan={plan} planResults={planResults} />
+            <PlanProgress
+              summary={recSummary}
+              plan={plan}
+              planResults={planResults}
+              planShared={planShared}
+              onMeasure={onMeasurePlan}
+              isMeasuring={isMeasuringPlan}
+              measureNote={planMeasureNote}
+              presentation={presentation}
+            />
+          </>
+        );
+      })()}
+
+      {/* The complete list, with the agreed plan */}
       <KeywordRecommendations
         recommendations={recommendations}
         summary={recSummary}

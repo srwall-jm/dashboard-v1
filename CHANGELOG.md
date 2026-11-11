@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+Changed (Spend recommendations, visual)
+- The tab now opens with pictures instead of five figure cards: the monthly amount that can come down next to a bar of where the spend goes (comes down, stays on the reduced keywords, untouched, added); what the saving may cost in clicks, with the uncertain part hatched; spend by organic position, to show why these keywords; and the first keywords to act on as bars with the part that always stays, ordered safest first or largest saving first.
+- Solid bars are figures from the accounts, striped bars are estimates, dashed outlines are clicks that may be lost, so the page reads without colour and in print.
+- The agreed plan is a four-step strip (proposed, agreed, applied, measured) with the measured verdicts.
+- In the keyword table, the searches behind a keyword are shown with a small bar of how much of its spend is on searches already won organically.
+
 Changed (Jellyfish look)
 - Amounts in euros are written with the sign after the number ("45,991 €") everywhere. Other currencies keep the sign before it.
 - Jellyfish identity across the app: DM Sans for text, Big Shoulders Display for titles and large figures, neutral greys, black menu and headline with the Jellyfish line-wave image and wordmark, yellow as the one accent, and a print footer with source and "Proprietary & Confidential".
