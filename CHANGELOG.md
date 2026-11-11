@@ -19,6 +19,10 @@ Changed (independent design review)
 
 Fixed
 - Avg. CPC and Avg. CPA in Google Ads showed no currency symbol.
+- Changing the client, the dates or the accounts while data was loading could let the older load overwrite the newer one, or count Search Console clicks twice. Each load is now numbered and a superseded one writes nothing. The same applies to the GA4 and Search Console loads, and their previous figures are cleared when a load fails.
+- The keyword load no longer starts before the data it depends on has finished loading.
+- The GA4 dimension selector offered dimensions (source, landing page, device) that left organic and paid at zero without saying so. It now offers only channel group, medium and source / medium.
+- Sample rows could stay on screen next to real data when only one source was connected.
 - A keyword with no organic data for its exact text was read as "no organic ranking" and could be recommended for an increase, even where the client ranks first. It is now kept as is, and nothing is recommended when Search Console queries did not load.
 - A top organic position needs at least 10 organic clicks in the period before a reduction is proposed.
 - Brand terms are stored per client with no default. The old default (`shop|brand|pro|sports`) marked words like "protein" as brand, an empty field marked everything as brand, and a client without brand terms inherited the previous client's.

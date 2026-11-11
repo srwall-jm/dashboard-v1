@@ -547,11 +547,10 @@ const App: React.FC = () => {
       });
       if (!resp.ok) return;
       const data = await resp.json();
-      const filtered = (data.dimensions || []).filter((d: any) => {
-        const apiName = d.apiName.toLowerCase();
-        const relevant = ['session', 'source', 'medium', 'channel', 'campaign', 'country', 'region', 'page', 'landing', 'device'];
-        return relevant.some(r => apiName.includes(r));
-      });
+      // Only the dimensions the Organic Search / Paid Search split can read. Any other one
+      // (source, landing page, device...) left organic and paid at zero without saying so.
+      const SEARCH_SPLIT_DIMENSIONS = ['sessionDefaultChannelGroup', 'sessionMedium', 'sessionSourceMedium'];
+      const filtered = (data.dimensions || []).filter((d: any) => SEARCH_SPLIT_DIMENSIONS.includes(d.apiName));
       const mapped = filtered.map((d: any) => ({ label: d.uiName || d.apiName, value: d.apiName }));
       const sorted = mapped.sort((a: any, b: any) => {
         const aIndex = PRIORITY_DIMENSIONS.indexOf(a.value);
@@ -796,9 +795,34 @@ const App: React.FC = () => {
     }
   };
 
+  // Each load gets a number. When the client, the dates or the accounts change while a load is
+  // running, a newer one starts; the older one keeps fetching but none of its results are written.
+  const bridgeRun = useRef(0);
+  const ga4Run = useRef(0);
+  const gscRun = useRef(0);
+  const showingMock = useRef(false);
+  const guardSetters = <T extends Record<string, (...args: any[]) => void>>(setters: T, live: () => boolean): T =>
+    Object.fromEntries(Object.entries(setters).map(([name, fn]) => [name, (...args: any[]) => { if (live()) fn(...args); }])) as T;
+  const bridgeSetters = {
+    setBridgeDataGA4, setBridgeDataGoogleAds, setKeywordSignals, setIsLoadingBridge, setLoadingProgress,
+    setGoogleAdsDailyTotals, setGoogleAdsGlobalMetrics, setCurrencySymbol, setKeywordBridgeDataGoogleAds,
+    setGlobalKeywordBridgeDataGoogleAds, setIsGoogleAdsKeywordsLoaded, setError, setKeywordBridgeDataGA4, setWarning,
+  };
+
   // --- BRIDGE DATA: GA4 SESSIONS (ORGANIC vs PAID) ---
   // UPDATED: New granular logic with URL+Keyword
   const fetchBridgeData = async () => {
+    const runId = ++bridgeRun.current;
+    const live = () => runId === bridgeRun.current;
+    // Same names on purpose: every state update below goes through the check.
+    const {
+      setBridgeDataGA4, setBridgeDataGoogleAds, setKeywordSignals, setIsLoadingBridge, setLoadingProgress,
+      setGoogleAdsDailyTotals, setGoogleAdsGlobalMetrics, setCurrencySymbol, setKeywordBridgeDataGoogleAds,
+      setGlobalKeywordBridgeDataGoogleAds, setIsGoogleAdsKeywordsLoaded, setError, setKeywordBridgeDataGA4, setWarning,
+    } = guardSetters(bridgeSetters, live);
+    // Search Console totals per query are collected here and handed over only if this load is still current.
+    const queryTotals: Record<string, { clicks: number; impressions: number; weightedRankSum: number }> = {};
+
     setIsLoadingBridge(true);
     setLoadingProgress(0);
     
@@ -813,8 +837,15 @@ const App: React.FC = () => {
         if (!bridgeDataGA4.length) setBridgeDataGA4(generateMockBridgeData());
         if (!bridgeDataGoogleAds.length) setBridgeDataGoogleAds(generateMockBridgeData());
         if (!keywordSignals.length) setKeywordSignals(generateMockKeywordSignals());
+        showingMock.current = true;
         setIsLoadingBridge(false);
         return;
+    }
+
+    // Something is connected: sample rows must not sit next to real ones.
+    if (showingMock.current) {
+        showingMock.current = false;
+        setBridgeDataGA4([]); setBridgeDataGoogleAds([]); setKeywordSignals([]);
     }
     
     
@@ -874,7 +905,6 @@ const App: React.FC = () => {
     
     // 1. TRY GSC FETCH (If Available)
     setWarning('gscBridge', null);
-    gscQueryTotals.current = {};
     if (gscAuth?.site && gscAuth.token) {
         try {
             const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
@@ -905,7 +935,7 @@ const App: React.FC = () => {
                     const cleanPath = normalizeUrl(fullUrl);
 
                     const queryKey = String(query).toLowerCase().trim();
-                    const queryTotal = gscQueryTotals.current[queryKey] || (gscQueryTotals.current[queryKey] = { clicks: 0, impressions: 0, weightedRankSum: 0 });
+                    const queryTotal = queryTotals[queryKey] || (queryTotals[queryKey] = { clicks: 0, impressions: 0, weightedRankSum: 0 });
                     queryTotal.clicks += clicks;
                     queryTotal.impressions += impressions;
                     queryTotal.weightedRankSum += rank * impressions;
@@ -964,6 +994,9 @@ const App: React.FC = () => {
         }
     }
     
+    if (!live()) return;
+    gscQueryTotals.current = queryTotals;
+
     // 2. TRY GOOGLE ADS FETCH (If Available & Selected)
     if (googleAdsAuth?.token && activeAdsAccounts.length > 0) {
          const googleAdsPaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
@@ -1480,6 +1513,7 @@ const App: React.FC = () => {
     if (!googleAdsAuth?.token || isGoogleAdsKeywordsLoading || isGoogleAdsKeywordsLoaded || activeAdsAccounts.length === 0) return;
     
     setIsGoogleAdsKeywordsLoading(true);
+    const bridgeRunAtStart = bridgeRun.current;
     const allAccountIds = activeAdsAccounts.map(acc => acc.id);
     const googleAdsGlobalKeywordMap: Record<string, { clicks: number, conversions: number, cost: number, impressions: number }> = {};
     const googleAdsKeywordUrlMap: Record<string, { clicks: number, conversions: number, cost: number }> = {};
@@ -1606,6 +1640,10 @@ const App: React.FC = () => {
                 });
             });
         }
+
+        // The client, dates or accounts changed while this was loading: these keywords belong to the old
+        // selection. Drop them; the load for the new selection starts on its own.
+        if (bridgeRunAtStart !== bridgeRun.current) return;
 
         // Now update the bridge data with the keywords
         setBridgeDataGoogleAds(prev => prev.map(item => {
@@ -1768,6 +1806,7 @@ const App: React.FC = () => {
 
   const fetchGa4Data = async () => {
     if (!ga4Auth?.property || !ga4Auth.token) return;
+    const runId = ++ga4Run.current;
     
     setIsLoadingGa4(true);
     
@@ -1834,14 +1873,18 @@ const App: React.FC = () => {
         };
       });
       
+      if (runId !== ga4Run.current) return; // a newer load is on its way
       setRealDailyData(dailyMapped);
       
     } catch (err: any) {
+      if (runId !== ga4Run.current) return;
       console.error("Error fetching GA4:", err);
       setError(`GA4 Error: ${err.message}`);
+      // Figures of another client or period must not stay on screen after a failed load.
+      setRealDailyData([]);
       if (isAuthExpired(err)) { setGa4Auth(null); sessionStorage.removeItem('ga4_auth'); }
     } finally {
-      setIsLoadingGa4(false);
+      if (runId === ga4Run.current) setIsLoadingGa4(false);
     }
   };
   
@@ -1851,13 +1894,15 @@ const App: React.FC = () => {
         googleAdsAuth?.token && 
         !isGoogleAdsKeywordsLoaded && 
         !isGoogleAdsKeywordsLoading &&
+        !isLoadingBridge &&
         activeAdsAccounts.length > 0) {
       fetchGoogleAdsKeywords();
     }
-  }, [activeTab, isGoogleAdsKeywordsLoaded, isGoogleAdsKeywordsLoading, googleAdsAuth, activeAdsAccountsKey]);
+  }, [activeTab, isGoogleAdsKeywordsLoaded, isGoogleAdsKeywordsLoading, isLoadingBridge, googleAdsAuth, activeAdsAccountsKey]);
 
   const fetchGscData = async () => {
     if (!gscAuth?.site || !gscAuth.token) return;
+    const runId = ++gscRun.current;
     
     setIsLoadingGsc(true);
     try {
@@ -1936,6 +1981,7 @@ const App: React.FC = () => {
         previousTotals = prevData.totals;
       }
       
+      if (runId !== gscRun.current) return; // a newer load is on its way
       setRealKeywordData(combinedKeywords);
       setGscDailyTotals(combinedDailyTotals);
       setGscTotals({ current: currentTotals, previous: previousTotals });
@@ -1943,11 +1989,14 @@ const App: React.FC = () => {
         setWarning('gsc', 'Search Console: keyword tables show the top 50,000 query rows for the period. Totals are complete; keyword and branded splits are partial. Use a shorter date range for full detail.');
       }
     } catch (err: any) {
+      if (runId !== gscRun.current) return;
       console.error(err);
       setError(`GSC Error: ${err.message}`);
+      setRealKeywordData([]);
+      setGscDailyTotals([]);
       if (isAuthExpired(err)) { setGscAuth(null); sessionStorage.removeItem('gsc_auth'); }
     } finally {
-      setIsLoadingGsc(false);
+      if (runId === gscRun.current) setIsLoadingGsc(false);
     }
   };
   
