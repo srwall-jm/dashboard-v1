@@ -361,3 +361,19 @@ export const combineShares = (rows: ShareRow[]): { impressionShare: number | nul
     topImpressionShare: topEligible > 0 ? top / topEligible : null,
   };
 };
+
+// Recommendations for the keywords in scope: brand flag from the client's brand
+// regex, then the Branded / Non-Branded filter of the dashboard.
+export const buildRecommendations = (
+  signals: KeywordSignal[],
+  isBranded: ((text: string) => boolean) | undefined,
+  queryType: 'All' | 'Branded' | 'Non-Branded',
+  periodDays: number,
+  settings: RecommendationSettings = DEFAULT_SETTINGS
+): { recommendations: KeywordRecommendation[]; summary: RecommendationSummary } => {
+  const scoped = signals
+    .map(k => ({ ...k, isBrand: isBranded ? isBranded(k.keyword) : k.isBrand }))
+    .filter(k => queryType === 'All' || (queryType === 'Branded' ? k.isBrand : !k.isBrand));
+  const recommendations = recommendKeywords(scoped, settings);
+  return { recommendations, summary: summarizeRecommendations(recommendations, periodDays) };
+};

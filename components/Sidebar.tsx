@@ -1,21 +1,22 @@
-
 import React from 'react';
-import { Layers, Globe, Target, LogOut, ChevronRight, ChevronLeft, Activity, Cable, Bot, Settings, Megaphone, Zap } from 'lucide-react';
+import { Layers, Globe, Target, LogOut, Bot, Settings, Megaphone, Zap, LayoutDashboard, PanelLeftClose } from 'lucide-react';
 import { DashboardTab } from '../types';
+import { TAB_META } from '../navigation';
 
-const SidebarLink: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string }> = ({ active, onClick, icon, label }) => (
-  <button
-    onClick={onClick}
-    className={`w-full flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 rounded-xl transition-all duration-200 group ${
-      active ? 'bg-[#F8B133] text-black shadow-lg' : 'text-slate-400 hover:bg-white/5 hover:text-white'
-    }`}
-  >
-    <div className={`p-1 rounded-lg transition-colors ${active ? 'bg-black/10' : 'bg-transparent group-hover:bg-white/10'}`}>
-      {React.cloneElement(icon as React.ReactElement<any>, { size: 18 })}
-    </div>
-    <span className="text-[8px] font-black uppercase tracking-widest text-center whitespace-normal">{label}</span>
-  </button>
-);
+const NAV_GROUPS: { heading: string | null; items: { tab: DashboardTab; icon: React.ReactNode }[] }[] = [
+  { heading: null, items: [{ tab: DashboardTab.SUMMARY, icon: <LayoutDashboard /> }] },
+  { heading: 'Decide', items: [{ tab: DashboardTab.SEARCH_EFFICIENCY, icon: <Zap /> }] },
+  {
+    heading: 'Understand',
+    items: [
+      { tab: DashboardTab.ORGANIC_VS_PAID, icon: <Layers /> },
+      { tab: DashboardTab.SEO_BY_COUNTRY, icon: <Globe /> },
+      { tab: DashboardTab.KEYWORD_DEEP_DIVE, icon: <Target /> },
+      { tab: DashboardTab.GOOGLE_ADS_PERFORMANCE, icon: <Megaphone /> },
+      { tab: DashboardTab.AI_TRAFFIC_MONITOR, icon: <Bot /> },
+    ],
+  },
+];
 
 interface SidebarProps {
   isOpen: boolean;
@@ -30,70 +31,74 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({
   isOpen, setIsOpen, activeTab, setActiveTab, user, handleLogout, setIsSettingsOpen
 }) => {
-  return (
-    <aside className={`fixed inset-y-0 left-0 bg-slate-950 text-white flex flex-col z-50 shadow-2xl transition-all duration-300 ease-in-out transform 
-      ${isOpen ? 'translate-x-0' : '-translate-x-full'} 
-      w-20 lg:w-24
-    `}>
-      <div className="flex-1 p-1 flex flex-col gap-1">
-        <div className="flex flex-col items-center mb-4 pt-2">
-            <img src="/logo.png" alt="OneSearch Logo" className="w-8 h-8 lg:w-9 lg:h-9 rounded-xl object-cover" />
-            <p className="text-[6px] lg:text-[8px] font-black text-[#F8B133] uppercase tracking-widest mt-1">OneSearch</p>
-        </div>
+  const go = (tab: DashboardTab) => {
+    setActiveTab(tab);
+    // On small screens the menu covers the page, so close it after choosing.
+    if (typeof window !== 'undefined' && window.innerWidth < 1280) setIsOpen(false);
+  };
 
-        <nav className="space-y-1 flex-1">
-          <SidebarLink 
-            active={activeTab === DashboardTab.ORGANIC_VS_PAID} 
-            onClick={() => setActiveTab(DashboardTab.ORGANIC_VS_PAID)} 
-            icon={<Layers />} 
-            label="Dashboard" 
-          />
-          <SidebarLink 
-            active={activeTab === DashboardTab.SEO_BY_COUNTRY} 
-            onClick={() => setActiveTab(DashboardTab.SEO_BY_COUNTRY)} 
-            icon={<Globe />} 
-            label="Local" 
-          />
-          <SidebarLink 
-            active={activeTab === DashboardTab.SEARCH_EFFICIENCY} 
-            onClick={() => setActiveTab(DashboardTab.SEARCH_EFFICIENCY)} 
-            icon={<Zap />} 
-            label="Efficiency" 
-          />
-        </nav>
-        
-        {/* Bottom Section */}
-        <nav className="space-y-1 mt-auto border-t border-white/10 pt-2">
-           <p className="text-[7px] text-slate-600 uppercase font-black text-center mb-1">Explorer</p>
-           <SidebarLink 
-            active={activeTab === DashboardTab.AI_TRAFFIC_MONITOR} 
-            onClick={() => setActiveTab(DashboardTab.AI_TRAFFIC_MONITOR)} 
-            icon={<Bot />} 
-            label="AI Traffic" 
-          />
-           <SidebarLink 
-            active={activeTab === DashboardTab.KEYWORD_DEEP_DIVE} 
-            onClick={() => setActiveTab(DashboardTab.KEYWORD_DEEP_DIVE)} 
-            icon={<Target />} 
-            label="SEO" 
-          />
-          <SidebarLink 
-            active={activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE} 
-            onClick={() => setActiveTab(DashboardTab.GOOGLE_ADS_PERFORMANCE)} 
-            icon={<Megaphone />} 
-            label="ADS" 
-          />
-        </nav>
+  return (
+    <aside
+      className={`print:hidden fixed inset-y-0 left-0 w-60 bg-slate-950 text-white flex flex-col z-50 shadow-2xl transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+    >
+      <div className="flex items-center justify-between px-4 pt-5 pb-4">
+        <div className="flex items-center gap-3">
+          <img src="/logo.png" alt="OneSearch logo" className="w-9 h-9 rounded-xl object-cover" />
+          <div>
+            <p className="text-sm font-black tracking-tight leading-none">OneSearch</p>
+            <p className="text-[10px] font-bold text-slate-500 mt-1">Paid and organic as one channel</p>
+          </div>
+        </div>
+        <button onClick={() => setIsOpen(false)} className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-white/10" title="Hide menu">
+          <PanelLeftClose size={16} />
+        </button>
       </div>
 
-      <div className="border-t border-white/5 bg-slate-900 p-2">
-            <button 
-                onClick={() => setIsSettingsOpen(true)}
-                className={`w-full p-3 bg-[#F8B133] hover:bg-[#e09e2d] text-black rounded-lg flex justify-center`}
-                title="Settings"
-            >
-                <Settings size={20} />
-            </button>
+      <nav className="flex-1 overflow-y-auto px-3 pb-4 space-y-5">
+        {NAV_GROUPS.map((group, gi) => (
+          <div key={gi}>
+            {group.heading && <p className="px-3 mb-1.5 text-[10px] font-black uppercase tracking-widest text-slate-600">{group.heading}</p>}
+            <div className="space-y-1">
+              {group.items.map(({ tab, icon }) => {
+                const active = activeTab === tab;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => go(tab)}
+                    aria-current={active ? 'page' : undefined}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-[13px] font-bold transition-colors ${
+                      active ? 'bg-[#F8B133] text-black shadow-lg' : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    {React.cloneElement(icon as React.ReactElement<any>, { size: 17, className: 'flex-shrink-0' })}
+                    <span>{TAB_META[tab].label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </nav>
+
+      <div className="border-t border-white/10 p-3 space-y-1">
+        {user?.name && (
+          <div className="px-3 py-2">
+            <p className="text-xs font-bold text-white truncate">{user.name}</p>
+            {user.email && <p className="text-[10px] text-slate-500 truncate">{user.email}</p>}
+          </div>
+        )}
+        <button
+          onClick={() => setIsSettingsOpen(true)}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold text-slate-300 hover:bg-white/5 hover:text-white"
+        >
+          <Settings size={17} /> Settings
+        </button>
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold text-slate-400 hover:bg-white/5 hover:text-white"
+        >
+          <LogOut size={17} /> Sign out
+        </button>
       </div>
     </aside>
   );
