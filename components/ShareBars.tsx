@@ -40,7 +40,7 @@ export const ShareBars: React.FC<{
     <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 h-full flex flex-col break-inside-avoid">
       <div className="flex justify-between items-start gap-3 mb-5">
         <div>
-          <h4 className="text-base font-bold text-slate-900">{title}</h4>
+          <h4 className="jf-display text-xl text-slate-900">{title}</h4>
           {subtitle && <p className="text-xs font-medium text-slate-600 mt-0.5">{subtitle}</p>}
         </div>
         {onExport && (
@@ -52,7 +52,7 @@ export const ShareBars: React.FC<{
 
       {headline && (
         <p className="mb-5">
-          <span className="block text-3xl font-bold text-slate-900 tabular-nums">{headline}</span>
+          <span className="block jf-figure text-5xl text-slate-900 tabular-nums">{headline}</span>
           {headlineLabel && <span className="block text-xs font-medium text-slate-600 mt-1">{headlineLabel}</span>}
         </p>
       )}

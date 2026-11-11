@@ -27,7 +27,7 @@ export const KpiCard: React.FC<KpiCardProps> = ({ title, value, comparison, abso
         </span>
       </div>
       <div>
-        <p className="text-2xl font-bold text-slate-900 tracking-tight tabular-nums break-words leading-tight">
+        <p className="jf-figure text-4xl text-slate-900 tabular-nums break-words">
           {typeof value === 'number' && !isPercent ? num(value) : value}
         </p>
         {hasComparison && (

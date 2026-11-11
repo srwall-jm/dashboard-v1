@@ -175,7 +175,7 @@ export const GoogleAdsPerformanceView: React.FC<{
          <div className="lg:col-span-2 bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
             <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h4 className="text-base font-bold text-slate-900">Efficiency Matrix</h4>
+                    <h4 className="jf-display text-xl text-slate-900">Efficiency Matrix</h4>
                     <p className="text-xs font-medium text-slate-600">Each dot is a landing page: cost across, conversions up, size by clicks. Far right and low means spend without conversions.</p>
                 </div>
             </div>
@@ -242,7 +242,7 @@ export const GoogleAdsPerformanceView: React.FC<{
       <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
             <div>
-              <h4 className="text-base font-bold text-slate-900">Google Ads Performance by URL</h4>
+              <h4 className="jf-display text-xl text-slate-900">Google Ads Performance by URL</h4>
               <p className="text-xs font-medium text-slate-600 mt-0.5">Detailed breakdown of Landing Pages and Campaigns</p>
             </div>
             

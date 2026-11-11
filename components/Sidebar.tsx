@@ -48,13 +48,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       aria-label="Sections"
       // Off screen means out of the tab order too.
       inert={!isOpen}
-      className={`print:hidden fixed inset-y-0 left-0 w-60 bg-slate-950 text-white flex flex-col z-50 shadow-2xl transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      className={`print:hidden fixed inset-y-0 left-0 w-60 bg-black text-white flex flex-col z-50 shadow-2xl transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
     >
       <div className="flex items-center justify-between px-4 pt-5 pb-4">
         <div className="flex items-center gap-3">
           <img src="/logo.png" alt="OneSearch logo" className="w-9 h-9 rounded-xl object-cover" />
           <div>
-            <p className="text-sm font-bold tracking-tight leading-none">OneSearch</p>
+            <p className="jf-display text-2xl text-white">OneSearch</p>
             <p className="text-[11px] font-bold text-slate-400 mt-1">Paid and organic as one channel</p>
           </div>
         </div>
@@ -105,6 +105,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </nav>
 
       <div className="border-t border-white/10 p-3 space-y-1">
+        <div className="px-3 pt-2 pb-3">
+          <img src="/brand/jellyfish-wordmark.png" alt="Jellyfish" className="h-5 w-auto" />
+        </div>
         {user?.name && (
           <div className="px-3 py-2">
             <p className="text-xs font-bold text-white truncate">{user.name}</p>

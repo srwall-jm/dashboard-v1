@@ -88,7 +88,7 @@ return (
       
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
-          <h4 className="text-base font-bold text-slate-900">URL & Keyword Precision Analysis</h4>
+          <h4 className="jf-display text-xl text-slate-900">URL & Keyword Precision Analysis</h4>
           <p className="text-xs font-medium text-slate-600 mt-0.5">URL hierarchy and top 20 corresponding queries (Aggregated)</p>
         </div>
         

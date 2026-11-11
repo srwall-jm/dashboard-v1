@@ -155,7 +155,7 @@ export const AiTrafficView: React.FC<{
       <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h4 className="text-base font-bold text-slate-900">AI Traffic Over Time</h4>
+            <h4 className="jf-display text-xl text-slate-900">AI Traffic Over Time</h4>
             <p className="text-xs font-medium text-slate-600 mt-0.5">Session Volume by Source</p>
           </div>
         </div>
@@ -194,7 +194,7 @@ export const AiTrafficView: React.FC<{
       <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex justify-between items-center mb-8">
             <div>
-              <h4 className="text-base font-bold text-slate-900">Landing Page Impact</h4>
+              <h4 className="jf-display text-xl text-slate-900">Landing Page Impact</h4>
               <p className="text-xs font-medium text-slate-600 mt-0.5">Which content are LLMs referencing?</p>
             </div>
              <button 

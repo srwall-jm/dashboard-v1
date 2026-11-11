@@ -420,7 +420,7 @@ export const SearchEfficiencyView: React.FC<{
       <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
               <div>
-                <h4 className="text-base font-bold text-slate-900">Landing pages</h4>
+                <h4 className="jf-display text-xl text-slate-900">Landing pages</h4>
                 <p className="text-xs font-medium text-slate-600 mt-1">Overlap: organic top 3 and ads on the same page. Ads only: no organic top 10. Organic only: no ad spend.</p>
               </div>
               

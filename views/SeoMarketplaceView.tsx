@@ -58,7 +58,7 @@ const CountryShareAnalysis = ({ data, currencySymbol, onRefresh, isLoading }: { 
        <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex justify-between items-center mb-8">
             <div>
-              <h4 className="text-base font-bold text-slate-900">Country Efficiency Leaderboard</h4>
+              <h4 className="jf-display text-xl text-slate-900">Country Efficiency Leaderboard</h4>
               <p className="text-xs font-medium text-slate-600 mt-0.5">Average revenue generated per organic session per country</p>
             </div>
             <div className="flex items-center gap-4">
@@ -218,7 +218,7 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
       <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm overflow-hidden w-full mt-8">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h4 className="text-base font-bold text-slate-900">Brand vs Generic Search (Time Overlay)</h4>
+            <h4 className="jf-display text-xl text-slate-900">Brand vs Generic Search (Time Overlay)</h4>
             <p className="text-xs font-medium text-slate-600 mt-0.5">Overlapping periods by relative position in time</p>
           </div>
           <div className="flex items-center gap-4">
@@ -268,7 +268,7 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
 
       <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm mt-8">
         <div className="flex justify-between items-center mb-8">
-          <div><h4 className="text-base font-bold text-slate-900">Market Efficiency Analysis (Current Period)</h4><p className="text-xs font-medium text-slate-600 mt-0.5">Traffic vs Revenue | Size = Revenue Contribution</p></div>
+          <div><h4 className="jf-display text-xl text-slate-900">Market Efficiency Analysis (Current Period)</h4><p className="text-xs font-medium text-slate-600 mt-0.5">Traffic vs Revenue | Size = Revenue Contribution</p></div>
           <button 
             onClick={() => exportToCSV(countryPerformanceData, "Market_Efficiency_Analysis")} 
             className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 flex-shrink-0"

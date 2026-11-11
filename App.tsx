@@ -2244,7 +2244,7 @@ const App: React.FC = () => {
   
   if (!user && accessSession.status === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="w-10 h-10 border-4 border-slate-900 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -2297,7 +2297,7 @@ const App: React.FC = () => {
   }
   
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex flex-col md:flex-row">
+    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
       <button 
         onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
         aria-label={isSidebarOpen ? 'Close menu' : 'Open menu'}
@@ -2416,8 +2416,8 @@ const App: React.FC = () => {
                   {isLoadingGa4 ? 'Syncing GA4...' : isLoadingGsc ? 'Syncing GSC...' : isLoadingGoogleAds ? 'Syncing Google Ads...' : isLoadingBridge ? 'Joining Data...' : isLoadingAi ? 'Scanning AI...' : 'Dashboard Active'}
                 </span>
               </div>
-              <h2 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tighter">{TAB_META[activeTab].title}</h2>
-              <p className="text-sm font-medium text-slate-500 mt-1">
+              <h2 className="jf-display text-4xl md:text-5xl text-slate-900">{TAB_META[activeTab].title}</h2>
+              <p className="text-sm font-semibold text-jf-gold mt-1.5">
                 <span className="print:hidden">{clientView ? [clientName, periodLabel].filter(Boolean).join(' · ') : TAB_META[activeTab].question}</span>
                 <span className="hidden print:inline">
                   {[clientName || 'Client not named', `${periodLabel} (${periodDays} days)`, `Prepared with OneSearch on ${formatDate(new Date())}`].join(' · ')}
@@ -2501,7 +2501,7 @@ const App: React.FC = () => {
                   <button 
                     onClick={handleManualRefresh}
                     disabled={isAnythingLoading}
-                    className="flex items-center gap-2 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[11px] font-bold transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                    className="flex items-center gap-2 px-4 py-1.5 bg-slate-900 hover:bg-slate-700 text-white rounded-2xl text-[11px] font-bold transition-all shadow-sm active:scale-95 disabled:opacity-50"
                   >
                     <RefreshCw size={12} className={isAnythingLoading ? 'animate-spin' : ''} />
                     {isAnythingLoading ? 'SYNCING...' : 'REFRESH'}
@@ -2716,6 +2716,10 @@ const App: React.FC = () => {
             Generate {activeTab === DashboardTab.ORGANIC_VS_PAID ? 'Channel' : activeTab === DashboardTab.SEO_BY_COUNTRY ? 'Market' : activeTab === DashboardTab.PPC_SEO_BRIDGE ? 'Bridge' : activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE ? 'Paid' : activeTab === DashboardTab.AI_TRAFFIC_MONITOR ? 'AI' : 'SEO'} Insights
           </button>
         </div>
+        <footer className="hidden print:flex justify-between items-center mt-8 pt-3 border-t border-slate-200 text-[9px] text-slate-500">
+          <span>Source: Google Ads, Google Search Console and GA4 · {periodLabel}</span>
+          <span>© {new Date().getFullYear()} Jellyfish · Proprietary &amp; Confidential</span>
+        </footer>
       </main>
       {isLoadingBridge && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -2752,7 +2756,7 @@ const App: React.FC = () => {
             </div>
             <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
               <div 
-                className="bg-indigo-600 h-full transition-all duration-700 ease-in-out"
+                className="bg-jf-yellow h-full transition-all duration-700 ease-in-out"
                 style={{ width: `${loadingProgress}%` }}
               ></div>
             </div>

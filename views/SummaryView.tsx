@@ -18,7 +18,7 @@ interface ChannelStats {
 const Tile: React.FC<{ label: string; value: string; note?: React.ReactNode; change?: number }> = ({ label, value, note, change }) => (
   <div className="bg-white p-5 rounded-2xl border border-slate-200 break-inside-avoid">
     <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">{label}</p>
-    <p className="text-2xl font-bold text-slate-900 tracking-tight mt-2 tabular-nums">{value}</p>
+    <p className="jf-figure text-4xl text-slate-900 mt-2 tabular-nums">{value}</p>
     <p className="text-xs font-medium text-slate-600 mt-1">
       {change !== undefined && change !== 0 && (
         <span className={`font-semibold ${change > 0 ? DELTA.up : DELTA.down}`}>{change > 0 ? '+' : ''}{change.toFixed(1)}% vs previous · </span>
@@ -68,42 +68,48 @@ export const SummaryView: React.FC<{
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">
       {/* 1. Headline: the one thing to take away */}
-      <section className="bg-slate-950 text-white rounded-2xl p-8 md:p-10 break-inside-avoid" aria-labelledby="summary-headline">
+      <section
+        className="relative overflow-hidden bg-black text-white rounded-2xl p-8 md:p-12 break-inside-avoid"
+        aria-labelledby="summary-headline"
+      >
+        <div className="absolute inset-0 bg-cover bg-center opacity-60 pointer-events-none" style={{ backgroundImage: "url(/brand/jellyfish-waves.jpg)" }} aria-hidden="true" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black via-black/80 to-black/30 pointer-events-none" aria-hidden="true" />
+        <div className="relative">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-[#F8B133]">
           The headline{isSample ? " (sample data, not a client's)" : ''}
         </p>
         {!hasRecs ? (
-          <h3 id="summary-headline" className="text-2xl md:text-3xl font-bold tracking-tight mt-3 max-w-4xl leading-tight" role="status">
+          <h3 id="summary-headline" className="jf-display text-3xl md:text-4xl xl:text-5xl mt-3 max-w-5xl" role="status">
             {isLoading
               ? 'Loading Google Ads keywords…'
               : 'Nothing to recommend yet. Connect Google Ads and Search Console in Settings to see which keywords can take less paid spend and which need more.'}
           </h3>
         ) : organicMissing ? (
           <>
-            <h3 id="summary-headline" className="text-2xl md:text-3xl font-bold tracking-tight mt-3 max-w-4xl leading-tight" role="status">
+            <h3 id="summary-headline" className="jf-display text-3xl md:text-4xl xl:text-5xl mt-3 max-w-5xl" role="status">
               No recommendation yet: Search Console did not load, so paid keywords cannot be compared with their organic position.
             </h3>
-            <p className="text-sm text-slate-300 mt-4 max-w-3xl">Connect Search Console in Settings, choose this client's site and refresh. Until then every keyword is kept as is.</p>
+            <p className="text-base text-slate-200 mt-5 max-w-3xl">Connect Search Console in Settings, choose this client's site and refresh. Until then every keyword is kept as is.</p>
           </>
         ) : nReduce > 0 ? (
           <>
-            <h3 id="summary-headline" className="text-2xl md:text-3xl font-bold tracking-tight mt-3 max-w-4xl leading-tight">
+            <h3 id="summary-headline" className="jf-display text-3xl md:text-4xl xl:text-5xl mt-3 max-w-5xl">
               You can cut paid search by about <span className="text-[#F8B133]">{money(summary.spendCutMonthly)} a month ({pct(summary.spendCutShare)})</span> on {plural(nReduce, 'keyword')} where you already rank at the top organically
               {nIncrease > 0 ? <>, and move {money(monthly(summary.spendToIncrease))} of it to {plural(nIncrease, 'keyword')} where organic is beyond page one.</> : '.'}
             </h3>
-            <p className="text-sm text-slate-300 mt-4 max-w-3xl">
+            <p className="text-base text-slate-200 mt-5 max-w-3xl">
               {floorSentence} Expected loss: {range(summary.clicksAtRisk)} clicks
               {summary.conversionsAtRisk.high >= 0.5 ? ` and ${range(summary.conversionsAtRisk)} conversions` : ''} in a period like this one, which is why we test in steps.
             </p>
           </>
         ) : (
           <>
-            <h3 id="summary-headline" className="text-2xl md:text-3xl font-bold tracking-tight mt-3 max-w-4xl leading-tight">
+            <h3 id="summary-headline" className="jf-display text-3xl md:text-4xl xl:text-5xl mt-3 max-w-5xl">
               {nIncrease > 0
                 ? <>No paid spend should come down this period. {plural(nIncrease, 'keyword')} where organic is beyond page one can take about <span className="text-[#F8B133]">{money(monthly(summary.spendToIncrease))} more a month</span>.</>
                 : `No change recommended this period. No keyword has both a top ${settings.maxRankForReduce} organic result and room to cut safely.`}
             </h3>
-            <p className="text-sm text-slate-300 mt-4 max-w-3xl">{ruleSentence}</p>
+            <p className="text-base text-slate-200 mt-5 max-w-3xl">{ruleSentence}</p>
           </>
         )}
         <button
@@ -113,12 +119,13 @@ export const SummaryView: React.FC<{
         >
           See the keyword-by-keyword plan <ArrowRight size={16} aria-hidden="true" />
         </button>
+        </div>
       </section>
 
       {/* 2. Why it is worth testing */}
       {nReduce > 0 && (
         <section aria-labelledby="why-test">
-          <h3 id="why-test" className="text-sm font-bold text-slate-900 mb-3">Why it is worth testing</h3>
+          <h3 id="why-test" className="text-sm font-bold text-jf-gold mb-3">Why it is worth testing</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Tile
               label="Real cost per added click"
@@ -158,7 +165,7 @@ export const SummaryView: React.FC<{
             <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 break-inside-avoid">
               <div className="flex items-center gap-2 mb-1">
                 <span className={`p-1.5 rounded-lg ${ACTION_STYLE.REDUCE.badge}`}><ArrowDownRight size={16} aria-hidden="true" /></span>
-                <h3 className="text-base font-bold text-slate-900">Reduce here first</h3>
+                <h3 className="jf-display text-xl text-slate-900">Reduce here first</h3>
               </div>
               <p className="text-xs font-medium text-slate-600 mb-4">Largest savings where you already rank in the top {settings.maxRankForReduce} organically.</p>
               {reductions.length === 0 ? (
@@ -189,7 +196,7 @@ export const SummaryView: React.FC<{
             <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 break-inside-avoid">
               <div className="flex items-center gap-2 mb-1">
                 <span className={`p-1.5 rounded-lg ${ACTION_STYLE.INCREASE.badge}`}><ArrowUpRight size={16} aria-hidden="true" /></span>
-                <h3 className="text-base font-bold text-slate-900">Add budget here</h3>
+                <h3 className="jf-display text-xl text-slate-900">Add budget here</h3>
               </div>
               <p className="text-xs font-medium text-slate-600 mb-4">Organic is beyond page one, ads convert efficiently, and the ad is missing from part of the searches.</p>
               {increases.length === 0 ? (
@@ -239,7 +246,7 @@ export const SummaryView: React.FC<{
         <section className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 break-inside-avoid">
           <div className="flex items-center gap-2 mb-3">
             <ListChecks size={16} className="text-slate-600" aria-hidden="true" />
-            <h3 className="text-base font-bold text-slate-900">How to run the test</h3>
+            <h3 className="jf-display text-xl text-slate-900">How to run the test</h3>
           </div>
           <ol className="space-y-2 text-sm text-slate-600 list-decimal pl-5">
             <li>Start with the reductions under low auction pressure. Lower bids or budgets in steps, not at once.</li>
@@ -251,7 +258,7 @@ export const SummaryView: React.FC<{
         <section className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 break-inside-avoid">
           <div className="flex items-center gap-2 mb-3">
             <ShieldCheck size={16} className="text-slate-600" aria-hidden="true" />
-            <h3 className="text-base font-bold text-slate-900">Assumptions</h3>
+            <h3 className="jf-display text-xl text-slate-900">Assumptions</h3>
           </div>
           <ul className="space-y-2 text-sm text-slate-600 list-disc pl-5">
             <li>These are estimates to design a test, not a forecast.</li>
@@ -265,7 +272,7 @@ export const SummaryView: React.FC<{
 
       {/* 6. Context: background, not argument */}
       <section aria-labelledby="summary-context">
-        <h3 id="summary-context" className="text-sm font-bold text-slate-900 mb-3">Search in this period</h3>
+        <h3 id="summary-context" className="text-sm font-bold text-jf-gold mb-3">Search in this period</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {hasSessions ? (
             <>

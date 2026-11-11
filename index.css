@@ -3,8 +3,25 @@
 @tailwind utilities;
 
 body {
-  font-family: 'Inter', sans-serif;
-  background-color: #f8fafc;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  background-color: #F7F7F7;
+  color: #3C3C3C;
+}
+
+/* Jellyfish display type: condensed, bold, uppercase. Used for titles and large figures. */
+.jf-display {
+  font-family: 'Big Shoulders Display', 'DM Sans', system-ui, sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  line-height: 1.02;
+}
+/* Figures keep their case (currency symbols, "to", units) but use the display face. */
+.jf-figure {
+  font-family: 'Big Shoulders Display', 'DM Sans', system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.05;
 }
 
 /* Print / save as PDF: a landscape page on white, whole tables, no controls. */

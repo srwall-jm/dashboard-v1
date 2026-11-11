@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+Changed (Jellyfish look)
+- Jellyfish identity across the app: DM Sans for text, Big Shoulders Display for titles and large figures, neutral greys, black menu and headline with the Jellyfish line-wave image and wordmark, yellow as the one accent, and a print footer with source and "Proprietary & Confidential".
+
 Changed (independent design review)
 - Donut charts replaced by sorted bars with written figures; scatter plots use one colour, labelled axes and country names; AI traffic quality is written, not a coloured dot.
 - Older tables: sortable headers are buttons with a sort direction, and expandable rows open from the keyboard.

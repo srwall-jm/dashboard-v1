@@ -16,7 +16,7 @@ const UnifiedFunnel = ({ title, data }: any) => {
   return (
     <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm h-full">
       <div className="flex justify-between items-center mb-8">
-        <h4 className="text-base font-bold text-slate-900">{title}</h4>
+        <h4 className="jf-display text-xl text-slate-900">{title}</h4>
       </div>
       <div className="space-y-8">
         {data.map((stage: any, i: number) => {
@@ -75,7 +75,7 @@ const EcommerceFunnel = ({ title, data, color }: any) => {
   return (
     <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
       <div className="flex justify-between items-center mb-8">
-        <h4 className="text-base font-bold text-slate-900">{title}</h4>
+        <h4 className="jf-display text-xl text-slate-900">{title}</h4>
         <button 
           onClick={() => exportToCSV(data, `${title.replace(/ /g, "_")}_Funnel`)} 
           className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 flex-shrink-0"
@@ -489,7 +489,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
       <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
-            <h4 className="text-base font-bold text-slate-900">Global Search Share Trend (Time Overlay)</h4>
+            <h4 className="jf-display text-xl text-slate-900">Global Search Share Trend (Time Overlay)</h4>
             <p className="text-xs font-medium text-slate-600 mt-0.5">Overlapping periods by relative position in time</p>
           </div>
           <div className="flex items-center gap-4">
@@ -528,7 +528,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
       <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
-            <h4 className="text-base font-bold text-slate-900">Global Search Impressions</h4>
+            <h4 className="jf-display text-xl text-slate-900">Global Search Impressions</h4>
             <p className="text-xs font-medium text-slate-600 mt-0.5">Combined GSC (Organic) and Google Ads (Paid) daily impressions</p>
           </div>
           <div className="flex items-center gap-4">
@@ -632,7 +632,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
       <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h4 className="text-base font-bold text-slate-900">Sessions Performance (Time Overlay)</h4>
+            <h4 className="jf-display text-xl text-slate-900">Sessions Performance (Time Overlay)</h4>
             <p className="text-xs font-medium text-slate-600 mt-0.5">Overlapping periods by relative position in time</p>
           </div>
           <div className="flex items-center gap-4">
@@ -676,7 +676,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
       <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h4 className="text-base font-bold text-slate-900">Revenue Evolution (Time Overlay)</h4>
+            <h4 className="jf-display text-xl text-slate-900">Revenue Evolution (Time Overlay)</h4>
             <p className="text-xs font-medium text-slate-600 mt-0.5">Overlapping periods by relative position in time | Currency: {currencySymbol}</p>
           </div>
           <button 

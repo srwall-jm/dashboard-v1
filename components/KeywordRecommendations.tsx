@@ -121,7 +121,7 @@ const RecTable: React.FC<{
 const Card: React.FC<{ label: string; value: string; note: React.ReactNode }> = ({ label, value, note }) => (
   <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 break-inside-avoid">
     <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">{label}</p>
-    <p className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">{value}</p>
+    <p className="jf-figure text-3xl text-slate-900 mt-1 tabular-nums">{value}</p>
     <p className="text-xs font-medium text-slate-600 mt-1">{note}</p>
   </div>
 );
@@ -218,7 +218,7 @@ export const KeywordRecommendations: React.FC<{
     <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200">
       <div className="flex flex-col md:flex-row justify-between items-start gap-4 mb-6">
         <div>
-          <h3 className="text-lg font-bold text-slate-900">Where paid spend can move</h3>
+          <h3 className="jf-display text-2xl text-slate-900">Where paid spend can move</h3>
           <p className="text-xs font-medium text-slate-600 mt-1">
             {[clientName, periodLabel, `${periodDays} day${periodDays !== 1 ? 's' : ''}`].filter(Boolean).join(' · ')}
           </p>
@@ -323,13 +323,13 @@ export const KeywordRecommendations: React.FC<{
           {/* Client view and print: the two complete tables */}
           <div className={`${deliverableClass} space-y-8`}>
             <section>
-              <h4 className="text-base font-bold text-slate-900 mb-2">Reduce: {reduceRows.length} keyword{reduceRows.length !== 1 ? 's' : ''}</h4>
+              <h4 className="jf-display text-xl text-slate-900 mb-2">Reduce: {reduceRows.length} keyword{reduceRows.length !== 1 ? 's' : ''}</h4>
               {reduceRows.length === 0
                 ? <p className="text-sm text-slate-600">No keyword meets the conditions for a reduction in this period.</p>
                 : <div className="overflow-x-auto"><RecTable rows={reduceRows} money={money} caption="Keywords to reduce" /></div>}
             </section>
             <section>
-              <h4 className="text-base font-bold text-slate-900 mb-2">Increase: {increaseRows.length} keyword{increaseRows.length !== 1 ? 's' : ''}</h4>
+              <h4 className="jf-display text-xl text-slate-900 mb-2">Increase: {increaseRows.length} keyword{increaseRows.length !== 1 ? 's' : ''}</h4>
               {increaseRows.length === 0
                 ? <p className="text-sm text-slate-600">No keyword meets the conditions for an increase in this period.</p>
                 : <div className="overflow-x-auto"><RecTable rows={increaseRows} money={money} caption="Keywords to increase" /></div>}
@@ -348,7 +348,7 @@ export const KeywordRecommendations: React.FC<{
           Assumptions and how this is calculated {showMethod ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
         </button>
         <div className={presentation || showMethod ? 'block' : 'hidden print:block'}>
-          <h4 className={`${deliverableClass} text-base font-bold text-slate-900 mb-2`}>Assumptions</h4>
+          <h4 className={`${deliverableClass} jf-display text-xl text-slate-900 mb-2`}>Assumptions</h4>
           <ul className="mt-3 space-y-1.5 text-xs text-slate-600 list-disc pl-4 max-w-3xl">
             {customRules && <li><strong>These rules were adjusted for this client in Settings.</strong> The figures below are the ones in use.</li>}
             <li>Each Google Ads keyword is matched to the same search query in Search Console for the same period. Keywords with fewer than {s.minPaidClicks} paid clicks get no recommendation: {summary.judgedKeywords} of {recommendations.length} keywords are judged, covering {pct(summary.judgedSpendShare)} of spend.</li>

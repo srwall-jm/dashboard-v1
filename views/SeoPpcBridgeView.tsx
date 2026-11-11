@@ -315,7 +315,7 @@ const BridgeAnalysisTable: React.FC<{
             <div className="flex flex-col gap-2">
               <div>
                 <div className="flex items-center gap-3">
-                    <h4 className="text-base font-bold text-slate-900">{title}</h4>
+                    <h4 className="jf-display text-xl text-slate-900">{title}</h4>
                     {headerContent}
                 </div>
                 <p className="text-xs font-medium text-slate-600 mt-0.5">{subTitle}</p>
@@ -476,7 +476,7 @@ const BridgeAnalysisTable: React.FC<{
       <div className="bg-slate-900 p-6 md:p-8 rounded-2xl border border-slate-800 shadow-2xl relative overflow-hidden">
          <div className="flex justify-between items-center mb-6 z-10 relative">
             <div>
-                <h4 className="text-base font-bold text-slate-900">Sessions Performance (Time Overlay)</h4>
+                <h4 className="jf-display text-xl text-slate-900">Sessions Performance (Time Overlay)</h4>
                 <p className="text-[11px] font-bold text-white">Aggregated Performance for {selectedUrls.size} Selected URLs ({dataSourceName} Scope)</p>
             </div>
             <div className="p-2 bg-white/10 rounded-xl">
