@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { TrendingUp, Percent, Tag, ShoppingBag, Globe, FileText, ChevronDown, RefreshCw, Megaphone, ArrowUpRight, ArrowDownRight, PieChart as PieIcon } from 'lucide-react';
 import { DailyData } from '../types';
-import { exportToCSV, formatDate, getStartOfWeek, normalizeCountry } from '../utils';
+import { exportToCSV, formatDate, getStartOfWeek, normalizeCountry, parseLocalDate } from '../utils';
 import { KpiCard } from '../components/KpiCard';
 import { ComparisonTooltip } from '../components/ComparisonTooltip';
 import { EmptyState } from '../components/EmptyState';
@@ -357,7 +357,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
     
     const getBucket = (dateStr: string) => {
       if (!dateStr) return 'N/A';
-      if (grouping === 'weekly') return formatDate(getStartOfWeek(new Date(dateStr)));
+      if (grouping === 'weekly') return formatDate(getStartOfWeek(parseLocalDate(dateStr)));
       if (grouping === 'monthly') return `${dateStr.slice(0, 7)}-01`;
       return dateStr;
     };
@@ -382,7 +382,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
     return Object.keys(map).sort().map(bucket => {
       const d = map[bucket];
       let xLabel = bucket;
-      const refDate = d.date ? new Date(d.date) : null;
+      const refDate = d.date ? parseLocalDate(d.date) : null;
       if (refDate && !isNaN(refDate.getTime())) {
         xLabel = grouping === 'monthly' 
           ? refDate.toLocaleDateString('en-US', { month: 'short' })
@@ -402,7 +402,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
     if (!data.length) return [];
     
     const getBucket = (dateStr: string) => {
-      if (grouping === 'weekly') return formatDate(getStartOfWeek(new Date(dateStr)));
+      if (grouping === 'weekly') return formatDate(getStartOfWeek(parseLocalDate(dateStr)));
       if (grouping === 'monthly') return `${dateStr.slice(0, 7)}-01`;
       return dateStr;
     };
@@ -451,7 +451,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
       const p = pBucket ? prevMap[pBucket] : null;
 
       let xLabel = bucket;
-      const refDate = c.date ? new Date(c.date) : null;
+      const refDate = c.date ? parseLocalDate(c.date) : null;
       if (refDate) {
         xLabel = grouping === 'monthly' 
           ? refDate.toLocaleDateString('en-US', { month: 'short' })
@@ -642,7 +642,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
                   verticalAlign="top" 
                   align="center" 
                   iconType="circle"
-                  onClick={(e) => toggleSeries(e.dataKey)}
+                  onClick={(e) => toggleSeries(String(e.dataKey))}
                   wrapperStyle={{ cursor: 'pointer', paddingBottom: '20px' }}
                 />
                 <Line 

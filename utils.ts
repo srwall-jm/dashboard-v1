@@ -96,6 +96,28 @@ export const extractPath = (url: string): string => {
   }
 };
 
+// Path normaliser used to join GSC, GA4 and Google Ads rows on the same URL key.
+export const normalizeUrl = (url: string): string => {
+  if (!url || url === '(not set)') return '(not set)';
+  try { url = decodeURIComponent(url); } catch (e) { /* keep original */ }
+  let path = url.toLowerCase().trim();
+  path = path.replace(/^https?:\/\/[^\/]+/, '');
+  path = path.split('?')[0];
+  path = path.split('#')[0];
+  // Remove Google Ads ValueTrack parameters like {ignore}
+  path = path.replace(/\{[^}]*\}/g, '');
+  if (path.endsWith('/') && path.length > 1) { path = path.slice(0, -1); }
+  if (!path.startsWith('/')) { path = '/' + path; }
+  return path;
+};
+
+// Parses 'YYYY-MM-DD' as a local date. `new Date('YYYY-MM-DD')` reads it as UTC,
+// which lands on the previous day for anyone west of Greenwich.
+export const parseLocalDate = (value: string): Date => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value || '');
+  return match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : new Date(value);
+};
+
 export const formatDate = (date: Date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -115,7 +137,7 @@ export const exportToCSV = (data: any[], filename: string) => {
   const headers = Object.keys(data[0]).join(",");
   const rows = data.map(obj => 
     Object.values(obj)
-      .map(val => typeof val === 'string' ? `"${val}"` : val)
+      .map(val => typeof val === 'string' ? `"${val.replace(/"/g, '""')}"` : val)
       .join(",")
   );
   const csvContent = [headers, ...rows].join("\n");

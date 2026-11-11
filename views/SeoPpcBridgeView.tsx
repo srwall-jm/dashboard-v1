@@ -7,7 +7,7 @@ import {
   AlertOctagon, Zap, ShieldCheck, FileText, ExternalLink, Search, Filter, ChevronDown, ChevronRight, ChevronUp, CornerDownRight, BarChart2, TrendingUp, DollarSign, Info, LayoutList, Key, Settings, CheckSquare, Square, RefreshCw
 } from 'lucide-react';
 import { BridgeData, DailyData, KeywordBridgeData, GoogleAdsCustomer } from '../types';
-import { exportToCSV, formatDate } from '../utils';
+import { exportToCSV, formatDate, parseLocalDate } from '../utils';
 import { KpiCard } from '../components/KpiCard';
 import { ComparisonTooltip } from '../components/ComparisonTooltip'; 
 import { EmptyState } from '../components/EmptyState';
@@ -245,7 +245,7 @@ const BridgeAnalysisTable: React.FC<{
         const pBucket = prevBuckets[index];
         const p = pBucket ? prevMap[pBucket as string] : null;
 
-        const dateObj = new Date(c.date);
+        const dateObj = parseLocalDate(c.date);
         const xLabel = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
         return {

@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Cloudflare local
+.dev.vars
+.wrangler
+error_log.txt
+ads_error_log.txt

@@ -232,7 +232,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             <div className="h-full flex flex-col justify-center">
                                 <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-700 text-xs font-bold flex items-center gap-2">
                                     <Cpu size={14} />
-                                    Google Gemini 3 Pro is active and ready.
+                                    Google Gemini runs on the server. No key needed here.
                                 </div>
                             </div>
                         )}

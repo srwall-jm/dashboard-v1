@@ -1,15 +1,17 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  RefreshCw, Filter, Globe, Tag, AlertCircle, Sparkles, Cpu, Activity, Menu, X, FileText
+  RefreshCw, Filter, Globe, Tag, AlertCircle, Sparkles, Cpu, Menu, X
 } from 'lucide-react';
 import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, GoogleAdsCustomer, QueryType, BridgeData, AiTrafficData, KeywordBridgeData, GoogleAdsGlobalMetrics } from './types';
-import { getDashboardInsights, getOpenAiInsights } from './geminiService';
+import { getDashboardInsights, getOpenAiInsights } from './insightsService';
 import GoogleLogin from './GoogleLogin'; 
-import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry, extractPath, AI_SOURCE_REGEX_STRING, parseGoogleAdsMetric } from './utils';
+import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry, extractPath, normalizeUrl, parseLocalDate, AI_SOURCE_REGEX_STRING, parseGoogleAdsMetric } from './utils';
+import { ga4RunReportAll, gscQueryAll, isAuthExpired } from './dataFetch';
 import { generateMockBridgeData, generateMockAiTrafficData } from './mockData';
 // Import New Components and Views
 import { Sidebar } from './components/Sidebar';
 import { SettingsModal } from './components/SettingsModal';
+import { InsightsText } from './components/InsightsText';
 import { DateRangeSelector } from './components/DateRangeSelector';
 import { OrganicVsPaidView } from './views/OrganicVsPaidView';
 import { SeoMarketplaceView } from './views/SeoMarketplaceView';
@@ -101,11 +103,20 @@ const App: React.FC = () => {
   const [isGoogleAdsKeywordsLoading, setIsGoogleAdsKeywordsLoading] = useState(false);
   const [isGoogleAdsKeywordsLoaded, setIsGoogleAdsKeywordsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Non-blocking notices about incomplete data (row caps, accounts that failed), keyed by source.
+  const [dataWarnings, setDataWarnings] = useState<Record<string, string>>({});
+  const setWarning = (key: string, message: string | null) =>
+    setDataWarnings(prev => {
+      if (!message && !(key in prev)) return prev;
+      const next = { ...prev };
+      if (message) next[key] = message; else delete next[key];
+      return next;
+    });
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
-  const [brandRegexStr, setBrandRegexStr] = useState('shop|brand|pro|sports');
+  const [brandRegexStr, setBrandRegexStr] = useState(() => localStorage.getItem('brand_regex') || 'shop|brand|pro|sports');
   const [grouping, setGrouping] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   
   const [aiProvider, setAiProvider] = useState<'gemini' | 'openai'>(() => {
@@ -195,13 +206,14 @@ const App: React.FC = () => {
   };
   
   const getComparisonDates = () => {
-    const start = new Date(filters.dateRange.start);
-    const end = new Date(filters.dateRange.end);
-    const diff = end.getTime() - start.getTime();
+    const start = parseLocalDate(filters.dateRange.start);
+    const end = parseLocalDate(filters.dateRange.end);
     
     if (filters.comparison.type === 'previous_period') {
-      const compStart = new Date(start.getTime() - diff - 86400000);
-      const compEnd = new Date(start.getTime() - 86400000);
+      // Same number of days, ending the day before the current range starts.
+      const days = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+      const compEnd = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1);
+      const compStart = new Date(start.getFullYear(), start.getMonth(), start.getDate() - days);
       return { start: formatDate(compStart), end: formatDate(compEnd) };
     } else {
       const compStart = new Date(start);
@@ -313,7 +325,7 @@ const App: React.FC = () => {
             // Check for specific DEVELOPER_TOKEN_PROHIBITED error
             const errors = errData.error?.details?.[0]?.errors;
             if (errors?.some((e: any) => e.errorCode?.authorizationError === 'DEVELOPER_TOKEN_PROHIBITED')) {
-                errMsg = "Error: El Developer Token no está permitido para este proyecto de Google Cloud (Project ID 333322783684). Por favor, asegúrate de que tu token tenga acceso 'Basic' o 'Standard', o que el proyecto esté vinculado a tu MCC en la consola de Google Ads API.";
+                errMsg = "The Developer Token is not allowed for the Google Cloud project of the OAuth Client ID in use. Check that the token has 'Basic' or 'Standard' access and that the Client ID in Settings belongs to the project paired with this token.";
             }
             
             throw new Error(errMsg);
@@ -385,7 +397,7 @@ const App: React.FC = () => {
         const errData = await resp.json().catch(() => ({}));
         const errors = errData.error?.details?.[0]?.errors;
         if (errors?.some((e: any) => e.errorCode?.authorizationError === 'DEVELOPER_TOKEN_PROHIBITED')) {
-            throw new Error("ERROR DE TOKEN: El Developer Token no está permitido para este proyecto (333322783684). Necesitas un token con nivel de acceso 'Basic' o 'Standard'.");
+            throw new Error("The Developer Token is not allowed for the Google Cloud project of the OAuth Client ID in use. It needs 'Basic' or 'Standard' access.");
         }
         throw new Error(errData.error?.message || `Status: ${resp.status}`);
       }
@@ -400,7 +412,7 @@ const App: React.FC = () => {
           const client = row.customerClient;
           return {
             id: String(client.id),
-            descriptiveName: client.descriptiveName || `Cuenta ${client.id}`,
+            descriptiveName: client.descriptiveName || `Account ${client.id}`,
             resourceName: client.resourceName
           };
         });
@@ -411,14 +423,12 @@ const App: React.FC = () => {
       );
       
       if (uniqueLeafAccounts.length === 0) {
-          console.log("No se encontraron subcuentas. Usando cuenta principal...");
           setAvailableGoogleAdsSubAccounts([{
               id: managerId,
-              descriptiveName: 'MCC / Cuenta Seleccionada',
+              descriptiveName: 'MCC / Selected Account',
               resourceName: `customers/${managerId}`
           }]);
       } else {
-          console.log(`Encontradas ${uniqueLeafAccounts.length} subcuentas.`);
           setAvailableGoogleAdsSubAccounts(uniqueLeafAccounts);
       }
       
@@ -501,7 +511,8 @@ const App: React.FC = () => {
         setAiTrafficData(processed);
     } catch (e: any) {
         console.error("AI Traffic API Error", e);
-        if(!aiTrafficData.length) setAiTrafficData(generateMockAiTrafficData());
+        setAiTrafficData([]);
+        setError(`AI Traffic: ${e.message || 'GA4 request failed'}`);
     } finally {
         setIsLoadingAi(false);
     }
@@ -521,19 +532,6 @@ const App: React.FC = () => {
         return;
     }
     
-    const normalizeUrl = (url: string) => {
-      if (!url || url === '(not set)') return '(not set)';
-      try { url = decodeURIComponent(url); } catch (e) {}
-      let path = url.toLowerCase().trim();
-      path = path.replace(/^https?:\/\/[^\/]+/, '');
-      path = path.split('?')[0];
-      path = path.split('#')[0];
-      // Remove Google Ads ValueTrack parameters like {ignore}
-      path = path.replace(/\{[^}]*\}/g, '');
-      if (path.endsWith('/') && path.length > 1) { path = path.slice(0, -1); }
-      if (!path.startsWith('/')) { path = '/' + path; }
-      return path;
-    };
     
     // 0. FETCH GA4 ORGANIC SESSIONS (Per URL)
     const ga4OrganicMap: Record<string, { sessions: number, transactions: number }> = {};
@@ -590,6 +588,7 @@ const App: React.FC = () => {
     const getCompositeKey = (url: string, keyword: string) => `${url}||${keyword.toLowerCase().trim()}`;
     
     // 1. TRY GSC FETCH (If Available)
+    setWarning('gscBridge', null);
     if (gscAuth?.site && gscAuth.token) {
         try {
             const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
@@ -608,6 +607,7 @@ const App: React.FC = () => {
                     })
                 });
                 const gscDataRaw = await gscResp.json();
+                if (gscDataRaw.error) throw new Error(gscResp.status === 401 ? 'session expired, reconnect Search Console in Settings' : gscDataRaw.error.message);
                 const rows = gscDataRaw.rows || [];
                 
                 rows.forEach((row: any) => {
@@ -658,13 +658,17 @@ const App: React.FC = () => {
                 });
                 
                 if (rows.length < batchSize) break;
+                if (i === 3) {
+                    setWarning('gscBridge', 'Search Console: URL and keyword joins use the top 100,000 page and query rows for the period. Long-tail queries beyond that are not included.');
+                }
             }
             
             Object.values(gscUrlMap).forEach(item => {
                 item.queries.sort((a,b) => b.clicks - a.clicks);
             });
-        } catch (e) {
+        } catch (e: any) {
             console.error("GSC Data Fetch Error:", e);
+            setWarning('gscBridge', `Search Console data for the SEO and PPC join could not be read (${e?.message || 'request failed'}). Organic rank and clicks are missing.`);
         }
     }
     
@@ -717,6 +721,10 @@ const App: React.FC = () => {
             WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
          `;
          
+         // Accounts whose requests failed, so the user is told the paid figures are incomplete.
+         const adsFailures = new Map<string, string>();
+         setWarning('ads', null);
+
          const fetchGoogleAds = async (query: string, targetId: string) => {
             if (!googleAdsAuth?.token) {
                 throw new Error("Google Ads token is missing");
@@ -752,10 +760,11 @@ const App: React.FC = () => {
                     if (!res.ok) {
                         const errData = await res.json().catch(() => ({}));
                         const errors = errData.error?.details?.[0]?.errors;
-                        if (errors?.some((e: any) => e.errorCode?.authorizationError === 'DEVELOPER_TOKEN_PROHIBITED')) {
-                            throw new Error("DEVELOPER_TOKEN_PROHIBITED: Este token requiere acceso 'Basic' o 'Standard'.");
-                        }
+                        let reason = errData.error?.message || `status ${res.status}`;
+                        if (res.status === 401) reason = 'session expired, reconnect Google Ads in Settings';
+                        else if (errors?.some((e: any) => e.errorCode?.authorizationError === 'DEVELOPER_TOKEN_PROHIBITED')) reason = "the Developer Token needs 'Basic' or 'Standard' access";
                         console.error(`Google Ads API Error for ${targetId}:`, errData);
+                        adsFailures.set(cleanTargetId, reason);
                         break;
                     }
                     
@@ -767,8 +776,9 @@ const App: React.FC = () => {
                     }
                     nextPageToken = json.nextPageToken;
                 } while (nextPageToken);
-            } catch (err) {
+            } catch (err: any) {
                 console.error(`Fetch error for ${targetId}:`, err);
+                adsFailures.set(cleanTargetId, err?.message || 'network error');
             }
 
             return allResults;
@@ -940,6 +950,9 @@ const App: React.FC = () => {
             });
 
             setBridgeDataGoogleAds(googleAdsResults.sort((a, b) => b.blendedCostRatio - a.blendedCostRatio));
+            if (adsFailures.size > 0) {
+                setWarning('ads', `Google Ads: ${adsFailures.size} of ${allAccountIds.length} account${allAccountIds.length !== 1 ? 's' : ''} could not be read (${Array.from(adsFailures.values())[0]}). Spend, clicks and conversions are incomplete.`);
+            }
             setIsGoogleAdsKeywordsLoaded(false); // Reset keywords
             setKeywordBridgeDataGoogleAds([]);
             setGlobalKeywordBridgeDataGoogleAds([]);
@@ -1166,6 +1179,9 @@ const App: React.FC = () => {
         AND metrics.clicks > 0
     `;
 
+    const kwFailures = new Map<string, string>();
+    setWarning('adsKeywords', null);
+
     const fetchGoogleAds = async (query: string, targetId: string) => {
         const headers: any = { 
             Authorization: `Bearer ${googleAdsAuth.token}`, 
@@ -1187,12 +1203,18 @@ const App: React.FC = () => {
                     headers: headers,
                     body: JSON.stringify(body)
                 });
-                if (!res.ok) break;
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    kwFailures.set(cleanTargetId, res.status === 401 ? 'session expired, reconnect Google Ads in Settings' : (errData.error?.message || `status ${res.status}`));
+                    break;
+                }
                 const json = await res.json();
                 if (json.results) allResults.push(...json.results);
                 nextPageToken = json.nextPageToken;
             } while (nextPageToken);
-        } catch (err) {}
+        } catch (err: any) {
+            kwFailures.set(cleanTargetId, err?.message || 'network error');
+        }
         return allResults;
     };
 
@@ -1363,8 +1385,14 @@ const App: React.FC = () => {
         setKeywordBridgeDataGoogleAds(googleAdsKwResults.sort((a, b) => b.paidSessions - a.paidSessions));
         setGlobalKeywordBridgeDataGoogleAds(finalGlobalKwResults.sort((a, b) => b.paidSessions - a.paidSessions));
         setIsGoogleAdsKeywordsLoaded(true);
-    } catch (err) {
+        if (kwFailures.size > 0) {
+            setWarning('adsKeywords', `Google Ads keywords: ${kwFailures.size} of ${allAccountIds.length} account${allAccountIds.length !== 1 ? 's' : ''} could not be read (${Array.from(kwFailures.values())[0]}). Keyword-level paid data is incomplete.`);
+        }
+    } catch (err: any) {
         console.error("Error fetching Google Ads keywords:", err);
+        setWarning('adsKeywords', `Google Ads keywords could not be processed (${err?.message || 'unexpected error'}).`);
+        // Mark as attempted so the loader does not retry in a loop and burn API quota.
+        setIsGoogleAdsKeywordsLoaded(true);
     } finally {
         setIsGoogleAdsKeywordsLoading(false);
     }
@@ -1383,30 +1411,26 @@ const App: React.FC = () => {
         dateRanges.push({ startDate: comp.start, endDate: comp.end });
       }
       
-      const ga4ReportResp = await fetch(`https://analyticsdata.googleapis.com/v1beta/${ga4Auth.property.id}:runReport`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${ga4Auth.token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          dateRanges,
-          dimensions: [
-            { name: 'date' }, 
-            { name: filters.ga4Dimension }, 
-            { name: 'country' }, 
-            { name: 'landingPage' }
-          ],
-          metrics: [
-            { name: 'sessions' }, 
-            { name: 'totalRevenue' }, 
-            { name: 'transactions' }, 
-            { name: 'itemsAddedToCart' },
-            { name: 'itemsCheckedOut' }
-          ],
-          limit: 100000
-        })
-      });
-      
-      const ga4Data = await ga4ReportResp.json();
-      if (ga4Data.error) throw new Error(ga4Data.error.message);
+      setWarning('ga4', null);
+      const ga4Data = await ga4RunReportAll(ga4Auth.token, ga4Auth.property.id, {
+        dateRanges,
+        dimensions: [
+          { name: 'date' }, 
+          { name: filters.ga4Dimension }, 
+          { name: 'country' }, 
+          { name: 'landingPage' }
+        ],
+        metrics: [
+          { name: 'sessions' }, 
+          { name: 'totalRevenue' }, 
+          { name: 'transactions' }, 
+          { name: 'itemsAddedToCart' },
+          { name: 'itemsCheckedOut' }
+        ],
+      }, { maxRows: 300000 });
+      if (ga4Data.truncated) {
+        setWarning('ga4', `GA4: loaded ${ga4Data.rows.length.toLocaleString()} of ${(ga4Data.totalRows || 0).toLocaleString()} rows. Sessions and revenue are understated. Use a shorter date range.`);
+      }
       
       const currentStart = parseInt(filters.dateRange.start.replace(/-/g, ''), 10);
       const currentEnd = parseInt(filters.dateRange.end.replace(/-/g, ''), 10);
@@ -1446,6 +1470,7 @@ const App: React.FC = () => {
     } catch (err: any) {
       console.error("Error fetching GA4:", err);
       setError(`GA4 Error: ${err.message}`);
+      if (isAuthExpired(err)) { setGa4Auth(null); sessionStorage.removeItem('ga4_auth'); }
     } finally {
       setIsLoadingGa4(false);
     }
@@ -1467,19 +1492,19 @@ const App: React.FC = () => {
     
     setIsLoadingGsc(true);
     try {
-      const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
+      const siteUrl = gscAuth.site.siteUrl;
+      const gscToken = gscAuth.token;
+      let keywordsTruncated = false;
+      setWarning('gsc', null);
       
       const fetchOneRange = async (start: string, end: string, label: 'current' | 'previous') => {
-        const respTotals = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            startDate: start,
-            endDate: end,
-            dimensions: ['date', 'country'],
-          })
-        });
-        const dataTotals = await respTotals.json();
+        // Totals by day and country. Without an explicit row limit Search Console returns only 1,000 rows,
+        // which understates clicks and impressions on sites with traffic from many countries.
+        const dataTotals = await gscQueryAll(gscToken, siteUrl, {
+          startDate: start,
+          endDate: end,
+          dimensions: ['date', 'country'],
+        }, { maxRows: 200000 });
         
         const totalAggregated = (dataTotals.rows || []).reduce((acc: any, row: any) => ({
           clicks: acc.clicks + row.clicks,
@@ -1494,29 +1519,13 @@ const App: React.FC = () => {
           label
         }));
         
-        const rowLimit = 25000;
-        let allGranularRows: any[] = [];
-        
-        for (let page = 0; page < 2; page++) {
-          const respGranular = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${siteUrl}/searchAnalytics/query`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${gscAuth.token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              startDate: start,
-              endDate: end,
-              dimensions: ['query', 'page', 'date', 'country'],
-              rowLimit: rowLimit,
-              startRow: page * rowLimit
-            })
-          });
-          const dataGranular = await respGranular.json();
-          if (dataGranular.error) throw new Error(dataGranular.error.message);
-          
-          if (dataGranular.rows) {
-            allGranularRows = [...allGranularRows, ...dataGranular.rows];
-          }
-          if (!dataGranular.rows || dataGranular.rows.length < rowLimit) break;
-        }
+        const granular = await gscQueryAll(gscToken, siteUrl, {
+          startDate: start,
+          endDate: end,
+          dimensions: ['query', 'page', 'date', 'country'],
+        }, { maxRows: 50000 });
+        const allGranularRows = granular.rows;
+        if (granular.truncated) keywordsTruncated = true;
         
         const mapped = allGranularRows.map((row: any) => ({
             keyword: row.keys[0] || '',
@@ -1561,9 +1570,13 @@ const App: React.FC = () => {
       setRealKeywordData(combinedKeywords);
       setGscDailyTotals(combinedDailyTotals);
       setGscTotals({ current: currentTotals, previous: previousTotals });
+      if (keywordsTruncated) {
+        setWarning('gsc', 'Search Console: keyword tables show the top 50,000 query rows for the period. Totals are complete; keyword and branded splits are partial. Use a shorter date range for full detail.');
+      }
     } catch (err: any) {
       console.error(err);
       setError(`GSC Error: ${err.message}`);
+      if (isAuthExpired(err)) { setGscAuth(null); sessionStorage.removeItem('gsc_auth'); }
     } finally {
       setIsLoadingGsc(false);
     }
@@ -1844,11 +1857,21 @@ const App: React.FC = () => {
     }
   };
   
+  const SAMPLE_BRIDGE_TABS = [DashboardTab.PPC_SEO_BRIDGE, DashboardTab.GOOGLE_ADS_PERFORMANCE, DashboardTab.SEARCH_EFFICIENCY];
+  const nothingConnected = !gscAuth?.token && !ga4Auth?.token && !googleAdsAuth?.token;
+  const isShowingSampleData =
+    (SAMPLE_BRIDGE_TABS.includes(activeTab) && nothingConnected && (bridgeDataGA4.length > 0 || bridgeDataGoogleAds.length > 0)) ||
+    (activeTab === DashboardTab.AI_TRAFFIC_MONITOR && !ga4Auth?.property && aiTrafficData.length > 0);
+
   const isAnythingLoading = isLoadingGa4 || isLoadingGsc || isLoadingBridge || isLoadingAi || isLoadingGoogleAds;
   
   useEffect(() => { 
     localStorage.setItem('ai_provider', aiProvider); 
   }, [aiProvider]);
+
+  useEffect(() => {
+    localStorage.setItem('brand_regex', brandRegexStr);
+  }, [brandRegexStr]);
   
   useEffect(() => { 
     localStorage.setItem('openai_api_key', openaiKey); 
@@ -1883,7 +1906,7 @@ const App: React.FC = () => {
         <div className="flex-1 flex flex-col items-center justify-center p-8 bg-white">
           <div className="w-full max-w-sm space-y-8">
             <div className="text-center flex flex-col items-center gap-3">
-               <img src="https://i.imgur.com/SX8wLdv.png" alt="OneSearch Logo" className="w-16 h-16 rounded-2xl object-cover" />
+               <img src="/logo.png" alt="OneSearch Logo" className="w-16 h-16 rounded-2xl object-cover" />
                <span className="text-xl font-black tracking-tight">OneSearch™</span>
             </div>
             
@@ -1964,7 +1987,7 @@ const App: React.FC = () => {
         <header className="flex flex-col gap-6 mb-10">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
-              <img src="https://i.imgur.com/SX8wLdv.png" alt="OneSearch Logo" className="w-8 h-8 rounded-xl object-cover" />
+              <img src="/logo.png" alt="OneSearch Logo" className="w-8 h-8 rounded-xl object-cover" />
               <h1 className="text-xl font-black text-slate-800 tracking-tighter">OneSearch</h1>
             </div>
             
@@ -2063,6 +2086,27 @@ const App: React.FC = () => {
           </div>
         )}
         
+        {Object.keys(dataWarnings).length > 0 && (
+          <div className="mb-8 p-4 bg-amber-50 border border-amber-300 rounded-2xl flex items-start gap-3 text-amber-900 shadow-sm">
+            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-black text-xs uppercase tracking-widest">Incomplete data</p>
+              {Object.entries(dataWarnings).map(([key, message]) => (
+                <p key={key} className="font-bold text-xs">{message}</p>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {isShowingSampleData && (
+          <div className="mb-8 p-4 bg-amber-50 border border-amber-300 rounded-2xl flex items-center gap-3 text-amber-900 shadow-sm">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <p className="font-bold text-xs">
+              Sample data. These figures are illustrative and do not belong to any client. Connect your sources in Settings to load real data.
+            </p>
+          </div>
+        )}
+        
         {tabInsights[activeTab as string] && (
           <div className="mb-10 bg-slate-900 rounded-[32px] p-8 md:p-10 text-white shadow-2xl relative animate-in fade-in zoom-in-95 duration-500 overflow-hidden">
             <div className="absolute top-0 right-0 p-12 opacity-10 pointer-events-none">
@@ -2076,7 +2120,7 @@ const App: React.FC = () => {
                     Strategic Report: {activeTab === DashboardTab.ORGANIC_VS_PAID ? "Channels" : activeTab === DashboardTab.SEO_BY_COUNTRY ? "Markets" : activeTab === DashboardTab.PPC_SEO_BRIDGE ? "The Bridge" : activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE ? "Paid Search" : activeTab === DashboardTab.AI_TRAFFIC_MONITOR ? "AI Intelligence" : "Deep Dive"}
                   </h3>
                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
-                    Generated by {aiProvider === 'openai' ? 'OpenAI GPT-4o-mini' : 'Google Gemini 3 Pro'}
+                    Generated by {aiProvider === 'openai' ? 'OpenAI' : 'Google Gemini'}
                   </p>
                 </div>
               </div>
@@ -2087,10 +2131,7 @@ const App: React.FC = () => {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div 
-              className="prose prose-invert max-w-none font-medium text-sm md:text-base leading-relaxed z-10 relative" 
-              dangerouslySetInnerHTML={{ __html: (tabInsights[activeTab as string] || '').replace(/\n/g, '<br/>') }} 
-            />
+            <InsightsText text={tabInsights[activeTab as string] || ''} />
           </div>
         )}
         
@@ -2192,15 +2233,6 @@ const App: React.FC = () => {
         </div>
         
         <div className="mt-12 flex flex-col items-center gap-4 pb-12">
-          {error && (
-            <a 
-              href="/api/ads-logs" 
-              target="_blank" 
-              className="text-[9px] font-black uppercase text-slate-400 hover:text-indigo-600 underline tracking-widest flex items-center gap-1.5"
-            >
-              <FileText size={10} /> View Technical Debug Logs
-            </a>
-          )}
           <button 
             onClick={handleGenerateInsights} 
             disabled={loadingInsights || isAnythingLoading || (realDailyData.length === 0 && realKeywordData.length === 0)} 
@@ -2229,22 +2261,22 @@ const App: React.FC = () => {
               </div>
             </div>
             <div className="space-y-3">
-              <h3 className="text-2xl font-black text-slate-900 tracking-tight text-balance">Sincronizando Campañas</h3>
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight text-balance">Syncing campaigns</h3>
               <div className="space-y-4">
                 <p className="text-slate-500 text-sm font-medium">
-                  Estamos procesando <strong>{availableGoogleAdsSubAccounts.length} cuenta{availableGoogleAdsSubAccounts.length !== 1 ? 's' : ''}</strong>.
+                  Processing <strong>{availableGoogleAdsSubAccounts.length} account{availableGoogleAdsSubAccounts.length !== 1 ? 's' : ''}</strong>.
                 </p>
                 
                 {availableGoogleAdsSubAccounts.length === 1 && (
                   <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 text-[10px] leading-relaxed text-left">
-                    <p className="font-bold mb-1 flex items-center gap-1"><AlertCircle size={12} /> ¿Esperabas ver más cuentas?</p>
-                    Si esta es una cuenta MCC con subcuentas, asegúrate de que el Developer Token tenga acceso <strong>Basic</strong> o <strong>Standard</strong>. 
-                    Tokens en nivel <strong>Test</strong> solo pueden acceder a su propio proyecto de Google Cloud.
+                    <p className="font-bold mb-1 flex items-center gap-1"><AlertCircle size={12} /> Expected more accounts?</p>
+                    If this is an MCC with sub-accounts, make sure the Developer Token has <strong>Basic</strong> or <strong>Standard</strong> access. 
+                    <strong>Test</strong> level tokens can only reach their own Google Cloud project.
                   </div>
                 )}
                 
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest bg-slate-50 py-2 rounded-lg">
-                  Integrando Google Ads + GSC + GA4
+                  Joining Google Ads + GSC + GA4
                 </p>
               </div>
             </div>
@@ -2254,7 +2286,7 @@ const App: React.FC = () => {
                 style={{ width: `${loadingProgress}%` }}
               ></div>
             </div>
-            <p className="text-[10px] text-slate-400 font-bold italic animate-pulse">Por favor, no cierres esta pestaña...</p>
+            <p className="text-[10px] text-slate-400 font-bold italic animate-pulse">Please keep this tab open...</p>
           </div>
         </div>
       )}

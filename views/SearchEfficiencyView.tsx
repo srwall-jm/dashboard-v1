@@ -377,7 +377,7 @@ export const SearchEfficiencyView: React.FC<{
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-4">
         <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-slate-500 font-black uppercase tracking-widest text-[10px]">Sincronizando datos de Keywords...</p>
+        <p className="text-slate-500 font-black uppercase tracking-widest text-[10px]">Syncing keyword data...</p>
       </div>
     );
   }

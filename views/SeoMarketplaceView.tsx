@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { MousePointer2, Eye, Percent, TrendingUp, Tag, ShoppingBag, Globe, FileText, Trophy, RefreshCw } from 'lucide-react';
 import { DailyData, KeywordData, QueryType } from '../types';
-import { exportToCSV, formatDate, getStartOfWeek, normalizeCountry } from '../utils';
+import { exportToCSV, formatDate, getStartOfWeek, normalizeCountry, parseLocalDate } from '../utils';
 import { KpiCard } from '../components/KpiCard';
 import { ComparisonTooltip } from '../components/ComparisonTooltip';
 import { EmptyState } from '../components/EmptyState';
@@ -202,7 +202,7 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
   const brandedTrendData = useMemo(() => {
     if (!gscDailyTotals.length) return [];
     const getBucket = (dateStr: string) => {
-      if (grouping === 'weekly') return formatDate(getStartOfWeek(new Date(dateStr)));
+      if (grouping === 'weekly') return formatDate(getStartOfWeek(parseLocalDate(dateStr)));
       if (grouping === 'monthly') return `${dateStr.slice(0, 7)}-01`;
       return dateStr;
     };
