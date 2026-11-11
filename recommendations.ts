@@ -433,14 +433,36 @@ export const buildRecommendations = (
   isBranded: ((text: string) => boolean) | undefined,
   queryType: 'All' | 'Branded' | 'Non-Branded',
   periodDays: number,
-  settings: RecommendationSettings = DEFAULT_SETTINGS
+  settings: RecommendationSettings = DEFAULT_SETTINGS,
+  // Keywords the client decided never to reduce (lower-cased keyword -> note), from the agreed plan.
+  doNotReduce?: Map<string, string>
 ): { recommendations: KeywordRecommendation[]; summary: RecommendationSummary } => {
   const scoped = signals
     .map(k => ({ ...k, isBrand: isBranded ? isBranded(k.keyword) : k.isBrand }))
     .filter(k => queryType === 'All' || (queryType === 'Branded' ? k.isBrand : !k.isBrand));
-  const recommendations = recommendKeywords(scoped, settings);
+  const recommendations = recommendKeywords(scoped, settings).map(r => {
+    const key = r.keyword.trim().toLowerCase();
+    if (r.action !== 'REDUCE' || !doNotReduce || !doNotReduce.has(key)) return r;
+    const note = (doNotReduce.get(key) || '').trim();
+    return keepAsIs(r, `Marked "do not reduce" for this client${note ? `: ${note}` : ''}. The model would have proposed a cut of ${Math.round(-r.changePct * 100)}%.`);
+  });
   return { recommendations, summary: summarizeRecommendations(recommendations, periodDays) };
 };
+
+// Turns a recommendation into "keep as is", with the reason given.
+export const keepAsIs = (r: KeywordRecommendation, reason: string): KeywordRecommendation => ({
+  ...r,
+  action: 'HOLD',
+  risk: null,
+  changePct: 0,
+  suggestedSpend: r.currentSpend,
+  spendCut: 0,
+  clicksRecovered: { low: 0, high: 0 },
+  clicksAtRisk: { low: 0, high: 0 },
+  conversionsAtRisk: { low: 0, high: 0 },
+  expectedExtraConversions: null,
+  reason,
+});
 
 // ---- Rules a client can change ----
 // A flat, storable form of the settings worth tuning per client. Values are shares

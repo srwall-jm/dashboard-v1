@@ -1,5 +1,6 @@
 
 import React, { useMemo, useState } from 'react';
+import { withCurrency } from '../utils';
 import { 
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, BarChart, Bar, ZAxis
 } from 'recharts';
@@ -160,13 +161,13 @@ export const GoogleAdsPerformanceView: React.FC<{
         {/* Updated formatting: symbol together with number */}
         <KpiCard 
             title="Total Spend" 
-            value={`${currencySymbol}${displayStats.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
+            value={`${withCurrency(currencySymbol, displayStats.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}`} 
             icon={<DollarSign />} 
             color="orange" 
         />
         <KpiCard title="Total Clicks" value={displayStats.totalClicks.toLocaleString('en-US')} icon={<MousePointerClick />} color="blue" />
-        <KpiCard title="Avg. CPC" value={`${currencySymbol}${displayStats.avgCpc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} prefix={currencySymbol} icon={<Target />} color="indigo" />
-        <KpiCard title="Avg. CPA" value={`${currencySymbol}${displayStats.avgCpa.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} prefix={currencySymbol} icon={<Zap />} color={displayStats.avgCpa > 50 ? 'rose' : 'emerald'} />
+        <KpiCard title="Avg. CPC" value={`${withCurrency(currencySymbol, displayStats.avgCpc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}`} prefix={currencySymbol} icon={<Target />} color="indigo" />
+        <KpiCard title="Avg. CPA" value={`${withCurrency(currencySymbol, displayStats.avgCpa.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}`} prefix={currencySymbol} icon={<Zap />} color={displayStats.avgCpa > 50 ? 'rose' : 'emerald'} />
       </div>
 
       {/* SECTION 2: VISUAL INTELLIGENCE */}
@@ -184,7 +185,7 @@ export const GoogleAdsPerformanceView: React.FC<{
                 <ResponsiveContainer width="100%" height="100%">
                     <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis type="number" dataKey="ppcCost" name="Cost" tick={{fontSize: 12, fontWeight: 600, fill: '#475569'}} label={{ value: `Cost (${currencySymbol})`, position: 'insideBottom', offset: -10, fontSize: 12, fill: '#475569' }} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString('en-US')}`} />
+                    <XAxis type="number" dataKey="ppcCost" name="Cost" tick={{fontSize: 12, fontWeight: 600, fill: '#475569'}} label={{ value: `Cost (${currencySymbol})`, position: 'insideBottom', offset: -10, fontSize: 12, fill: '#475569' }} tickFormatter={(val) => `${withCurrency(currencySymbol, val.toLocaleString('en-US'))}`} />
                     <YAxis type="number" dataKey="ppcConversions" name="Conversions" tick={{fontSize: 12, fontWeight: 600, fill: '#475569'}} label={{ value: 'Conversions', angle: -90, position: 'insideLeft', fontSize: 12, fill: '#475569' }} tickFormatter={(val) => val.toLocaleString('en-US')} />
                     <ZAxis type="number" dataKey="ppcSessions" range={[50, 400]} name="Clicks" />
                     <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }: any) => { 
@@ -194,9 +195,9 @@ export const GoogleAdsPerformanceView: React.FC<{
                             <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10">
                             <p className="text-[11px] font-bold uppercase tracking-wide mb-2 border-b border-white/10 pb-2 truncate max-w-[200px]">{d.url}</p>
                             <div className="space-y-1">
-                                <p className="text-[11px] flex justify-between gap-4"><span>Cost:</span> <span className="font-bold text-rose-400">{currencySymbol}{d.ppcCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></p>
+                                <p className="text-[11px] flex justify-between gap-4"><span>Cost:</span> <span className="font-bold text-rose-400">{withCurrency(currencySymbol, d.ppcCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}</span></p>
                                 <p className="text-[11px] flex justify-between gap-4"><span>Conv:</span> <span className="font-bold text-emerald-400">{d.ppcConversions.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></p>
-                                <p className="text-[11px] flex justify-between gap-4"><span>CPA:</span> <span className="font-bold">{currencySymbol}{d.cpa.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></p>
+                                <p className="text-[11px] flex justify-between gap-4"><span>CPA:</span> <span className="font-bold">{withCurrency(currencySymbol, d.cpa.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}</span></p>
                             </div>
                             </div>
                         ); 
@@ -294,7 +295,7 @@ export const GoogleAdsPerformanceView: React.FC<{
                             </td>
                             <td className="py-3 px-4 text-right">
                                 <div className="flex flex-col items-end gap-1">
-                                    <span className="text-[11px] font-bold text-slate-800">{currencySymbol}{row.ppcCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    <span className="text-[11px] font-bold text-slate-800">{withCurrency(currencySymbol, row.ppcCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}</span>
                                     <div className="w-16 h-1 bg-slate-100 rounded-full overflow-hidden">
                                         <div className="h-full bg-orange-400" style={{ width: `${Math.min((row.ppcCost / maxCost) * 100, 100)}%` }} />
                                     </div>
@@ -304,7 +305,7 @@ export const GoogleAdsPerformanceView: React.FC<{
                                 <span className="text-[11px] font-bold text-slate-600">{row.ppcSessions.toLocaleString('en-US')}</span>
                             </td>
                             <td className="py-3 px-4 text-right">
-                                <span className="text-[11px] font-bold text-slate-600">{row.ppcSessions > 0 ? `${currencySymbol}${(row.ppcCost / row.ppcSessions).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</span>
+                                <span className="text-[11px] font-bold text-slate-600">{row.ppcSessions > 0 ? `${withCurrency(currencySymbol, (row.ppcCost / row.ppcSessions).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}` : '-'}</span>
                             </td>
                             <td className="py-3 px-4 text-right">
                                 <span className="text-[11px] font-bold text-slate-600">{row.ppcImpressions > 0 ? `${((row.ppcSessions / row.ppcImpressions) * 100).toFixed(2)}%` : '-'}</span>
@@ -321,7 +322,7 @@ export const GoogleAdsPerformanceView: React.FC<{
                             </td>
                             <td className="py-3 px-4 text-right">
                                 <span className={`text-[11px] font-bold ${row.ppcConversions > 0 && (row.ppcCost / row.ppcConversions) < 20 ? 'text-emerald-600' : 'text-slate-600'}`}>
-                                    {row.ppcConversions > 0 ? `${currencySymbol}${(row.ppcCost / row.ppcConversions).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
+                                    {row.ppcConversions > 0 ? `${withCurrency(currencySymbol, (row.ppcCost / row.ppcConversions).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}` : '-'}
                                 </span>
                             </td>
                         </tr>

@@ -210,3 +210,11 @@ export const isPaidSearch = (channel: string | undefined | null): boolean => {
   const medium = channelMedium(channel);
   return medium === 'paid search' || medium === 'cpc' || medium === 'ppc';
 };
+
+// Money as shown everywhere in the app. The euro sign goes after the amount, with a space ("45,991 €");
+// other currencies keep their usual place before it ("$45,991").
+export const withCurrency = (symbol: string, amount: string | number): string => {
+  const text = typeof amount === 'number' ? amount.toLocaleString('en-US') : String(amount);
+  if (!symbol) return text;
+  return symbol === '€' ? `${text} €` : `${symbol}${text}`;
+};

@@ -1,9 +1,11 @@
 import React, { useMemo, useState } from 'react';
+import { withCurrency } from '../utils';
 import { ArrowDownRight, ArrowUpRight, Minus, HelpCircle, FileText, Search, ChevronDown, ChevronUp, ArrowDown, ArrowUp } from 'lucide-react';
 import {
   KeywordRecommendation, RecommendationSummary, RecAction, Range, DEFAULT_SETTINGS, RecommendationSettings, isDefaultSettings,
 } from '../recommendations';
 import { ACTION_STYLE, PRESSURE_STYLE, PRESSURE_HELP } from '../theme';
+import { Plan, PlanItem, PlanStatus, EMPTY_ITEM, PLAN_STATUS_LABEL, planKeyOf, countPlan } from '../plan';
 import { exportToCSV } from '../utils';
 
 const ACTION_ICON: Record<RecAction, React.ReactNode> = {
@@ -50,13 +52,73 @@ const effectText = (r: KeywordRecommendation, money: (v: number) => string): str
   return '—';
 };
 
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+// What was agreed with the client for one keyword. Editable for the analyst, read-only for the client.
+const PlanCell: React.FC<{ keyword: string; item: PlanItem; onChange?: (item: PlanItem) => void }> = ({ keyword, item, onChange }) => {
+  if (!onChange) {
+    const parts = [
+      item.status !== 'none' ? `${PLAN_STATUS_LABEL[item.status]}${item.appliedOn ? ` on ${item.appliedOn}` : ''}` : '',
+      item.doNotReduce ? 'Do not reduce' : '',
+      item.note,
+    ].filter(Boolean);
+    return <span className="text-xs text-slate-700">{parts.length > 0 ? parts.join(' · ') : '—'}</span>;
+  }
+  return (
+    <div className="flex flex-col gap-1.5 min-w-[170px]">
+      <div className="flex items-center gap-1.5">
+        <select
+          aria-label={`Plan for ${keyword}`}
+          value={item.status}
+          onChange={e => {
+            const status = e.target.value as PlanStatus;
+            onChange({ ...item, status, appliedOn: status === 'applied' || status === 'reverted' ? item.appliedOn || today() : null });
+          }}
+          className="bg-white border border-slate-200 rounded-md text-xs font-semibold text-slate-700 px-1.5 py-1 outline-none cursor-pointer"
+        >
+          {(Object.keys(PLAN_STATUS_LABEL) as PlanStatus[]).map(st => <option key={st} value={st}>{PLAN_STATUS_LABEL[st]}</option>)}
+        </select>
+        {(item.status === 'applied' || item.status === 'reverted') && (
+          <input
+            type="date"
+            aria-label={`Date applied for ${keyword}`}
+            value={item.appliedOn || ''}
+            max={today()}
+            onChange={e => onChange({ ...item, appliedOn: e.target.value || today() })}
+            className="bg-white border border-slate-200 rounded-md text-xs text-slate-700 px-1.5 py-1 outline-none"
+          />
+        )}
+      </div>
+      <input
+        type="text"
+        aria-label={`Note for ${keyword}`}
+        key={`${keyword}:${item.note}`}
+        defaultValue={item.note}
+        placeholder="Note"
+        maxLength={300}
+        onBlur={e => { if (e.target.value.trim() !== item.note) onChange({ ...item, note: e.target.value.trim() }); }}
+        className="bg-white border border-slate-200 rounded-md text-xs text-slate-700 px-1.5 py-1 outline-none"
+      />
+      <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer">
+        <input type="checkbox" checked={item.doNotReduce} onChange={e => onChange({ ...item, doNotReduce: e.target.checked })} className="w-3.5 h-3.5 accent-slate-900" />
+        Do not reduce
+      </label>
+    </div>
+  );
+};
+
 const RecTable: React.FC<{
   rows: KeywordRecommendation[];
   money: (v: number) => string;
   sort?: { key: SortKey; dir: 'asc' | 'desc' };
   onSort?: (key: SortKey) => void;
   caption?: string;
-}> = ({ rows, money, sort, onSort, caption }) => {
+  plan?: Plan; // shown as a column when given
+  onPlanChange?: (keyword: string, item: PlanItem) => void; // editable when given
+}> = ({ rows, money, sort, onSort, caption, plan, onPlanChange }) => {
   const header = (label: string, key: SortKey | null, align: 'left' | 'right' = 'left') => {
     const active = Boolean(sort && key && sort.key === key);
     return (
@@ -76,7 +138,7 @@ const RecTable: React.FC<{
   };
 
   return (
-    <table className="w-full text-left min-w-[960px]">
+    <table className={`w-full text-left ${plan ? 'min-w-[1160px]' : 'min-w-[960px]'}`}>
       {caption && <caption className="sr-only">{caption}</caption>}
       <thead>
         <tr className="border-b border-slate-200">
@@ -88,6 +150,7 @@ const RecTable: React.FC<{
           {header('Expected effect', 'impact')}
           {header('Auction pressure', null)}
           {header('Why', null)}
+          {plan && header('Agreed plan', null)}
         </tr>
       </thead>
       <tbody>
@@ -110,6 +173,11 @@ const RecTable: React.FC<{
               <td className="py-3 px-3 text-[13px] font-medium text-slate-700 tabular-nums">{effectText(r, money)}</td>
               <td className="py-3 px-3"><PressureBadge pressure={r.pressure} impressionShare={r.impressionShare} rankLostShare={r.rankLostShare} /></td>
               <td className="py-3 px-3 text-xs text-slate-600 max-w-[320px]">{r.reason}</td>
+              {plan && (
+                <td className="py-3 px-3">
+                  <PlanCell keyword={r.keyword} item={plan[planKeyOf(r.keyword)] || EMPTY_ITEM} onChange={onPlanChange ? item => onPlanChange(r.keyword, item) : undefined} />
+                </td>
+              )}
             </tr>
           );
         })}
@@ -137,15 +205,19 @@ export const KeywordRecommendations: React.FC<{
   isLoading?: boolean;
   // Client view: no controls, the two tables a client needs, assumptions open.
   presentation?: boolean;
-}> = ({ recommendations, summary, settings, currencySymbol, periodDays, periodLabel, clientName, isLoading, presentation = false }) => {
+  // What was agreed with the client, keyword by keyword.
+  plan?: Plan;
+  onPlanChange?: (keyword: string, item: PlanItem) => void;
+  planShared?: boolean; // saved for the team, as opposed to this browser only
+}> = ({ recommendations, summary, settings, currencySymbol, periodDays, periodLabel, clientName, isLoading, presentation = false, plan, onPlanChange, planShared = false }) => {
   const [filter, setFilter] = useState<Filter>('REDUCE');
   const [search, setSearch] = useState('');
   const [visible, setVisible] = useState(PAGE);
   const [showMethod, setShowMethod] = useState(false);
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'impact', dir: 'desc' });
 
-  const money = (value: number) => `${currencySymbol}${int(value)}`;
-  const money2 = (value: number) => `${currencySymbol}${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const money = (value: number) => `${withCurrency(currencySymbol, int(value))}`;
+  const money2 = (value: number) => `${withCurrency(currencySymbol, value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}`;
 
   // "Impact" puts the biggest money move first, whether it is a cut or a raise.
   const impactOf = (r: KeywordRecommendation) => Math.abs(r.suggestedSpend - r.currentSpend);
@@ -209,6 +281,8 @@ export const KeywordRecommendations: React.FC<{
   const s = settings || DEFAULT_SETTINGS;
   const customRules = !isDefaultSettings(s);
   const hasRecs = recommendations.length > 0;
+  const planCounts = countPlan(plan || {});
+  const planHasEntries = Boolean(plan) && Object.keys(plan!).length > 0;
 
   // The interactive table is for the analyst. Client view and print get the two tables that matter, complete.
   const interactiveClass = presentation ? 'hidden' : 'print:hidden';
@@ -272,6 +346,16 @@ export const KeywordRecommendations: React.FC<{
         />
       </div>
 
+      {plan && hasRecs && (
+        <p className="mb-4 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-700">
+          <span className="font-bold text-slate-900">Agreed plan:</span>{' '}
+          {planHasEntries
+            ? `${planCounts.agreed} agreed · ${planCounts.applied} applied · ${planCounts.reverted} reverted · ${planCounts.doNotReduce} marked do not reduce.`
+            : 'nothing recorded yet. Use the last column to note what was agreed with the client and when it was applied.'}{' '}
+          <span className="print:hidden text-slate-500">{planShared ? 'Shared with the team.' : 'Saved in this browser only.'}</span>
+        </p>
+      )}
+
       {!hasRecs ? (
         <p className="text-sm text-slate-600 py-8 text-center" role="status">
           {isLoading ? 'Loading Google Ads keywords…' : 'Keyword recommendations need Google Ads keywords and Search Console. Connect both in Settings.'}
@@ -310,7 +394,7 @@ export const KeywordRecommendations: React.FC<{
               <p className="text-sm text-slate-600 py-8 text-center">No keywords in this group.</p>
             ) : (
               <div className="overflow-x-auto">
-                <RecTable rows={rows.slice(0, visible)} money={money} sort={sort} onSort={handleSort} caption="Keyword recommendations" />
+                <RecTable rows={rows.slice(0, visible)} money={money} sort={sort} onSort={handleSort} caption="Keyword recommendations" plan={plan} onPlanChange={onPlanChange} />
                 {rows.length > visible && (
                   <button type="button" onClick={() => setVisible(v => v + PAGE)} className="mt-4 text-xs font-semibold text-slate-700 underline underline-offset-2 hover:text-slate-900">
                     Show {Math.min(PAGE, rows.length - visible)} more of {rows.length}
@@ -326,13 +410,13 @@ export const KeywordRecommendations: React.FC<{
               <h4 className="jf-display text-xl text-slate-900 mb-2">Reduce: {reduceRows.length} keyword{reduceRows.length !== 1 ? 's' : ''}</h4>
               {reduceRows.length === 0
                 ? <p className="text-sm text-slate-600">No keyword meets the conditions for a reduction in this period.</p>
-                : <div className="overflow-x-auto"><RecTable rows={reduceRows} money={money} caption="Keywords to reduce" /></div>}
+                : <div className="overflow-x-auto"><RecTable rows={reduceRows} money={money} caption="Keywords to reduce" plan={planHasEntries ? plan : undefined} /></div>}
             </section>
             <section>
               <h4 className="jf-display text-xl text-slate-900 mb-2">Increase: {increaseRows.length} keyword{increaseRows.length !== 1 ? 's' : ''}</h4>
               {increaseRows.length === 0
                 ? <p className="text-sm text-slate-600">No keyword meets the conditions for an increase in this period.</p>
-                : <div className="overflow-x-auto"><RecTable rows={increaseRows} money={money} caption="Keywords to increase" /></div>}
+                : <div className="overflow-x-auto"><RecTable rows={increaseRows} money={money} caption="Keywords to increase" plan={planHasEntries ? plan : undefined} /></div>}
             </section>
           </div>
         </>

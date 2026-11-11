@@ -1,4 +1,5 @@
 import React from 'react';
+import { withCurrency } from '../utils';
 import { ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 import { DELTA } from '../theme';
 
@@ -35,7 +36,7 @@ export const KpiCard: React.FC<KpiCardProps> = ({ title, value, comparison, abso
             {direction === 'up' ? <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" /> : direction === 'down' ? <ArrowDownRight className="w-3.5 h-3.5" aria-hidden="true" /> : <Minus className="w-3.5 h-3.5" aria-hidden="true" />}
             {direction === 'flat' ? 'No change' : `${comparison! > 0 ? '+' : '-'}${Math.abs(comparison!).toFixed(1)}%`}
             {absoluteChange !== undefined && direction !== 'flat' && (
-              <span className="font-medium text-slate-600">({absoluteChange >= 0 ? '+' : '-'}{prefix}{num(Math.abs(absoluteChange))})</span>
+              <span className="font-medium text-slate-600">({absoluteChange >= 0 ? '+' : '-'}{withCurrency(prefix, num(Math.abs(absoluteChange)))})</span>
             )}
             <span className="font-medium text-slate-600">vs previous</span>
           </p>

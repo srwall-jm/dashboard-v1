@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { withCurrency } from '../utils';
 import { History, Save, Trash2, ArrowRight } from 'lucide-react';
 import {
   Snapshot, SnapshotHeader, SnapshotInput, KeywordMove, diffSnapshots, snapshotIdOf,
@@ -47,7 +48,7 @@ export const MonthlyReport: React.FC<{
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const money = (value: number) => `${currencySymbol}${int(value)}`;
+  const money = (value: number) => `${withCurrency(currencySymbol, int(value))}`;
   const currentId = current ? snapshotIdOf(current.periodStart, current.periodEnd) : null;
   const savedCurrent = list.find(s => s.id === currentId) || null;
   const others = list.filter(s => s.id !== currentId);

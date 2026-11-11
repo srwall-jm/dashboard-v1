@@ -1,4 +1,5 @@
 import React from 'react';
+import { withCurrency } from '../utils';
 import { ArrowDownRight, ArrowUpRight, ArrowRight, ShieldCheck, ListChecks } from 'lucide-react';
 import { KeywordRecommendation, RecommendationSummary, RecommendationSettings, DEFAULT_SETTINGS, Range } from '../recommendations';
 import { GoogleAdsGlobalMetrics } from '../types';
@@ -45,8 +46,8 @@ export const SummaryView: React.FC<{
   afterHeadline?: React.ReactNode;
   onOpenRecommendations: () => void;
 }> = ({ recommendations, summary, settings = DEFAULT_SETTINGS, channelStats, globalMetrics, currencySymbol, periodDays, comparisonEnabled, isLoading, isSample, organicMissing = false, afterHeadline, onOpenRecommendations }) => {
-  const money = (value: number) => `${currencySymbol}${int(value)}`;
-  const money2 = (value: number) => `${currencySymbol}${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const money = (value: number) => `${withCurrency(currencySymbol, int(value))}`;
+  const money2 = (value: number) => `${withCurrency(currencySymbol, value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}`;
   // Everything in the headline is per month, so cuts and increases can be compared.
   const monthly = (value: number) => (value * 30) / (periodDays > 0 ? periodDays : 30);
 

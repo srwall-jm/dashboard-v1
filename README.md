@@ -92,6 +92,12 @@ With a shared client chosen, the Summary has a "Monthly report" block. "Save thi
 
 Reports are kept in the same KV namespace as the shared clients (`CLIENT_PROFILES`), so they need no extra setup. Nothing is saved automatically: someone has to press the button each month.
 
+## Agreed plan
+
+In Spend recommendations, the last column of the keyword table records what was agreed with the client: agreed, applied (with the date) or reverted, a note, and "do not reduce" for keywords the client wants left alone. A keyword marked "do not reduce" is kept as is and is taken out of the saving figures, with the note shown as the reason.
+
+For a shared client the plan is stored with it and the whole team sees it. Otherwise it is kept in the browser. The tool does not yet measure what happened to clicks after a change was applied.
+
 ## Known limits
 
 - Without Cloudflare Access configured (see "Restricting access"), the login screen identifies the user but does not restrict who can sign in.

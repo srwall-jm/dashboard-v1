@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { withCurrency } from './utils';
 import { 
   RefreshCw, Filter, Globe, Tag, AlertCircle, Sparkles, Cpu, Menu, X, Printer, Presentation
 } from 'lucide-react';
@@ -12,6 +13,7 @@ import { KeywordSignal, ShareRow, combineShares, buildRecommendations, Recommend
 import { RecommendationRulesPanel } from './components/RecommendationRulesPanel';
 import { TAB_META } from './navigation';
 import { buildSnapshot } from './snapshots';
+import { Plan, PlanItem, withPlanItem, doNotReduceMap, loadLocalPlan, saveLocalPlan, fetchSharedPlan, saveSharedPlanItem } from './plan';
 import { MonthlyReport } from './components/MonthlyReport';
 import { ClientProfile, ClientProfileInput, ClientProfileList, fetchClientProfiles, saveClientProfile, deleteClientProfile } from './clientProfiles';
 import { PinnedAdsAccounts, clientKeyOf, resolveAdsAccounts, loadPinnedAdsAccounts, savePinnedAdsAccounts } from './adsAccounts';
@@ -344,6 +346,31 @@ const App: React.FC = () => {
 
   const handleSelectClientProfile = (id: string | null) =>
     applyClientProfile(clientProfiles.clients.find(p => p.id === id) || null);
+
+  // --- The plan agreed with the client, keyword by keyword ---
+  // Shared through the server for a shared client; otherwise kept in this browser for the client on screen.
+  const [plan, setPlan] = useState<Plan>({});
+  const planIsShared = clientProfiles.available && Boolean(activeProfile);
+  useEffect(() => {
+    let cancelled = false;
+    if (planIsShared && activeProfile) {
+      setPlan({});
+      fetchSharedPlan(activeProfile.id).then(result => { if (!cancelled) setPlan(result.plan); });
+    } else {
+      setPlan(loadLocalPlan(adsClientKey));
+    }
+    return () => { cancelled = true; };
+  }, [planIsShared, activeProfile?.id, adsClientKey]);
+
+  const handlePlanChange = (keyword: string, item: PlanItem) => {
+    const next = withPlanItem(plan, keyword, item);
+    setPlan(next);
+    if (planIsShared && activeProfile) {
+      saveSharedPlanItem(activeProfile.id, keyword, item).catch(err => setError(err?.message || 'The plan could not be saved.'));
+    } else {
+      saveLocalPlan(adsClientKey, next);
+    }
+  };
 
   useEffect(() => {
     if (!googleAdsAuth?.token || availableGoogleAdsSubAccounts.length === 0) {
@@ -2134,14 +2161,14 @@ const App: React.FC = () => {
       if (activeTab === DashboardTab.ORGANIC_VS_PAID) {
         summary = `
           Context: Analysis of Organic vs Paid Search funnels.
-          Organic Stats: ${channelStats.organic.current.sessions} sessions, ${currencySymbol}${channelStats.organic.current.revenue.toLocaleString('en-US')} revenue, ${channelStats.organic.current.cr.toFixed(2)}% CR.
-          Paid Stats: ${channelStats.paid.current.sessions} sessions, ${currencySymbol}${channelStats.paid.current.revenue.toLocaleString('en-US')} revenue, ${channelStats.paid.current.cr.toFixed(2)}% CR.
+          Organic Stats: ${channelStats.organic.current.sessions} sessions, ${withCurrency(currencySymbol, channelStats.organic.current.revenue.toLocaleString('en-US'))} revenue, ${channelStats.organic.current.cr.toFixed(2)}% CR.
+          Paid Stats: ${channelStats.paid.current.sessions} sessions, ${withCurrency(currencySymbol, channelStats.paid.current.revenue.toLocaleString('en-US'))} revenue, ${channelStats.paid.current.cr.toFixed(2)}% CR.
           Search Weight: ${channelStats.shares.sessions.current.toFixed(1)}% share.
         `;
       } else if (activeTab === DashboardTab.SEO_BY_COUNTRY) {
         summary = `
           Context: Market-level SEO efficiency.
-          Organic GA4 Rev: ${currencySymbol}${channelStats.organic.current.revenue.toLocaleString('en-US')}.
+          Organic GA4 Rev: ${withCurrency(currencySymbol, channelStats.organic.current.revenue.toLocaleString('en-US'))}.
         `;
       } else if (activeTab === DashboardTab.PPC_SEO_BRIDGE) {
         const primaryBridgeData = bridgeDataGoogleAds.length > 0 ? bridgeDataGoogleAds : bridgeDataGA4;
@@ -2159,9 +2186,9 @@ const App: React.FC = () => {
           const avgCpa = totalConv > 0 ? totalCost / totalConv : 0;
           summary = `
             Context: Google Ads / Paid Search Performance Analysis by URL.
-            Total Spend: ${currencySymbol}${totalCost.toLocaleString('en-US')}.
+            Total Spend: ${withCurrency(currencySymbol, totalCost.toLocaleString('en-US'))}.
             Total Conversions: ${totalConv}.
-            Average CPA: ${currencySymbol}${avgCpa.toFixed(2)}.
+            Average CPA: ${withCurrency(currencySymbol, avgCpa.toFixed(2))}.
             Look for high CPA URLs and efficient high-volume URLs in the data provided.
           `;
       } else if (activeTab === DashboardTab.AI_TRAFFIC_MONITOR) {
@@ -2177,12 +2204,12 @@ const App: React.FC = () => {
            .filter(x => x.action === action)
            .sort((a, b) => Math.abs(b.suggestedSpend - b.currentSpend) - Math.abs(a.suggestedSpend - a.currentSpend))
            .slice(0, 8)
-           .map(x => `${x.keyword}: ${currencySymbol}${Math.round(x.currentSpend)} to ${currencySymbol}${Math.round(x.suggestedSpend)} (organic position ${x.organicRank === null ? 'unknown' : x.organicRank.toFixed(1)}, auction pressure ${x.pressure})`)
+           .map(x => `${x.keyword}: ${withCurrency(currencySymbol, Math.round(x.currentSpend))} to ${withCurrency(currencySymbol, Math.round(x.suggestedSpend))} (organic position ${x.organicRank === null ? 'unknown' : x.organicRank.toFixed(1)}, auction pressure ${x.pressure})`)
            .join('; ');
          summary = `
            Context: keyword by keyword plan to move paid search spend, for a client presentation.
            Rules you must respect: no keyword is ever taken to zero, a minimum always stays so a competitor cannot take the ad slot. These are estimates to design a test, not a forecast. Use only the figures below; do not invent numbers.
-           Spend analysed: ${currencySymbol}${Math.round(r.spendAnalysed)}. Can come down: ${currencySymbol}${Math.round(r.spendCut)} on ${r.counts.REDUCE} keywords. Extra budget proposed: ${currencySymbol}${Math.round(r.spendToIncrease)} on ${r.counts.INCREASE} keywords. Net: ${currencySymbol}${Math.round(r.netChange)}.
+           Spend analysed: ${withCurrency(currencySymbol, Math.round(r.spendAnalysed))}. Can come down: ${withCurrency(currencySymbol, Math.round(r.spendCut))} on ${r.counts.REDUCE} keywords. Extra budget proposed: ${withCurrency(currencySymbol, Math.round(r.spendToIncrease))} on ${r.counts.INCREASE} keywords. Net: ${withCurrency(currencySymbol, Math.round(r.netChange))}.
            Paid clicks that may be lost: ${Math.round(r.clicksAtRisk.low)} to ${Math.round(r.clicksAtRisk.high)}. Clicks expected to still arrive through organic: ${Math.round(r.clicksRecovered.low)} to ${Math.round(r.clicksRecovered.high)}.
            Largest reductions: ${top('REDUCE') || 'none'}.
            Largest increases: ${top('INCREASE') || 'none'}.
@@ -2212,8 +2239,8 @@ const App: React.FC = () => {
   const periodLabel = `${filters.dateRange.start} to ${filters.dateRange.end}`;
   const clientName = activeProfile?.name || (gscAuth?.site?.siteUrl || '').replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').replace(/\/$/, '') || ga4Auth?.property?.name || '';
   const summaryRecs = useMemo(
-    () => buildRecommendations(keywordSignals, isBranded, filters.queryType, periodDays, recommendationSettings),
-    [keywordSignals, brandRegexStr, filters.queryType, periodDays, recommendationSettings]
+    () => buildRecommendations(keywordSignals, isBranded, filters.queryType, periodDays, recommendationSettings, doNotReduceMap(plan)),
+    [keywordSignals, brandRegexStr, filters.queryType, periodDays, recommendationSettings, plan]
   );
 
   useEffect(() => {
@@ -2715,6 +2742,9 @@ const App: React.FC = () => {
                  periodDays={periodDays}
                  recommendationSettings={recommendationSettings}
                  presentation={clientView}
+                 plan={plan}
+                 onPlanChange={handlePlanChange}
+                 planShared={planIsShared}
                  clientName={clientName}
                  periodLabel={periodLabel}
               />

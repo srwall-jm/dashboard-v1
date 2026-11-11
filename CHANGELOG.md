@@ -3,6 +3,7 @@
 ## Unreleased
 
 Changed (Jellyfish look)
+- Amounts in euros are written with the sign after the number ("45,991 €") everywhere. Other currencies keep the sign before it.
 - Jellyfish identity across the app: DM Sans for text, Big Shoulders Display for titles and large figures, neutral greys, black menu and headline with the Jellyfish line-wave image and wordmark, yellow as the one accent, and a print footer with source and "Proprietary & Confidential".
 
 Changed (independent design review)
@@ -33,6 +34,7 @@ Fixed
 - Connecting Google Ads right after typing the developer token (a first visit, or a new browser) sent the request without the token and listed no accounts until the page was reloaded.
 
 Added
+- Agreed plan per keyword in Spend recommendations: mark a keyword as agreed, applied (with its date) or reverted, add a note, or mark it "do not reduce". A keyword marked that way is kept as is and leaves the saving figures. Shared with the team for a shared client, otherwise kept in the browser. Measuring what happened after a change is not built yet.
 - Monthly report per client: save the report of a period from the Summary and, next time, see what changed since it: monthly saving potential, how many keywords to reduce and increase, and which keywords left or joined each list and why. Stored with the shared client in Cloudflare KV; needs access to be restricted.
 - Recommendation rules editable per client in Settings (largest cuts by competition, clicks organic keeps, increase step, minimum clicks). No cut can exceed 90%, and cuts cannot grow as competition rises. Rules are saved with the shared client profile.
 - Shared client profiles stored in Cloudflare KV (`CLIENT_PROFILES`): save the client setup once in Settings and anyone on the team opens it from the Client selector in the menu. No Google tokens are stored. Needs access to be restricted. Setup steps in the README.

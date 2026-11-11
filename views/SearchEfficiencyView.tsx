@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { withCurrency } from '../utils';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend
 } from 'recharts';
@@ -11,6 +12,7 @@ import { KpiCard } from '../components/KpiCard';
 import { EmptyState } from '../components/EmptyState';
 import { exportToCSV } from '../utils';
 import { KeywordSignal, buildRecommendations, RecommendationSettings, DEFAULT_SETTINGS } from '../recommendations';
+import { Plan, PlanItem, doNotReduceMap } from '../plan';
 import { KeywordRecommendations } from '../components/KeywordRecommendations';
 
 interface UrlEfficiencyRow {
@@ -49,9 +51,12 @@ export const SearchEfficiencyView: React.FC<{
   periodDays?: number;
   recommendationSettings?: RecommendationSettings;
   presentation?: boolean; // client view: recommendations only
+  plan?: Plan;
+  onPlanChange?: (keyword: string, item: PlanItem) => void;
+  planShared?: boolean;
   clientName?: string;
   periodLabel?: string;
-}> = ({ urlData, keywordData, currencySymbol, globalMetrics, totalGscClicks, isLoading, isBranded, onRefresh, queryTypeFilter, keywordSignals = [], periodDays = 30, recommendationSettings = DEFAULT_SETTINGS, presentation = false, clientName, periodLabel }) => {
+}> = ({ urlData, keywordData, currencySymbol, globalMetrics, totalGscClicks, isLoading, isBranded, onRefresh, queryTypeFilter, keywordSignals = [], periodDays = 30, recommendationSettings = DEFAULT_SETTINGS, presentation = false, plan, onPlanChange, planShared, clientName, periodLabel }) => {
   const [clusterFilter, setClusterFilter] = useState<'All' | 'Cannibalization Risk' | 'Paid Reliance' | 'Paid Gap'>('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ppcCost', direction: 'desc' });
@@ -60,8 +65,8 @@ export const SearchEfficiencyView: React.FC<{
 
   // 0. Keyword recommendations (reduce / hold / increase), the source of every saving figure in this view
   const { recommendations, summary: recSummary } = useMemo(
-    () => buildRecommendations(keywordSignals, isBranded, queryTypeFilter, periodDays, recommendationSettings),
-    [keywordSignals, isBranded, queryTypeFilter, periodDays, recommendationSettings]
+    () => buildRecommendations(keywordSignals, isBranded, queryTypeFilter, periodDays, recommendationSettings, plan ? doNotReduceMap(plan) : undefined),
+    [keywordSignals, isBranded, queryTypeFilter, periodDays, recommendationSettings, plan]
   );
 
   // 1. Data Processing Engine & Scorecard Calculations
@@ -399,6 +404,9 @@ export const SearchEfficiencyView: React.FC<{
         clientName={clientName}
         isLoading={isLoading}
         presentation={presentation}
+        plan={plan}
+        onPlanChange={presentation ? undefined : onPlanChange}
+        planShared={planShared}
       />
 
       {/* Analyst detail: landing pages. Not part of what the client sees. */}
@@ -548,7 +556,7 @@ export const SearchEfficiencyView: React.FC<{
                                   </td>
                                   <td className="py-2 px-2 text-right">
                                       <span className={`text-[11px] font-bold ${row.cluster === 'Cannibalization Risk' ? 'text-rose-600' : 'text-slate-800'}`}>
-                                          {currencySymbol}{formatCurrency(row.ppcCost)}
+                                          {withCurrency(currencySymbol, formatCurrency(row.ppcCost))}
                                       </span>
                                   </td>
                                   <td className="py-2 px-2 text-right">
@@ -563,7 +571,7 @@ export const SearchEfficiencyView: React.FC<{
                                   </td>
                                   <td className="py-2 px-2 text-right">
                                       <span className="text-[11px] font-bold text-slate-600">
-                                          {row.paidCpa > 0 ? `${currencySymbol}${formatCurrency(row.paidCpa)}` : '-'}
+                                          {row.paidCpa > 0 ? `${withCurrency(currencySymbol, formatCurrency(row.paidCpa))}` : '-'}
                                       </span>
                                   </td>
                               </tr>
@@ -611,7 +619,7 @@ export const SearchEfficiencyView: React.FC<{
                                                               <td className="py-2 px-4 text-xs text-center text-slate-600">{q.organicRank ? `#${q.organicRank.toFixed(1)}` : '-'}</td>
                                                               <td className="py-2 px-4 text-xs text-right text-slate-600">{formatNumber(q.organicClicks)}</td>
                                                               <td className="py-2 px-4 text-xs text-right text-slate-600">{formatNumber(q.paidSessions)}</td>
-                                                              <td className="py-2 px-4 text-xs text-right text-slate-600">{currencySymbol}{formatCurrency(q.ppcCost)}</td>
+                                                              <td className="py-2 px-4 text-xs text-right text-slate-600">{withCurrency(currencySymbol, formatCurrency(q.ppcCost))}</td>
                                                           </tr>
                                                       ))}
                                                   </tbody>

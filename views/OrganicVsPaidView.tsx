@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
+import { withCurrency } from '../utils';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend
 } from 'recharts';
@@ -133,7 +134,7 @@ const ShareOfSearchAnalysis = ({ stats, currencySymbol }: { stats: any, currency
       headline={`${data[0].percent.toFixed(1)}%`}
       headlineLabel={`of all ${metric.toLowerCase()} comes from search (organic + paid)`}
       rows={data.map(d => ({ label: d.name, value: d.value, percent: d.percent }))}
-      formatValue={v => (isCurrency ? `${currencySymbol}${Math.round(v).toLocaleString('en-US')}` : Math.round(v).toLocaleString('en-US'))}
+      formatValue={v => (isCurrency ? `${withCurrency(currencySymbol, Math.round(v).toLocaleString('en-US'))}` : Math.round(v).toLocaleString('en-US'))}
       colors={[SERIES.total, SERIES.context]}
       keepOrder
       onExport={() => exportToCSV(data, `${title.replace(/ /g, "_")}`)}
@@ -214,7 +215,7 @@ const CountryPerformanceTable = ({ title, data, type, currencySymbol, comparison
   const RenderValueWithComparison = ({ value, change, isCurrency = false, isPercent = false }: any) => (
     <div className="flex flex-col items-end">
       <span className="font-bold text-slate-900 text-[11px]">
-        {isCurrency ? `${currencySymbol}${value.toLocaleString('en-US')}` : isPercent ? `${value.toFixed(2)}%` : value.toLocaleString('en-US')}
+        {isCurrency ? `${withCurrency(currencySymbol, value.toLocaleString('en-US'))}` : isPercent ? `${value.toFixed(2)}%` : value.toLocaleString('en-US')}
       </span>
       {comparisonEnabled && (
         <div className={`flex items-center text-[11px] font-bold ${change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
@@ -473,7 +474,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <KpiCard title="Sessions" value={ch.s.current.sessions} comparison={comparisonEnabled ? ch.s.changes.sessions : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sessions : undefined} icon={<TrendingUp />} color={ch.color} />
               <KpiCard title="Conv. Rate" value={`${(Number(ch.s.current.cr) || 0).toFixed(2)}%`} comparison={comparisonEnabled ? ch.s.changes.cr : undefined} icon={<Percent />} isPercent color={ch.color} />
-              <KpiCard title="Revenue" value={`${currencySymbol}${ch.s.current.revenue.toLocaleString('en-US')}`} comparison={comparisonEnabled ? ch.s.changes.revenue : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<Tag />} prefix={currencySymbol} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
+              <KpiCard title="Revenue" value={`${withCurrency(currencySymbol, ch.s.current.revenue.toLocaleString('en-US'))}`} comparison={comparisonEnabled ? ch.s.changes.revenue : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<Tag />} prefix={currencySymbol} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
               <KpiCard title="Sales" value={ch.s.current.sales} comparison={comparisonEnabled ? ch.s.changes.sales : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sales : undefined} icon={<ShoppingBag />} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
             </div>
           </div>
@@ -692,7 +693,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="date" tick={{fontSize: 12, fontWeight: 700}} axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString('en-US')}`} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} tickFormatter={(val) => `${withCurrency(currencySymbol, val.toLocaleString('en-US'))}`} />
                 <Tooltip content={<ComparisonTooltip currency currencySymbol={currencySymbol} />} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
                 

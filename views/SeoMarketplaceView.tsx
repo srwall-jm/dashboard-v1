@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
+import { withCurrency } from '../utils';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ScatterChart, Scatter, ZAxis, Cell, Legend, LabelList, PieChart, Pie, BarChart, Bar
 } from 'recharts';
@@ -43,7 +44,7 @@ const CountryShareAnalysis = ({ data, currencySymbol, onRefresh, isLoading }: { 
       title={title}
       subtitle={`Share of organic ${metric.toLowerCase()} by country, largest first.`}
       rows={shareData.map(d => ({ label: d.country, value: d.value, percent: d.percent }))}
-      formatValue={v => (isCurrency ? `${currencySymbol}${Math.round(v).toLocaleString('en-US')}` : Math.round(v).toLocaleString('en-US'))}
+      formatValue={v => (isCurrency ? `${withCurrency(currencySymbol, Math.round(v).toLocaleString('en-US'))}` : Math.round(v).toLocaleString('en-US'))}
       colors={[SERIES.organic]}
       onExport={() => exportToCSV(shareData, `${title.replace(/ /g, "_")}`)}
     />
@@ -77,7 +78,7 @@ const CountryShareAnalysis = ({ data, currencySymbol, onRefresh, isLoading }: { 
             <ResponsiveContainer width="100%" height="100%">
               <BarChart layout="vertical" data={efficiencyRank} margin={{ left: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                <XAxis type="number" axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val}`} />
+                <XAxis type="number" axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} tickFormatter={(val) => `${withCurrency(currencySymbol, val)}`} />
                 <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 800, fill: '#1e293b'}} />
                 <Tooltip cursor={{fill: 'transparent'}} content={({ active, payload }: any) => {
                     if (active && payload && payload.length) {
@@ -85,7 +86,7 @@ const CountryShareAnalysis = ({ data, currencySymbol, onRefresh, isLoading }: { 
                       return (
                         <div className="bg-slate-900 text-white p-3 rounded-xl border border-white/10 shadow-xl">
                           <p className="text-[11px] font-bold uppercase tracking-wide mb-1">{d.name}</p>
-                          <p className="text-[11px] font-bold text-emerald-400">{currencySymbol}{d.efficiency.toFixed(2)} per session</p>
+                          <p className="text-[11px] font-bold text-emerald-400">{withCurrency(currencySymbol, d.efficiency.toFixed(2))} per session</p>
                         </div>
                       );
                     }
@@ -211,7 +212,7 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
         <KpiCard title="GSC Impressions" value={gscStats.current.impressions} comparison={comparisonEnabled ? gscStats.changes.impressions : undefined} icon={<Eye />} color="sky" />
         <KpiCard title="GSC Avg. CTR" value={`${gscStats.current.ctr.toFixed(2)}%`} comparison={comparisonEnabled ? gscStats.changes.ctr : undefined} icon={<Percent />} isPercent color="sky" />
         <KpiCard title="Organic Sessions" value={organicGa4.current.sessions} comparison={comparisonEnabled ? organicGa4.changes.sessions : undefined} icon={<TrendingUp />} color="indigo" />
-        <KpiCard title="Organic Revenue" value={`${currencySymbol}${organicGa4.current.revenue.toLocaleString('en-US')}`} comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} icon={<Tag />} prefix={currencySymbol} color="emerald" />
+        <KpiCard title="Organic Revenue" value={`${withCurrency(currencySymbol, organicGa4.current.revenue.toLocaleString('en-US'))}`} comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} icon={<Tag />} prefix={currencySymbol} color="emerald" />
         <KpiCard title="Organic Conv. Rate" value={`${organicGa4.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? organicGa4.changes.cr : undefined} icon={<ShoppingBag />} isPercent color="emerald" />
       </div>
 
@@ -282,7 +283,7 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
               <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis type="number" dataKey="traffic" name="Traffic" unit=" sess." axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} />
-                <YAxis type="number" dataKey="revenue" name="Revenue" unit={` ${currencySymbol}`} axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString('en-US')}`} />
+                <YAxis type="number" dataKey="revenue" name="Revenue" unit={` ${currencySymbol}`} axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} tickFormatter={(val) => `${withCurrency(currencySymbol, val.toLocaleString('en-US'))}`} />
                 <ZAxis type="number" dataKey="traffic" range={[120, 1200]} name="Sessions" />
                 <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }: any) => { 
                   if (active && payload && payload.length) { 
@@ -292,8 +293,8 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
                         <p className="text-[11px] font-bold uppercase tracking-wide mb-2 border-b border-white/10 pb-2">{d.country}</p>
                         <div className="space-y-1">
                           <p className="text-[11px] flex justify-between gap-4"><span>Traffic:</span> <span className="font-bold">{d.traffic.toLocaleString('en-US')} sess.</span></p>
-                          <p className="text-[11px] flex justify-between gap-4"><span>Revenue:</span> <span className="font-bold text-emerald-400">{currencySymbol}{d.revenue.toLocaleString('en-US')}</span></p>
-                          <p className="text-[11px] flex justify-between gap-4"><span>Efficiency:</span> <span className="font-bold text-indigo-400">{currencySymbol}{(d.revenue / d.traffic).toFixed(2)}/sess.</span></p>
+                          <p className="text-[11px] flex justify-between gap-4"><span>Revenue:</span> <span className="font-bold text-emerald-400">{withCurrency(currencySymbol, d.revenue.toLocaleString('en-US'))}</span></p>
+                          <p className="text-[11px] flex justify-between gap-4"><span>Efficiency:</span> <span className="font-bold text-indigo-400">{withCurrency(currencySymbol, (d.revenue / d.traffic).toFixed(2))}/sess.</span></p>
                         </div>
                       </div>
                     ); 

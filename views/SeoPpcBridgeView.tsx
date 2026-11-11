@@ -1,5 +1,6 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
+import { withCurrency } from '../utils';
 import { 
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, BarChart, Bar, LineChart, Line, Legend, LabelList
 } from 'recharts';
@@ -37,7 +38,7 @@ const QueryDetailRow: React.FC<{ query: string, rank: number | null, clicks: num
             ) : (
               <>
                 <span>{paidClicks.toLocaleString('en-US')}</span>
-                <span className="text-[11px] text-rose-500">{currencySymbol}{paidCost.toFixed(2)}</span>
+                <span className="text-[11px] text-rose-500">{withCurrency(currencySymbol, paidCost.toFixed(2))}</span>
               </>
             )}
         </div>
