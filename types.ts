@@ -112,6 +112,8 @@ export interface KeywordBridgeData {
   url?: string;
   organicRank: number | null;
   organicClicks: number;
+  organicSessions?: number; // Not filled at keyword level yet (GA4 has no query dimension)
+  organicTransactions?: number;
   paidSessions: number; // Value depends on dataSource
   paidCvr: number;
   ppcCost: number; // Added for Efficiency View
