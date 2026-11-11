@@ -86,6 +86,12 @@ One-time setup, by someone who administers the Cloudflare account:
 2. Pages project > Settings > Bindings: add a KV namespace binding named `CLIENT_PROFILES` pointing to it, for Production and Preview.
 3. Redeploy. "Shared clients" in Settings then shows the save form instead of a "not set up" note.
 
+## Monthly report
+
+With a shared client chosen, the Summary has a "Monthly report" block. "Save this report" stores what the recommendations say for the period on screen: the decision per keyword, the totals, the rules in use and any data notices. When an earlier report exists, the block shows what changed since it: saving potential, keywords to reduce and increase, and which keywords left or joined each list and why.
+
+Reports are kept in the same KV namespace as the shared clients (`CLIENT_PROFILES`), so they need no extra setup. Nothing is saved automatically: someone has to press the button each month.
+
 ## Known limits
 
 - Without Cloudflare Access configured (see "Restricting access"), the login screen identifies the user but does not restrict who can sign in.

@@ -33,6 +33,7 @@ Fixed
 - Connecting Google Ads right after typing the developer token (a first visit, or a new browser) sent the request without the token and listed no accounts until the page was reloaded.
 
 Added
+- Monthly report per client: save the report of a period from the Summary and, next time, see what changed since it: monthly saving potential, how many keywords to reduce and increase, and which keywords left or joined each list and why. Stored with the shared client in Cloudflare KV; needs access to be restricted.
 - Recommendation rules editable per client in Settings (largest cuts by competition, clicks organic keeps, increase step, minimum clicks). No cut can exceed 90%, and cuts cannot grow as competition rises. Rules are saved with the shared client profile.
 - Shared client profiles stored in Cloudflare KV (`CLIENT_PROFILES`): save the client setup once in Settings and anyone on the team opens it from the Client selector in the menu. No Google tokens are stored. Needs access to be restricted. Setup steps in the README.
 - The Google Ads developer token and OAuth Client ID can be stored in Cloudflare (`GOOGLE_ADS_DEVELOPER_TOKEN`, `GOOGLE_ADS_OAUTH_CLIENT_ID`). The proxy adds the token on the server, only for requests verified by Cloudflare Access, and both fields disappear from Settings.
