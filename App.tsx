@@ -331,6 +331,10 @@ const App: React.FC = () => {
   });
   const [openaiKey, setOpenaiKey] = useState(() => localStorage.getItem('openai_api_key') || '');
   const [developerToken, setDeveloperToken] = useState(() => localStorage.getItem('google_ads_developer_token') || '');
+  // Requests read the token from here. The Google sign-in callback is created once and would otherwise
+  // keep the token as it was at that moment: empty if it was typed after the page loaded.
+  const developerTokenRef = useRef(developerToken);
+  developerTokenRef.current = developerToken;
   const [googleAdsClientId, setGoogleAdsClientId] = useState(() => localStorage.getItem('google_ads_client_id') || DEFAULT_CLIENT_ID);
   
   const [activeTab, setActiveTab] = useState<DashboardTab>(DashboardTab.SUMMARY);
@@ -380,9 +384,7 @@ const App: React.FC = () => {
     // but debounced so it doesn't fire once per keystroke while typing.
     if (!googleAdsAuth?.token) return;
     const handle = setTimeout(() => {
-      if (!isLoadingGoogleAds) {
-        fetchGoogleAdsCustomers(googleAdsAuth.token);
-      }
+      fetchGoogleAdsCustomers(googleAdsAuth.token);
     }, 800);
     return () => clearTimeout(handle);
   }, [developerToken, googleAdsAuth?.token]);
@@ -516,7 +518,7 @@ const App: React.FC = () => {
     try {
         setError(null);
         setIsLoadingGoogleAds(true);
-        const tokenToUse = (developerToken || '').trim() || DEVELOPER_TOKEN;
+        const tokenToUse = (developerTokenRef.current || '').trim() || DEVELOPER_TOKEN;
         const resp = await fetch('/api/googleads/v25/customers:listAccessibleCustomers', {
             method: 'GET',
             headers: { 
@@ -594,7 +596,7 @@ const App: React.FC = () => {
         headers: { 
           'Authorization': `Bearer ${token}`, 
           'Content-Type': 'application/json',
-          'developer-token': (developerToken || '').trim() || DEVELOPER_TOKEN,
+          'developer-token': (developerTokenRef.current || '').trim() || DEVELOPER_TOKEN,
           'login-customer-id': managerId 
         },
         body: JSON.stringify({ query })
@@ -948,7 +950,7 @@ const App: React.FC = () => {
             const headers: any = { 
                 Authorization: `Bearer ${googleAdsAuth.token}`, 
                 'Content-Type': 'application/json',
-                'developer-token': (developerToken || '').trim() || DEVELOPER_TOKEN
+                'developer-token': (developerTokenRef.current || '').trim() || DEVELOPER_TOKEN
             };
             
             if (selectedGoogleAdsCustomer) {
@@ -1416,7 +1418,7 @@ const App: React.FC = () => {
         const headers: any = { 
             Authorization: `Bearer ${googleAdsAuth.token}`, 
             'Content-Type': 'application/json',
-            'developer-token': (developerToken || '').trim() || DEVELOPER_TOKEN
+            'developer-token': (developerTokenRef.current || '').trim() || DEVELOPER_TOKEN
         };
         if (selectedGoogleAdsCustomer) {
             headers['login-customer-id'] = selectedGoogleAdsCustomer.id.toString().replace(/-/g, '');

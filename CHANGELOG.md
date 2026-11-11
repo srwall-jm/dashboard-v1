@@ -15,6 +15,7 @@ Changed (independent design review)
 
 Fixed
 - Avg. CPC and Avg. CPA in Google Ads showed no currency symbol.
+- Connecting Google Ads right after typing the developer token (a first visit, or a new browser) sent the request without the token and listed no accounts until the page was reloaded.
 
 Added
 - Recommendation rules editable per client in Settings (largest cuts by competition, clicks organic keeps, increase step, minimum clicks). No cut can exceed 90%, and cuts cannot grow as competition rises. Rules are saved with the shared client profile.
