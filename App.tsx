@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  RefreshCw, Filter, Globe, Tag, AlertCircle, Sparkles, Cpu, Menu, X
+  RefreshCw, Filter, Globe, Tag, AlertCircle, Sparkles, Cpu, Menu, X, Printer, Presentation
 } from 'lucide-react';
 import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, GoogleAdsCustomer, QueryType, BridgeData, AiTrafficData, KeywordBridgeData, GoogleAdsGlobalMetrics } from './types';
 import { getDashboardInsights, getOpenAiInsights } from './insightsService';
@@ -8,7 +8,9 @@ import GoogleLogin from './GoogleLogin';
 import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry, extractPath, normalizeUrl, parseLocalDate, AI_SOURCE_REGEX_STRING, parseGoogleAdsMetric, isOrganicSearch, isPaidSearch } from './utils';
 import { ga4RunReportAll, gscQueryAll, isAuthExpired } from './dataFetch';
 import { generateMockBridgeData, generateMockAiTrafficData, generateMockKeywordSignals } from './mockData';
-import { KeywordSignal, ShareRow, combineShares } from './recommendations';
+import { KeywordSignal, ShareRow, combineShares, buildRecommendations } from './recommendations';
+import { TAB_META } from './navigation';
+import { SummaryView } from './views/SummaryView';
 // Import New Components and Views
 import { Sidebar } from './components/Sidebar';
 import { SettingsModal } from './components/SettingsModal';
@@ -118,7 +120,9 @@ const App: React.FC = () => {
       return next;
     });
   
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => typeof window === 'undefined' || window.innerWidth >= 1280);
+  // Client view: the same page without menu, filters or settings, ready to present or print.
+  const [clientView, setClientView] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
   const [brandRegexStr, setBrandRegexStr] = useState(() => localStorage.getItem('brand_regex') || 'shop|brand|pro|sports');
@@ -132,9 +136,10 @@ const App: React.FC = () => {
   const [developerToken, setDeveloperToken] = useState(() => localStorage.getItem('google_ads_developer_token') || '');
   const [googleAdsClientId, setGoogleAdsClientId] = useState(() => localStorage.getItem('google_ads_client_id') || DEFAULT_CLIENT_ID);
   
-  const [activeTab, setActiveTab] = useState<DashboardTab>(DashboardTab.ORGANIC_VS_PAID);
+  const [activeTab, setActiveTab] = useState<DashboardTab>(DashboardTab.SUMMARY);
   
   const [tabInsights, setTabInsights] = useState<Record<string, string | null>>({
+    [DashboardTab.SUMMARY]: null,
     [DashboardTab.ORGANIC_VS_PAID]: null,
     [DashboardTab.SEO_BY_COUNTRY]: null,
     [DashboardTab.KEYWORD_DEEP_DIVE]: null,
@@ -1541,7 +1546,7 @@ const App: React.FC = () => {
   
   // Trigger Keyword Fetch for Google Ads when entering relevant tabs
   useEffect(() => {
-    if ((activeTab === DashboardTab.ORGANIC_VS_PAID || activeTab === DashboardTab.PPC_SEO_BRIDGE || activeTab === DashboardTab.SEARCH_EFFICIENCY || activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE) && 
+    if ((activeTab === DashboardTab.SUMMARY || activeTab === DashboardTab.ORGANIC_VS_PAID || activeTab === DashboardTab.PPC_SEO_BRIDGE || activeTab === DashboardTab.SEARCH_EFFICIENCY || activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE) && 
         googleAdsAuth?.token && 
         !isGoogleAdsKeywordsLoaded && 
         !isGoogleAdsKeywordsLoading &&
@@ -1649,7 +1654,7 @@ const App: React.FC = () => {
     const bridgeParams = `${ga4Auth?.property?.id}-${gscAuth?.site?.siteUrl}-${selectedGoogleAdsCustomer?.id}-${availableGoogleAdsSubAccounts.length}-${(developerToken || '').trim()}-${filters.dateRange.start}-${filters.dateRange.end}`;
     const aiParams = `${ga4Auth?.property?.id}-${filters.dateRange.start}-${filters.dateRange.end}`;
 
-    if (activeTab === DashboardTab.ORGANIC_VS_PAID || activeTab === DashboardTab.PPC_SEO_BRIDGE || activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE || activeTab === DashboardTab.SEARCH_EFFICIENCY) {
+    if (activeTab === DashboardTab.SUMMARY || activeTab === DashboardTab.ORGANIC_VS_PAID || activeTab === DashboardTab.PPC_SEO_BRIDGE || activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE || activeTab === DashboardTab.SEARCH_EFFICIENCY) {
       if (bridgeParams !== lastBridgeFetchParams.current) {
         lastBridgeFetchParams.current = bridgeParams;
         fetchBridgeData();
@@ -1920,7 +1925,15 @@ const App: React.FC = () => {
     }
   };
   
-  const SAMPLE_BRIDGE_TABS = [DashboardTab.PPC_SEO_BRIDGE, DashboardTab.GOOGLE_ADS_PERFORMANCE, DashboardTab.SEARCH_EFFICIENCY];
+  const periodDays = Math.round((parseLocalDate(filters.dateRange.end).getTime() - parseLocalDate(filters.dateRange.start).getTime()) / 86400000) + 1;
+  const periodLabel = `${filters.dateRange.start} to ${filters.dateRange.end}`;
+  const clientName = (gscAuth?.site?.siteUrl || '').replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').replace(/\/$/, '') || ga4Auth?.property?.name || '';
+  const summaryRecs = useMemo(
+    () => buildRecommendations(keywordSignals, isBranded, filters.queryType, periodDays),
+    [keywordSignals, brandRegexStr, filters.queryType, periodDays]
+  );
+
+  const SAMPLE_BRIDGE_TABS = [DashboardTab.SUMMARY, DashboardTab.PPC_SEO_BRIDGE, DashboardTab.GOOGLE_ADS_PERFORMANCE, DashboardTab.SEARCH_EFFICIENCY];
   const nothingConnected = !gscAuth?.token && !ga4Auth?.token && !googleAdsAuth?.token;
   const isShowingSampleData =
     (SAMPLE_BRIDGE_TABS.includes(activeTab) && nothingConnected && (bridgeDataGA4.length > 0 || bridgeDataGoogleAds.length > 0)) ||
@@ -1990,15 +2003,15 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-[#f8fafc] flex flex-col md:flex-row">
       <button 
         onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
-        className="xl:hidden fixed bottom-6 right-6 z-50 p-4 bg-slate-950 text-white rounded-full shadow-2xl active:scale-95 transition-transform"
+        className={`xl:hidden print:hidden fixed bottom-6 right-6 z-50 p-4 bg-slate-950 text-white rounded-full shadow-2xl active:scale-95 transition-transform ${clientView ? 'hidden' : ''}`}
       >
         {isSidebarOpen ? <X /> : <Menu />}
       </button>
       
-      {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 xl:hidden" onClick={() => setIsSidebarOpen(false)} />}
+      {isSidebarOpen && !clientView && <div className="fixed inset-0 bg-black/50 z-40 xl:hidden print:hidden" onClick={() => setIsSidebarOpen(false)} />}
       
       <Sidebar 
-        isOpen={isSidebarOpen} 
+        isOpen={isSidebarOpen && !clientView} 
         setIsOpen={setIsSidebarOpen}
         activeTab={activeTab} 
         setActiveTab={setActiveTab}
@@ -2046,17 +2059,17 @@ const App: React.FC = () => {
         filteredGoogleAdsCustomers={filteredGoogleAdsCustomers}
       />
       
-      <main className={`flex-1 transition-all duration-300 ease-in-out p-5 md:p-8 xl:p-12 overflow-x-hidden ${isSidebarOpen ? 'ml-20 lg:ml-24' : 'ml-0'}`}>
+      <main className={`flex-1 transition-all duration-300 ease-in-out p-5 md:p-8 xl:p-12 overflow-x-hidden print:ml-0 print:p-0 ${isSidebarOpen && !clientView ? 'xl:ml-60' : 'ml-0'}`}>
         <header className="flex flex-col gap-6 mb-10">
           <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
+            <div className={`items-center gap-2 print:flex ${isSidebarOpen && !clientView ? 'hidden' : 'flex'}`}>
               <img src="/logo.png" alt="OneSearch Logo" className="w-8 h-8 rounded-xl object-cover" />
               <h1 className="text-xl font-black text-slate-800 tracking-tighter">OneSearch</h1>
             </div>
             
-            <div className="h-6 w-px bg-slate-200" />                
+            <div className={`h-6 w-px bg-slate-200 print:block ${isSidebarOpen && !clientView ? 'hidden' : 'block'}`} />                
 
-            {!isSidebarOpen && (
+            {!isSidebarOpen && !clientView && (
               <button 
                 onClick={() => setIsSidebarOpen(true)} 
                 className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-indigo-300 transition-all shadow-sm text-slate-600 hover:text-indigo-600 group" 
@@ -2072,19 +2085,31 @@ const App: React.FC = () => {
                   {isLoadingGa4 ? 'Syncing GA4...' : isLoadingGsc ? 'Syncing GSC...' : isLoadingGoogleAds ? 'Syncing Google Ads...' : isLoadingBridge ? 'Joining Data...' : isLoadingAi ? 'Scanning AI...' : 'Dashboard Active'}
                 </span>
               </div>
-              <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">
-                {activeTab === DashboardTab.ORGANIC_VS_PAID && "Organic vs Paid Performance"}
-                {activeTab === DashboardTab.SEO_BY_COUNTRY && "SEO Performance by Country"}
-                {activeTab === DashboardTab.KEYWORD_DEEP_DIVE && "URL & Keyword Analysis"}
-                {activeTab === DashboardTab.PPC_SEO_BRIDGE && "The Bridge: SEO vs PPC Intelligence"}
-                {activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE && "Google Ads & Paid Search Analysis"}
-                {activeTab === DashboardTab.SEARCH_EFFICIENCY && "Search Efficiency & Savings"}
-                {activeTab === DashboardTab.AI_TRAFFIC_MONITOR && "AI Traffic Monitor"}
-              </h2>
+              <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">{TAB_META[activeTab].title}</h2>
+              <p className="text-sm font-medium text-slate-500 mt-1">
+                {clientView ? [clientName, periodLabel].filter(Boolean).join(' · ') : TAB_META[activeTab].question}
+              </p>
+            </div>
+
+            <div className="ml-auto flex items-center gap-2 print:hidden">
+              <button
+                onClick={() => setClientView(v => !v)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors ${clientView ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'}`}
+                title="Hide menu, filters and settings to present this page"
+              >
+                <Presentation size={14} /> {clientView ? 'Exit client view' : 'Client view'}
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest bg-white text-slate-600 border border-slate-200 hover:border-slate-400 transition-colors"
+                title="Print this page or save it as PDF"
+              >
+                <Printer size={14} /> Print / PDF
+              </button>
             </div>
           </div>
           
-          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-4 w-full">
+          <div className={`flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-4 w-full print:hidden ${clientView ? 'hidden' : 'flex'}`}>
             <DateRangeSelector filters={filters} setFilters={setFilters} />
             
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white p-1.5 rounded-3xl border border-slate-200 shadow-sm">
@@ -2199,6 +2224,19 @@ const App: React.FC = () => {
         )}
         
         <div className="w-full">
+          {activeTab === DashboardTab.SUMMARY && (
+            <SummaryView
+              recommendations={summaryRecs.recommendations}
+              summary={summaryRecs.summary}
+              channelStats={channelStats}
+              globalMetrics={googleAdsGlobalMetrics}
+              currencySymbol={currencySymbol}
+              comparisonEnabled={filters.comparison.enabled}
+              isLoading={isGoogleAdsKeywordsLoading || isLoadingBridge}
+              onOpenRecommendations={() => setActiveTab(DashboardTab.SEARCH_EFFICIENCY)}
+            />
+          )}
+
           {activeTab === DashboardTab.ORGANIC_VS_PAID && (
             <OrganicVsPaidView 
               stats={channelStats} 
@@ -2283,9 +2321,9 @@ const App: React.FC = () => {
                  onRefresh={handleManualRefresh}
                  queryTypeFilter={filters.queryType}
                  keywordSignals={keywordSignals}
-                 periodDays={Math.round((parseLocalDate(filters.dateRange.end).getTime() - parseLocalDate(filters.dateRange.start).getTime()) / 86400000) + 1}
-                 clientName={gscAuth?.site?.siteUrl || ga4Auth?.property?.name || ''}
-                 periodLabel={`${filters.dateRange.start} to ${filters.dateRange.end}`}
+                 periodDays={periodDays}
+                 clientName={clientName}
+                 periodLabel={periodLabel}
               />
           )}
           
@@ -2299,7 +2337,7 @@ const App: React.FC = () => {
           )}
         </div>
         
-        <div className="mt-12 flex flex-col items-center gap-4 pb-12">
+        <div className={`mt-12 flex-col items-center gap-4 pb-12 print:hidden ${clientView || activeTab === DashboardTab.SUMMARY ? 'hidden' : 'flex'}`}>
           <button 
             onClick={handleGenerateInsights} 
             disabled={loadingInsights || isAnythingLoading || (realDailyData.length === 0 && realKeywordData.length === 0)} 

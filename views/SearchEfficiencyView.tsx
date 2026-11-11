@@ -9,7 +9,7 @@ import { KeywordBridgeData, GoogleAdsGlobalMetrics } from '../types';
 import { KpiCard } from '../components/KpiCard';
 import { EmptyState } from '../components/EmptyState';
 import { exportToCSV } from '../utils';
-import { KeywordSignal, recommendKeywords, summarizeRecommendations } from '../recommendations';
+import { KeywordSignal, buildRecommendations } from '../recommendations';
 import { KeywordRecommendations } from '../components/KeywordRecommendations';
 
 interface UrlEfficiencyRow {
@@ -55,13 +55,10 @@ export const SearchEfficiencyView: React.FC<{
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
 
   // 0. Keyword recommendations (reduce / hold / increase), the source of every saving figure in this view
-  const { recommendations, recSummary } = useMemo(() => {
-    const signals = keywordSignals
-      .map(k => ({ ...k, isBrand: isBranded ? isBranded(k.keyword) : k.isBrand }))
-      .filter(k => queryTypeFilter === 'All' || (queryTypeFilter === 'Branded' ? k.isBrand : !k.isBrand));
-    const recs = recommendKeywords(signals);
-    return { recommendations: recs, recSummary: summarizeRecommendations(recs, periodDays) };
-  }, [keywordSignals, isBranded, queryTypeFilter, periodDays]);
+  const { recommendations, summary: recSummary } = useMemo(
+    () => buildRecommendations(keywordSignals, isBranded, queryTypeFilter, periodDays),
+    [keywordSignals, isBranded, queryTypeFilter, periodDays]
+  );
 
   // 1. Data Processing Engine & Scorecard Calculations
   const { filteredData, metrics } = useMemo(() => {

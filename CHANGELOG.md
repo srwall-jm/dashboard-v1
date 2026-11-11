@@ -3,6 +3,9 @@
 ## Unreleased
 
 Added
+- Summary page as the landing page: headline saving, context figures, top keywords to reduce and to increase, how to act.
+- Navigation with section names grouped as Summary, Decide and Understand. Header shows what each section answers.
+- Client view (hides menu, filters and settings) and Print / PDF.
 - Keyword recommendations in Search Efficiency: reduce, hold or increase per keyword, with the reason, the suggested spend, and the clicks kept by organic and at risk. Spend is never recommended to go to zero; the floor rises with competitive pressure (impression share lost to ad rank) and is higher for brand terms. Assumptions are listed in the panel.
 - Google Ads keyword load reads impression share, with a fallback and a notice when an account does not return it.
 
