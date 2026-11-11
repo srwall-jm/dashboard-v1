@@ -110,6 +110,8 @@ export interface KeywordRecommendation {
   // Paid clicks removed by the cut that are expected to be lost.
   clicksAtRisk: Range;
   conversionsAtRisk: Range;
+  // The same reason as `reason`, as a case and its figures, so it can be written in other languages.
+  why: { code: string; params: Record<string, string | number | boolean> } | null;
   // What an ad click that organic would not have got really costs.
   incrementalCpc: number | null;
   // INCREASE only: conversions the extra spend buys at today's cost per conversion. An estimate.
@@ -163,6 +165,7 @@ export const recommendKeyword = (
     isBrand: signal.isBrand,
     action: 'HOLD',
     reason: '',
+    why: null,
     pressure,
     risk: null,
     organicRank: signal.organicRank,
@@ -190,6 +193,7 @@ export const recommendKeyword = (
       action: 'NO_DATA',
       incrementalCpc: null,
       reason: `Fewer than ${settings.minPaidClicks} paid clicks in the period. Not enough data to recommend a change.`,
+    why: { code: 'tooFew', params: { min: settings.minPaidClicks } },
     };
   }
 
@@ -206,6 +210,7 @@ export const recommendKeyword = (
         ...base,
         action: 'HOLD',
         reason: `Brand term at organic position ${rankText(rank!)} with ${pressureText[pressure]} (${pct(signal.rankLostShare || 0)} of searches where the ad did not show or was outranked). Keep spend to defend the brand.`,
+      why: { code: 'brandDefend', params: { rank: rank!, pressure, lost: signal.rankLostShare || 0 } },
       };
     }
 
@@ -225,6 +230,7 @@ export const recommendKeyword = (
       clicksAtRisk: atRisk,
       conversionsAtRisk: { low: atRisk.low * cvr, high: atRisk.high * cvr },
       reason: `Organic position ${rankText(rank!)}${signal.isBrand ? ', brand term' : ''}, ${pressureText[pressure]}. Cut ${pct(cut)} and keep ${pct(1 - cut)} as the minimum, so a competitor cannot take the ad slot. Test in steps and watch total clicks (paid + organic).`,
+        why: { code: 'reduce', params: { rank: rank!, brand: signal.isBrand, pressure, cut, keep: 1 - cut } },
     };
   }
 
@@ -234,6 +240,7 @@ export const recommendKeyword = (
       action: 'HOLD',
       incrementalCpc: null,
       reason: 'No organic data was found for this exact keyword text in Search Console, so we cannot tell whether ads are the only presence. Check the search terms it triggers before changing spend.',
+      why: { code: 'noOrganicData', params: {} },
     };
   }
 
@@ -245,6 +252,7 @@ export const recommendKeyword = (
         ...base,
         action: 'HOLD',
         reason: `Paid is the only real presence here (organic position ${rankText(rank)}) and it converts, but impression share is not available, so room to grow cannot be measured.`,
+      why: { code: 'increaseNoShare', params: { rank } },
       };
     }
     if (efficient && signal.rankLostShare !== null && signal.rankLostShare >= settings.minRankLostForIncrease) {
@@ -255,6 +263,7 @@ export const recommendKeyword = (
         suggestedSpend: signal.cost * (1 + settings.increaseStep),
         expectedExtraConversions: cpa !== null && cpa > 0 ? (signal.cost * settings.increaseStep) / cpa : null,
         reason: `Organic position ${rankText(rank)}, so paid is the only real presence. It converts at or below the account average cost per conversion, and ${pct(signal.rankLostShare)} of searches are missed because the ad did not show or was outranked. Raise ${pct(settings.increaseStep)} and review.`,
+        why: { code: 'increase', params: { rank, lost: signal.rankLostShare, step: settings.increaseStep } },
       };
     }
     if (!efficient) {
@@ -262,12 +271,14 @@ export const recommendKeyword = (
         ...base,
         action: 'HOLD',
         reason: `Paid is the only real presence here, but its cost per conversion is above the account average. Fix efficiency before adding budget.`,
+        why: { code: 'inefficient', params: {} },
       };
     }
     return {
       ...base,
       action: 'HOLD',
       reason: `Paid is the only real presence here and already shows on most searches (only ${pct(signal.rankLostShare || 0)} missed). No room to grow by raising bids.`,
+        why: { code: 'noRoom', params: { lost: signal.rankLostShare || 0 } },
     };
   }
 
@@ -278,6 +289,7 @@ export const recommendKeyword = (
       reason: rank <= settings.maxRankForReduce
         ? `Organic position ${rankText(rank)} but fewer than ${settings.minOrganicClicks} organic clicks in the period. Keep paid until organic proves it gets the click.`
         : `Organic position ${rankText(rank)} is not strong enough to replace paid clicks. Keep spend; this is an SEO opportunity first.`,
+      why: rank <= settings.maxRankForReduce ? { code: 'topButFewClicks', params: { rank, min: settings.minOrganicClicks } } : { code: 'notStrong', params: { rank } },
     };
   }
 
@@ -285,6 +297,7 @@ export const recommendKeyword = (
     ...base,
     action: 'HOLD',
     reason: `Paid is the only real presence here and it has no conversions in the period. Review the keyword before changing budget.`,
+      why: { code: 'noConversions', params: {} },
   };
 };
 
@@ -444,13 +457,17 @@ export const buildRecommendations = (
     const key = r.keyword.trim().toLowerCase();
     if (r.action !== 'REDUCE' || !doNotReduce || !doNotReduce.has(key)) return r;
     const note = (doNotReduce.get(key) || '').trim();
-    return keepAsIs(r, `Marked "do not reduce" for this client${note ? `: ${note}` : ''}. The model would have proposed a cut of ${Math.round(-r.changePct * 100)}%.`);
+    return keepAsIs(
+      r,
+      `Marked "do not reduce" for this client${note ? `: ${note}` : ''}. The model would have proposed a cut of ${Math.round(-r.changePct * 100)}%.`,
+      { code: 'doNotReduce', params: { note, cut: -r.changePct } }
+    );
   });
   return { recommendations, summary: summarizeRecommendations(recommendations, periodDays) };
 };
 
 // Turns a recommendation into "keep as is", with the reason given.
-export const keepAsIs = (r: KeywordRecommendation, reason: string): KeywordRecommendation => ({
+export const keepAsIs = (r: KeywordRecommendation, reason: string, why: KeywordRecommendation['why'] = null): KeywordRecommendation => ({
   ...r,
   action: 'HOLD',
   risk: null,
@@ -462,6 +479,7 @@ export const keepAsIs = (r: KeywordRecommendation, reason: string): KeywordRecom
   conversionsAtRisk: { low: 0, high: 0 },
   expectedExtraConversions: null,
   reason,
+  why,
 });
 
 // ---- Rules a client can change ----

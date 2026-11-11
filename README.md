@@ -98,6 +98,12 @@ In Spend recommendations, the last column of the keyword table records what was 
 
 For a shared client the plan is stored with it and the whole team sees it. Otherwise it is kept in the browser. The tool does not yet measure what happened to clicks after a change was applied.
 
+## Languages
+
+The selector in the page header switches what the client reads between English and Spanish. The texts live in `i18n.tsx`: the English sentence is written in the code and is also the key, and each language has a dictionary. A sentence with no translation is shown in English. To add a language, add a dictionary there and its entry in `LANGS`.
+
+The reason given for each keyword comes from the model as a case and its figures (`why` in `recommendations.ts`), so each language writes its own sentence.
+
 ## Known limits
 
 - Without Cloudflare Access configured (see "Restricting access"), the login screen identifies the user but does not restrict who can sign in.

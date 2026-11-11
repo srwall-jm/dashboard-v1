@@ -12,6 +12,7 @@ import { generateMockBridgeData, generateMockAiTrafficData, generateMockKeywordS
 import { KeywordSignal, ShareRow, combineShares, buildRecommendations, RecommendationOverrides, settingsFromOverrides } from './recommendations';
 import { RecommendationRulesPanel } from './components/RecommendationRulesPanel';
 import { TAB_META } from './navigation';
+import { Lang, LANGS, LangProvider, isLang, translate } from './i18n';
 import { buildSnapshot } from './snapshots';
 import { Plan, PlanItem, withPlanItem, doNotReduceMap, loadLocalPlan, saveLocalPlan, fetchSharedPlan, saveSharedPlanItem } from './plan';
 import { MonthlyReport } from './components/MonthlyReport';
@@ -194,6 +195,23 @@ const App: React.FC = () => {
     });
   };
 
+  // --- Language of what the client reads, per client ---
+  const [langByClient, setLangByClient] = useState<Record<string, Lang>>(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('lang_by_client') || '{}');
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch { return {}; }
+  });
+  const lang: Lang = langByClient[adsClientKey] || 'en';
+  const setLangForClient = (key: string, value: Lang) => {
+    setLangByClient(prev => {
+      const next = { ...prev, [key]: value };
+      try { localStorage.setItem('lang_by_client', JSON.stringify(next)); } catch { /* still applies for this session */ }
+      return next;
+    });
+  };
+  const t = (text: string, params?: Record<string, string | number>) => translate(lang, text, params);
+
   // --- Brand terms, per client. No default: a guessed regex silently changes which keywords are protected. ---
   const [brandByClient, setBrandByClient] = useState<Record<string, string>>(() => {
     try {
@@ -261,6 +279,7 @@ const App: React.FC = () => {
     // Always set, even when empty: a client saved without brand terms must not inherit another client's.
     setBrandForClient(clientKeyOf(profile.ga4PropertyId, profile.gscSiteUrl), profile.brandRegex || '');
     setRulesForClient(clientKeyOf(profile.ga4PropertyId, profile.gscSiteUrl), profile.recommendation || null);
+    if (isLang(profile.language)) setLangForClient(clientKeyOf(profile.ga4PropertyId, profile.gscSiteUrl), profile.language);
     if (profile.adsAccountIds.length > 0) {
       const key = clientKeyOf(profile.ga4PropertyId, profile.gscSiteUrl);
       setPinnedAdsAccounts(prev => {
@@ -323,6 +342,7 @@ const App: React.FC = () => {
     adsAccountIds: activeAdsAccounts.map(a => a.id),
     brandRegex: brandRegexStr,
     recommendation: rulesByClient[adsClientKey] || undefined,
+    language: lang,
   });
 
   const handleSaveClientProfile = async (id: string, profile: ClientProfileInput) => {
@@ -2285,7 +2305,7 @@ const App: React.FC = () => {
   };
   
   const periodDays = Math.round((parseLocalDate(filters.dateRange.end).getTime() - parseLocalDate(filters.dateRange.start).getTime()) / 86400000) + 1;
-  const periodLabel = `${filters.dateRange.start} to ${filters.dateRange.end}`;
+  const periodLabel = t('{start} to {end}', { start: filters.dateRange.start, end: filters.dateRange.end });
   const clientName = activeProfile?.name || (gscAuth?.site?.siteUrl || '').replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').replace(/\/$/, '') || ga4Auth?.property?.name || '';
   const summaryRecs = useMemo(
     () => buildRecommendations(keywordSignals, isBranded, filters.queryType, periodDays, recommendationSettings, doNotReduceMap(plan)),
@@ -2390,6 +2410,7 @@ const App: React.FC = () => {
   }
   
   return (
+    <LangProvider value={lang}>
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
       <button 
         onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
@@ -2484,7 +2505,8 @@ const App: React.FC = () => {
       
       <main className={`flex-1 transition-all duration-300 ease-in-out p-5 md:p-8 xl:p-12 overflow-x-hidden print:ml-0 print:p-0 ${isSidebarOpen && !clientView ? 'xl:ml-60' : 'ml-0'}`}>
         <header className="flex flex-col gap-6 mb-10">
-          <div className="flex items-center gap-6">
+          {/* Wraps on narrow screens: logo and menu button, then the title on its own line, then the buttons. */}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
             <div className={`items-center gap-2 print:flex ${isSidebarOpen && !clientView ? 'hidden' : 'flex'}`}>
               <img src="/logo.png" alt="OneSearch Logo" className="w-8 h-8 rounded-xl object-cover" />
               <h1 className="text-xl font-bold text-slate-800 tracking-tighter">OneSearch</h1>
@@ -2502,26 +2524,26 @@ const App: React.FC = () => {
                 <Menu size={20} className="group-hover:scale-110 transition-transform" />
               </button>
             )}
-            <div>
+            <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
               <div className={`items-center gap-2 mb-2 print:hidden ${clientView ? 'hidden' : 'flex'}`} role="status">
                 <span className={`w-2 h-2 rounded-full ${isAnythingLoading ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} aria-hidden="true" />
                 <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
                   {isLoadingGa4 ? 'Syncing GA4...' : isLoadingGsc ? 'Syncing GSC...' : isLoadingGoogleAds ? 'Syncing Google Ads...' : isLoadingBridge ? 'Joining Data...' : isLoadingAi ? 'Scanning AI...' : 'Dashboard Active'}
                 </span>
               </div>
-              <h2 className="jf-display text-4xl md:text-5xl text-slate-900">{TAB_META[activeTab].title}</h2>
+              <h2 className="jf-display text-4xl md:text-5xl text-slate-900">{t(TAB_META[activeTab].title)}</h2>
               <p className="text-sm font-semibold text-jf-gold mt-1.5">
-                <span className="print:hidden">{clientView ? [clientName, periodLabel].filter(Boolean).join(' · ') : TAB_META[activeTab].question}</span>
+                <span className="print:hidden">{clientView ? [clientName, periodLabel].filter(Boolean).join(' · ') : t(TAB_META[activeTab].question)}</span>
                 <span className="hidden print:inline">
-                  {[clientName || 'Client not named', `${periodLabel} (${periodDays} days)`, `Prepared with OneSearch on ${formatDate(new Date())}`].join(' · ')}
+                  {[clientName || t('Client not named'), `${periodLabel} (${t('{n} days', { n: periodDays })})`, t('Prepared with OneSearch on {date}', { date: formatDate(new Date()) })].join(' · ')}
                 </span>
               </p>
             </div>
 
-            <div className="ml-auto flex items-center gap-2 print:hidden">
+            <div className="sm:ml-auto flex flex-wrap items-center gap-2 print:hidden">
               {clientView && (
                 <div className="flex rounded-lg border border-slate-200 bg-white p-0.5" role="group" aria-label="Page">
-                  {([[DashboardTab.SUMMARY, 'Summary'], [DashboardTab.SEARCH_EFFICIENCY, 'Keyword detail']] as const).map(([tab, label]) => (
+                  {([[DashboardTab.SUMMARY, t('Summary')], [DashboardTab.SEARCH_EFFICIENCY, t('Keyword detail')]] as [DashboardTab, string][]).map(([tab, label]) => (
                     <button
                       key={tab}
                       type="button"
@@ -2534,19 +2556,28 @@ const App: React.FC = () => {
                   ))}
                 </div>
               )}
+              <select
+                aria-label={t('Language')}
+                title={t('Language')}
+                value={lang}
+                onChange={e => { if (isLang(e.target.value)) setLangForClient(adsClientKey, e.target.value); }}
+                className="bg-white border border-slate-200 rounded-xl text-[11px] font-bold uppercase tracking-wide text-slate-600 px-3 py-2 outline-none cursor-pointer hover:border-slate-400"
+              >
+                {LANGS.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+              </select>
               <button
                 onClick={() => setClientView(v => !v)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wide border transition-colors ${clientView ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'}`}
                 title="Hide menu, filters and settings to present this page"
               >
-                <Presentation size={14} /> {clientView ? 'Exit client view' : 'Client view'}
+                <Presentation size={14} /> {clientView ? t('Exit client view') : t('Client view')}
               </button>
               <button
                 onClick={() => window.print()}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wide bg-white text-slate-600 border border-slate-200 hover:border-slate-400 transition-colors"
                 title="Print this page or save it as PDF"
               >
-                <Printer size={14} /> Print / PDF
+                <Printer size={14} /> {t('Print / PDF')}
               </button>
             </div>
           </div>
@@ -2824,8 +2855,8 @@ const App: React.FC = () => {
           </button>
         </div>
         <footer className="hidden print:flex justify-between items-center mt-8 pt-3 border-t border-slate-200 text-[9px] text-slate-500">
-          <span>Source: Google Ads, Google Search Console and GA4 · {periodLabel}</span>
-          <span>© {new Date().getFullYear()} Jellyfish · Proprietary &amp; Confidential</span>
+          <span>{t('Source: Google Ads, Google Search Console and GA4')} · {periodLabel}</span>
+          <span>© {new Date().getFullYear()} Jellyfish · {t('Proprietary & Confidential')}</span>
         </footer>
       </main>
       {isLoadingBridge && (
@@ -2872,6 +2903,7 @@ const App: React.FC = () => {
         </div>
       )}
     </div>
+    </LangProvider>
   );
 };
 

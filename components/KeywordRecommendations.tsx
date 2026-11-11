@@ -7,6 +7,7 @@ import {
 import { ACTION_STYLE, PRESSURE_STYLE, PRESSURE_HELP } from '../theme';
 import { Plan, PlanItem, PlanStatus, EMPTY_ITEM, PLAN_STATUS_LABEL, planKeyOf, countPlan } from '../plan';
 import { exportToCSV } from '../utils';
+import { useI18n } from '../i18n';
 
 const ACTION_ICON: Record<RecAction, React.ReactNode> = {
   REDUCE: <ArrowDownRight size={13} aria-hidden="true" />,
@@ -25,28 +26,31 @@ const PAGE = 25;
 
 // Three small bars, so pressure levels still read in greyscale print.
 export const PressureBadge: React.FC<{ pressure: KeywordRecommendation['pressure']; impressionShare?: number | null; rankLostShare?: number | null }> = ({ pressure, impressionShare, rankLostShare }) => {
+  const { tr } = useI18n();
   const style = PRESSURE_STYLE[pressure];
   const detail = rankLostShare !== null && rankLostShare !== undefined
-    ? ` Your ad did not show or was outranked on ${pct(rankLostShare)} of searches.`
-    : impressionShare !== null && impressionShare !== undefined ? ` Your ad shows on ${pct(impressionShare)} of searches.` : '';
+    ? tr(' Your ad did not show or was outranked on {share} of searches.', { share: pct(rankLostShare) })
+    : impressionShare !== null && impressionShare !== undefined ? tr(' Your ad shows on {share} of searches.', { share: pct(impressionShare) }) : '';
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap ${style.badge}`} title={`${PRESSURE_HELP}${detail}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap ${style.badge}`} title={`${tr(PRESSURE_HELP)}${detail}`}>
       <span className="inline-flex items-end gap-px" aria-hidden="true">
         {[1, 2, 3].map(n => (
           <span key={n} className={`w-1 rounded-sm ${n <= style.bars ? 'bg-current' : 'bg-current opacity-25'}`} style={{ height: 4 + n * 2 }} />
         ))}
       </span>
-      {style.label}
+      {tr(style.label)}
     </span>
   );
 };
 
-const effectText = (r: KeywordRecommendation, money: (v: number) => string): string => {
-  if (r.action === 'REDUCE') return `May lose ${range(r.clicksAtRisk)} clicks`;
+type I18n = ReturnType<typeof useI18n>;
+
+const effectText = (r: KeywordRecommendation, money: (v: number) => string, i18n: I18n): string => {
+  if (r.action === 'REDUCE') return i18n.tr('May lose {clicks} clicks', { clicks: i18n.range(r.clicksAtRisk) });
   if (r.action === 'INCREASE') {
     const extra = r.suggestedSpend - r.currentSpend;
     return r.expectedExtraConversions && r.expectedExtraConversions >= 0.5
-      ? `+${money(extra)} · about ${int(r.expectedExtraConversions)} more conversions`
+      ? `+${money(extra)}${i18n.tr(' · about {n} more conversions', { n: i18n.int(r.expectedExtraConversions) })}`
       : `+${money(extra)}`;
   }
   return '—';
@@ -59,10 +63,11 @@ const today = () => {
 
 // What was agreed with the client for one keyword. Editable for the analyst, read-only for the client.
 const PlanCell: React.FC<{ keyword: string; item: PlanItem; onChange?: (item: PlanItem) => void }> = ({ keyword, item, onChange }) => {
+  const { tr } = useI18n();
   if (!onChange) {
     const parts = [
-      item.status !== 'none' ? `${PLAN_STATUS_LABEL[item.status]}${item.appliedOn ? ` on ${item.appliedOn}` : ''}` : '',
-      item.doNotReduce ? 'Do not reduce' : '',
+      item.status !== 'none' ? `${tr(PLAN_STATUS_LABEL[item.status])}${item.appliedOn ? tr(' on {date}', { date: item.appliedOn }) : ''}` : '',
+      item.doNotReduce ? tr('Do not reduce') : '',
       item.note,
     ].filter(Boolean);
     return <span className="text-xs text-slate-700">{parts.length > 0 ? parts.join(' · ') : '—'}</span>;
@@ -71,7 +76,7 @@ const PlanCell: React.FC<{ keyword: string; item: PlanItem; onChange?: (item: Pl
     <div className="flex flex-col gap-1.5 min-w-[170px]">
       <div className="flex items-center gap-1.5">
         <select
-          aria-label={`Plan for ${keyword}`}
+          aria-label={tr('Plan for {keyword}', { keyword })}
           value={item.status}
           onChange={e => {
             const status = e.target.value as PlanStatus;
@@ -79,12 +84,12 @@ const PlanCell: React.FC<{ keyword: string; item: PlanItem; onChange?: (item: Pl
           }}
           className="bg-white border border-slate-200 rounded-md text-xs font-semibold text-slate-700 px-1.5 py-1 outline-none cursor-pointer"
         >
-          {(Object.keys(PLAN_STATUS_LABEL) as PlanStatus[]).map(st => <option key={st} value={st}>{PLAN_STATUS_LABEL[st]}</option>)}
+          {(Object.keys(PLAN_STATUS_LABEL) as PlanStatus[]).map(st => <option key={st} value={st}>{tr(PLAN_STATUS_LABEL[st])}</option>)}
         </select>
         {(item.status === 'applied' || item.status === 'reverted') && (
           <input
             type="date"
-            aria-label={`Date applied for ${keyword}`}
+            aria-label={tr('Date applied for {keyword}', { keyword })}
             value={item.appliedOn || ''}
             max={today()}
             onChange={e => onChange({ ...item, appliedOn: e.target.value || today() })}
@@ -94,17 +99,17 @@ const PlanCell: React.FC<{ keyword: string; item: PlanItem; onChange?: (item: Pl
       </div>
       <input
         type="text"
-        aria-label={`Note for ${keyword}`}
+        aria-label={tr('Note for {keyword}', { keyword })}
         key={`${keyword}:${item.note}`}
         defaultValue={item.note}
-        placeholder="Note"
+        placeholder={tr('Note')}
         maxLength={300}
         onBlur={e => { if (e.target.value.trim() !== item.note) onChange({ ...item, note: e.target.value.trim() }); }}
         className="bg-white border border-slate-200 rounded-md text-xs text-slate-700 px-1.5 py-1 outline-none"
       />
       <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer">
         <input type="checkbox" checked={item.doNotReduce} onChange={e => onChange({ ...item, doNotReduce: e.target.checked })} className="w-3.5 h-3.5 accent-slate-900" />
-        Do not reduce
+        {tr('Do not reduce')}
       </label>
     </div>
   );
@@ -119,6 +124,8 @@ const RecTable: React.FC<{
   plan?: Plan; // shown as a column when given
   onPlanChange?: (keyword: string, item: PlanItem) => void; // editable when given
 }> = ({ rows, money, sort, onSort, caption, plan, onPlanChange }) => {
+  const i18n = useI18n();
+  const { tr } = i18n;
   const header = (label: string, key: SortKey | null, align: 'left' | 'right' = 'left') => {
     const active = Boolean(sort && key && sort.key === key);
     return (
@@ -142,15 +149,15 @@ const RecTable: React.FC<{
       {caption && <caption className="sr-only">{caption}</caption>}
       <thead>
         <tr className="border-b border-slate-200">
-          {header('Keyword', 'keyword')}
-          {header('Action', null)}
-          {header('Organic position', 'organicRank', 'right')}
-          {header('Spend now', 'currentSpend', 'right')}
-          {header('Suggested', 'suggestedSpend', 'right')}
-          {header('Expected effect', 'impact')}
-          {header('Auction pressure', null)}
-          {header('Why', null)}
-          {plan && header('Agreed plan', null)}
+          {header(tr('Keyword'), 'keyword')}
+          {header(tr('Action'), null)}
+          {header(tr('Organic position'), 'organicRank', 'right')}
+          {header(tr('Spend now'), 'currentSpend', 'right')}
+          {header(tr('Suggested'), 'suggestedSpend', 'right')}
+          {header(tr('Expected effect'), 'impact')}
+          {header(tr('Auction pressure'), null)}
+          {header(tr('Why'), null)}
+          {plan && header(tr('Agreed plan'), null)}
         </tr>
       </thead>
       <tbody>
@@ -160,19 +167,19 @@ const RecTable: React.FC<{
             <tr key={r.keyword} className="border-b border-slate-100 align-top">
               <td className="py-3 px-3 text-[13px] font-semibold text-slate-900 max-w-[220px]">
                 <span className="break-words">{r.keyword}</span>
-                {r.isBrand && <span className="ml-2 px-1.5 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600">Brand</span>}
+                {r.isBrand && <span className="ml-2 px-1.5 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600">{tr('Brand')}</span>}
               </td>
               <td className="py-3 px-3">
                 <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap ${style.badge}`}>
-                  {ACTION_ICON[r.action]} {style.label}{r.changePct !== 0 ? ` ${r.changePct > 0 ? '+' : ''}${Math.round(r.changePct * 100)}%` : ''}
+                  {ACTION_ICON[r.action]} {tr(style.label)}{r.changePct !== 0 ? ` ${r.changePct > 0 ? '+' : ''}${Math.round(r.changePct * 100)}%` : ''}
                 </span>
               </td>
-              <td className="py-3 px-3 text-[13px] font-medium text-slate-700 text-right tabular-nums">{r.organicRank === null ? '—' : r.organicRank.toFixed(1)}</td>
+              <td className="py-3 px-3 text-[13px] font-medium text-slate-700 text-right tabular-nums">{r.organicRank === null ? '—' : i18n.dec(r.organicRank, 1)}</td>
               <td className="py-3 px-3 text-[13px] font-medium text-slate-700 text-right tabular-nums">{money(r.currentSpend)}</td>
               <td className="py-3 px-3 text-[13px] font-bold text-slate-900 text-right tabular-nums">{r.changePct === 0 ? '—' : money(r.suggestedSpend)}</td>
-              <td className="py-3 px-3 text-[13px] font-medium text-slate-700 tabular-nums">{effectText(r, money)}</td>
+              <td className="py-3 px-3 text-[13px] font-medium text-slate-700 tabular-nums">{effectText(r, money, i18n)}</td>
               <td className="py-3 px-3"><PressureBadge pressure={r.pressure} impressionShare={r.impressionShare} rankLostShare={r.rankLostShare} /></td>
-              <td className="py-3 px-3 text-xs text-slate-600 max-w-[320px]">{r.reason}</td>
+              <td className="py-3 px-3 text-xs text-slate-600 max-w-[320px]">{i18n.reason(r)}</td>
               {plan && (
                 <td className="py-3 px-3">
                   <PlanCell keyword={r.keyword} item={plan[planKeyOf(r.keyword)] || EMPTY_ITEM} onChange={onPlanChange ? item => onPlanChange(r.keyword, item) : undefined} />
@@ -216,8 +223,12 @@ export const KeywordRecommendations: React.FC<{
   const [showMethod, setShowMethod] = useState(false);
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'impact', dir: 'desc' });
 
-  const money = (value: number) => `${withCurrency(currencySymbol, int(value))}`;
-  const money2 = (value: number) => `${withCurrency(currencySymbol, value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}`;
+  const i18n = useI18n();
+  const { tr } = i18n;
+  const money = (value: number) => i18n.money(currencySymbol, value);
+  const money2 = (value: number) => i18n.money(currencySymbol, value, 2);
+  const range = i18n.range;
+  const int = i18n.int;
 
   // "Impact" puts the biggest money move first, whether it is a cut or a raise.
   const impactOf = (r: KeywordRecommendation) => Math.abs(r.suggestedSpend - r.currentSpend);
@@ -266,16 +277,16 @@ export const KeywordRecommendations: React.FC<{
       'Ad shown on % of searches': r.impressionShare === null ? '' : Math.round(r.impressionShare * 100),
       'Searches where the ad did not show or was outranked %': r.rankLostShare === null ? '' : Math.round(r.rankLostShare * 100),
       'Auction pressure': r.pressure,
-      Why: r.reason,
+      Why: i18n.reason(r),
     })), 'Keyword_Recommendations');
   };
 
   const chips: { key: Filter; label: string; count: number }[] = [
-    { key: 'REDUCE', label: ACTION_STYLE.REDUCE.label, count: summary.counts.REDUCE },
-    { key: 'INCREASE', label: ACTION_STYLE.INCREASE.label, count: summary.counts.INCREASE },
-    { key: 'HOLD', label: ACTION_STYLE.HOLD.label, count: summary.counts.HOLD },
-    { key: 'NO_DATA', label: ACTION_STYLE.NO_DATA.label, count: summary.counts.NO_DATA },
-    { key: 'ALL', label: 'All', count: recommendations.length },
+    { key: 'REDUCE', label: tr(ACTION_STYLE.REDUCE.label), count: summary.counts.REDUCE },
+    { key: 'INCREASE', label: tr(ACTION_STYLE.INCREASE.label), count: summary.counts.INCREASE },
+    { key: 'HOLD', label: tr(ACTION_STYLE.HOLD.label), count: summary.counts.HOLD },
+    { key: 'NO_DATA', label: tr(ACTION_STYLE.NO_DATA.label), count: summary.counts.NO_DATA },
+    { key: 'ALL', label: tr('All'), count: recommendations.length },
   ];
 
   const s = settings || DEFAULT_SETTINGS;
@@ -292,13 +303,12 @@ export const KeywordRecommendations: React.FC<{
     <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200">
       <div className="flex flex-col md:flex-row justify-between items-start gap-4 mb-6">
         <div>
-          <h3 className="jf-display text-2xl text-slate-900">Where paid spend can move</h3>
+          <h3 className="jf-display text-2xl text-slate-900">{tr('Where paid spend can move')}</h3>
           <p className="text-xs font-medium text-slate-600 mt-1">
-            {[clientName, periodLabel, `${periodDays} day${periodDays !== 1 ? 's' : ''}`].filter(Boolean).join(' · ')}
+            {[clientName, periodLabel, tr('{n} days', { n: periodDays })].filter(Boolean).join(' · ')}
           </p>
           <p className="text-sm text-slate-600 mt-2 max-w-2xl">
-            Keyword by keyword: reduce where you already rank at the top organically, increase where organic is beyond page one and have room.
-            No keyword goes to zero. We keep a minimum everywhere so a competitor cannot take your ad slot.
+            {tr('Keyword by keyword: reduce where you already rank at the top organically, increase where organic is beyond page one and ads have room. No keyword goes to zero: we keep a minimum everywhere so a competitor cannot take your ad slot.')}
           </p>
         </div>
         <button
@@ -307,65 +317,67 @@ export const KeywordRecommendations: React.FC<{
           disabled={rows.length === 0}
           className={`${interactiveClass} flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:border-slate-400 disabled:opacity-40 flex-shrink-0`}
         >
-          <FileText size={14} aria-hidden="true" /> Export CSV
+          <FileText size={14} aria-hidden="true" /> {tr('Export CSV')}
         </button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
         <Card
-          label="Can come down"
+          label={tr('Can come down')}
           value={money(summary.spendCut)}
-          note={<>in this period · about {money(summary.spendCutMonthly)} a month · {pct(summary.spendCutShare)} of keyword spend</>}
+          note={tr('in this period · about {monthly} a month · {share} of keyword spend', { monthly: money(summary.spendCutMonthly), share: pct(summary.spendCutShare) })}
         />
         <Card
-          label="Real cost per added click"
-          value={summary.addedClickCost ? `${money2(summary.addedClickCost.low)} to ${money2(summary.addedClickCost.high)}` : '—'}
+          label={tr('Real cost per added click')}
+          value={summary.addedClickCost ? tr('{low} to {high}', { low: money2(summary.addedClickCost.low), high: money2(summary.addedClickCost.high) }) : '—'}
           note={summary.addedClickCost && summary.nominalCpc !== null
-            ? <>An ad click here looks like it costs {money2(summary.nominalCpc)}, but part of those clicks would arrive through the organic result anyway.</>
-            : 'Shown when there are keywords to reduce.'}
+            ? tr('An ad click here looks like it costs {cpc}, but part of those clicks would arrive through the organic result anyway.', { cpc: money2(summary.nominalCpc) })
+            : tr('Shown when there are keywords to reduce.')}
         />
         <Card
-          label="Clicks you may lose"
+          label={tr('Clicks you may lose')}
           value={range(summary.clicksAtRisk)}
           note={<>
-            {summary.lossShareOfSearch ? `${pct(summary.lossShareOfSearch.low)} to ${pct(summary.lossShareOfSearch.high)} of all search clicks on these keywords` : 'paid clicks organic is not expected to pick up'}
-            {summary.conversionsAtRisk.high >= 0.5 ? ` · ${range(summary.conversionsAtRisk)} conversions` : ''}. This is the price of the saving.
+            {summary.lossShareOfSearch
+              ? tr('{share} of all search clicks on these keywords', { share: tr('{low} to {high}', { low: pct(summary.lossShareOfSearch.low), high: pct(summary.lossShareOfSearch.high) }) })
+              : tr('paid clicks organic is not expected to pick up')}
+            {summary.conversionsAtRisk.high >= 0.5 ? tr(' · {conversions} conversions', { conversions: range(summary.conversionsAtRisk) }) : ''}. {tr('This is the price of the saving.')}
           </>}
         />
         <Card
-          label="Clicks that still arrive"
+          label={tr('Clicks that still arrive')}
           value={range(summary.clicksRecovered)}
-          note="of the paid clicks removed, expected to come through your organic result instead"
+          note={tr('of the paid clicks removed, expected to come through your organic result instead')}
         />
         <Card
-          label="Add budget"
+          label={tr('Add budget')}
           value={summary.counts.INCREASE > 0 ? money(summary.spendToIncrease) : '—'}
           note={summary.counts.INCREASE > 0
-            ? <>on {summary.counts.INCREASE} keyword{summary.counts.INCREASE !== 1 ? 's' : ''} where organic is beyond page one{summary.extraConversions >= 0.5 ? ` · about ${int(summary.extraConversions)} more conversions` : ''}</>
-            : 'No keyword meets the conditions in this period.'}
+            ? <>{tr('on {keywords} where organic is beyond page one', { keywords: i18n.keywords(summary.counts.INCREASE) })}{summary.extraConversions >= 0.5 ? tr(' · about {n} more conversions', { n: int(summary.extraConversions) }) : ''}</>
+            : tr('No keyword meets the conditions in this period.')}
         />
       </div>
 
       {plan && hasRecs && (
         <p className="mb-4 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-700">
-          <span className="font-bold text-slate-900">Agreed plan:</span>{' '}
+          <span className="font-bold text-slate-900">{tr('Agreed plan')}:</span>{' '}
           {planHasEntries
-            ? `${planCounts.agreed} agreed · ${planCounts.applied} applied · ${planCounts.reverted} reverted · ${planCounts.doNotReduce} marked do not reduce.`
-            : 'nothing recorded yet. Use the last column to note what was agreed with the client and when it was applied.'}{' '}
-          <span className="print:hidden text-slate-500">{planShared ? 'Shared with the team.' : 'Saved in this browser only.'}</span>
+            ? tr('{agreed} agreed · {applied} applied · {reverted} reverted · {held} marked do not reduce.', { agreed: planCounts.agreed, applied: planCounts.applied, reverted: planCounts.reverted, held: planCounts.doNotReduce })
+            : tr('nothing recorded yet. Use the last column to note what was agreed with the client and when it was applied.')}{' '}
+          <span className="print:hidden text-slate-500">{planShared ? tr('Shared with the team.') : tr('Saved in this browser only.')}</span>
         </p>
       )}
 
       {!hasRecs ? (
         <p className="text-sm text-slate-600 py-8 text-center" role="status">
-          {isLoading ? 'Loading Google Ads keywords…' : 'Keyword recommendations need Google Ads keywords and Search Console. Connect both in Settings.'}
+          {isLoading ? tr('Loading Google Ads keywords…') : tr('Keyword recommendations need Google Ads keywords and Search Console. Connect both in Settings.')}
         </p>
       ) : (
         <>
           {/* Analyst: filter, search, sort */}
           <div className={interactiveClass}>
             <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 mb-4">
-              <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by action">
+              <div className="flex flex-wrap gap-2" role="group" aria-label={tr('Filter by action')}>
                 {chips.map(c => (
                   <button
                     type="button"
@@ -382,8 +394,8 @@ export const KeywordRecommendations: React.FC<{
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" aria-hidden="true" />
                 <input
                   type="search"
-                  aria-label="Search keyword"
-                  placeholder="Search keyword…"
+                  aria-label={tr('Search keyword')}
+                  placeholder={tr('Search keyword…')}
                   value={search}
                   onChange={e => { setSearch(e.target.value); setVisible(PAGE); }}
                   className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus-visible:ring-2 ring-slate-900/30"
@@ -391,13 +403,13 @@ export const KeywordRecommendations: React.FC<{
               </div>
             </div>
             {rows.length === 0 ? (
-              <p className="text-sm text-slate-600 py-8 text-center">No keywords in this group.</p>
+              <p className="text-sm text-slate-600 py-8 text-center">{tr('No keywords in this group.')}</p>
             ) : (
               <div className="overflow-x-auto">
-                <RecTable rows={rows.slice(0, visible)} money={money} sort={sort} onSort={handleSort} caption="Keyword recommendations" plan={plan} onPlanChange={onPlanChange} />
+                <RecTable rows={rows.slice(0, visible)} money={money} sort={sort} onSort={handleSort} caption={tr('Keyword recommendations')} plan={plan} onPlanChange={onPlanChange} />
                 {rows.length > visible && (
                   <button type="button" onClick={() => setVisible(v => v + PAGE)} className="mt-4 text-xs font-semibold text-slate-700 underline underline-offset-2 hover:text-slate-900">
-                    Show {Math.min(PAGE, rows.length - visible)} more of {rows.length}
+                    {tr('Show {n} more of {total}', { n: Math.min(PAGE, rows.length - visible), total: int(rows.length) })}
                   </button>
                 )}
               </div>
@@ -407,16 +419,16 @@ export const KeywordRecommendations: React.FC<{
           {/* Client view and print: the two complete tables */}
           <div className={`${deliverableClass} space-y-8`}>
             <section>
-              <h4 className="jf-display text-xl text-slate-900 mb-2">Reduce: {reduceRows.length} keyword{reduceRows.length !== 1 ? 's' : ''}</h4>
+              <h4 className="jf-display text-xl text-slate-900 mb-2">{tr('Reduce')}: {i18n.keywords(reduceRows.length)}</h4>
               {reduceRows.length === 0
-                ? <p className="text-sm text-slate-600">No keyword meets the conditions for a reduction in this period.</p>
-                : <div className="overflow-x-auto"><RecTable rows={reduceRows} money={money} caption="Keywords to reduce" plan={planHasEntries ? plan : undefined} /></div>}
+                ? <p className="text-sm text-slate-600">{tr('No keyword meets the conditions for a reduction in this period.')}</p>
+                : <div className="overflow-x-auto"><RecTable rows={reduceRows} money={money} caption={tr('Keywords to reduce')} plan={planHasEntries ? plan : undefined} /></div>}
             </section>
             <section>
-              <h4 className="jf-display text-xl text-slate-900 mb-2">Increase: {increaseRows.length} keyword{increaseRows.length !== 1 ? 's' : ''}</h4>
+              <h4 className="jf-display text-xl text-slate-900 mb-2">{tr('Increase')}: {i18n.keywords(increaseRows.length)}</h4>
               {increaseRows.length === 0
-                ? <p className="text-sm text-slate-600">No keyword meets the conditions for an increase in this period.</p>
-                : <div className="overflow-x-auto"><RecTable rows={increaseRows} money={money} caption="Keywords to increase" plan={planHasEntries ? plan : undefined} /></div>}
+                ? <p className="text-sm text-slate-600">{tr('No keyword meets the conditions for an increase in this period.')}</p>
+                : <div className="overflow-x-auto"><RecTable rows={increaseRows} money={money} caption={tr('Keywords to increase')} plan={planHasEntries ? plan : undefined} /></div>}
             </section>
           </div>
         </>
@@ -429,18 +441,18 @@ export const KeywordRecommendations: React.FC<{
           aria-expanded={showMethod || presentation}
           className={`${interactiveClass} flex items-center gap-1 text-xs font-semibold text-slate-700 hover:text-slate-900`}
         >
-          Assumptions and how this is calculated {showMethod ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
+          {tr('Assumptions and how this is calculated')} {showMethod ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
         </button>
         <div className={presentation || showMethod ? 'block' : 'hidden print:block'}>
-          <h4 className={`${deliverableClass} jf-display text-xl text-slate-900 mb-2`}>Assumptions</h4>
+          <h4 className={`${deliverableClass} jf-display text-xl text-slate-900 mb-2`}>{tr('Assumptions')}</h4>
           <ul className="mt-3 space-y-1.5 text-xs text-slate-600 list-disc pl-4 max-w-3xl">
-            {customRules && <li><strong>These rules were adjusted for this client in Settings.</strong> The figures below are the ones in use.</li>}
-            <li>Each Google Ads keyword is matched to the same search query in Search Console for the same period. Keywords with fewer than {s.minPaidClicks} paid clicks get no recommendation: {summary.judgedKeywords} of {recommendations.length} keywords are judged, covering {pct(summary.judgedSpendShare)} of spend.</li>
-            <li>Reduce is only proposed when the organic result is in the top {s.maxRankForReduce} and gets at least {s.minOrganicClicks} clicks. A keyword with no organic data for its exact text is kept as is, never increased. Positions 2 and 3 get half the cut of position 1.</li>
-            <li>The cut depends on auction pressure (how often your ad did not show or was outranked): up to {pct(s.maxCut.nonBrand.low)} when low, {pct(s.maxCut.nonBrand.medium)} when medium, {pct(s.maxCut.nonBrand.high)} when high. Brand terms: {pct(s.maxCut.brand.low)}, {pct(s.maxCut.brand.medium)} and {s.maxCut.brand.high > 0 ? pct(s.maxCut.brand.high) : 'no cut at all'} under high pressure. Unknown pressure counts as medium.</li>
-            <li>Clicks that still arrive: {pct(s.recovery.rank1)} of removed paid clicks at organic position 1, {pct(s.recovery.rank2to4)} at positions 2 to 4 (upper end; the lower end is half). {customRules ? 'These rates are set per client in Settings.' : "These rates come from a Google study across industries from 2012. Your own test results will replace them."}</li>
-            <li>Increase is proposed when organic is beyond position {s.minRankForIncrease} or absent, ads convert at or below the account average cost per conversion, and the ad did not show or was outranked on at least {pct(s.minRankLostForIncrease)} of searches. Extra conversions assume today's cost per conversion holds.</li>
-            <li>These are estimates to design a test, not a forecast. Change spend in steps and compare total clicks (paid + organic) before and after.</li>
+            {customRules && <li><strong>{tr('These rules were adjusted for this client in Settings.')}</strong> {tr('The figures below are the ones in use.')}</li>}
+            <li>{tr('Each Google Ads keyword is matched to the same search query in Search Console for the same period. Keywords with fewer than {min} paid clicks get no recommendation: {judged} of {total} keywords are judged, covering {share} of spend.', { min: s.minPaidClicks, judged: int(summary.judgedKeywords), total: int(recommendations.length), share: pct(summary.judgedSpendShare) })}</li>
+            <li>{tr('Reduce is only proposed when the organic result is in the top {top} and gets at least {clicks} clicks. A keyword with no organic data for its exact text is kept as is, never increased. Positions 2 and 3 get half the cut of position 1.', { top: s.maxRankForReduce, clicks: s.minOrganicClicks })}</li>
+            <li>{tr('The cut depends on auction pressure (how often your ad did not show or was outranked): up to {low} when low, {medium} when medium, {high} when high. Brand terms: {brandLow}, {brandMedium} and {brandHigh} under high pressure. Unknown pressure counts as medium.', { low: pct(s.maxCut.nonBrand.low), medium: pct(s.maxCut.nonBrand.medium), high: pct(s.maxCut.nonBrand.high), brandLow: pct(s.maxCut.brand.low), brandMedium: pct(s.maxCut.brand.medium), brandHigh: s.maxCut.brand.high > 0 ? pct(s.maxCut.brand.high) : tr('no cut at all') })}</li>
+            <li>{tr('Clicks that still arrive: {rank1} of removed paid clicks at organic position 1, {rank2to4} at positions 2 to 4 (upper end; the lower end is half).', { rank1: pct(s.recovery.rank1), rank2to4: pct(s.recovery.rank2to4) })} {customRules ? tr('These rates are set per client in Settings.') : tr('These rates come from a Google study across industries from 2012. Your own test results will replace them.')}</li>
+            <li>{tr('Increase is proposed when organic is beyond position {rank} or absent, ads convert at or below the account average cost per conversion, and the ad did not show or was outranked on at least {share} of searches. Extra conversions assume today\'s cost per conversion holds.', { rank: s.minRankForIncrease, share: pct(s.minRankLostForIncrease) })}</li>
+            <li>{tr('These are estimates to design a test, not a forecast. Change spend in steps and compare total clicks (paid + organic) before and after.')}</li>
           </ul>
         </div>
       </div>

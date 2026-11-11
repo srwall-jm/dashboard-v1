@@ -85,6 +85,7 @@ export const sanitizeProfile = (input) => {
       adsAccountIds,
       brandRegex,
       ...(recommendation ? { recommendation } : {}),
+      ...(input.language === 'en' || input.language === 'es' ? { language: input.language } : {}),
     },
   };
 };

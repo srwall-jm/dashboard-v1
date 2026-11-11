@@ -1,0 +1,324 @@
+// Language of what the client reads: Summary, recommendations, monthly report, plan, print.
+//
+// The English text is written in the code and is also the key: tr('Reduce here first').
+// A language that has no entry for a text shows the English, so nothing breaks while a
+// translation is incomplete. To add a language, add a dictionary like ES below.
+
+import React, { createContext, useContext } from 'react';
+import type { KeywordRecommendation } from './recommendations';
+import { withCurrency } from './utils';
+
+export type Lang = 'en' | 'es';
+export const LANGS: { code: Lang; label: string }[] = [
+  { code: 'en', label: 'English' },
+  { code: 'es', label: 'Español' },
+];
+export const isLang = (value: unknown): value is Lang => value === 'en' || value === 'es';
+
+type Params = Record<string, string | number>;
+
+const ES: Record<string, string> = {
+  // ---- navigation and page header ----
+  'Summary': 'Resumen',
+  'Spend recommendations': 'Recomendaciones de inversión',
+  'Organic vs Paid': 'Orgánico vs. pago',
+  'Markets': 'Mercados',
+  'URLs & keywords': 'URLs y keywords',
+  'Google Ads': 'Google Ads',
+  'AI traffic': 'Tráfico de IA',
+  'Decide': 'Decidir',
+  'Understand': 'Entender',
+  'Client': 'Cliente',
+  'Choose a client...': 'Elige un cliente...',
+  'Settings': 'Ajustes',
+  'Sign out': 'Cerrar sesión',
+  'Paid and organic as one channel': 'Pago y orgánico como un solo canal',
+  'Search summary': 'Resumen de búsqueda',
+  'Where paid spend can move, and what it costs.': 'Dónde se puede mover la inversión de pago y qué cuesta.',
+  'Keyword by keyword: reduce, hold or increase paid spend.': 'Keyword a keyword: reducir, mantener o aumentar la inversión de pago.',
+  'Organic vs Paid performance': 'Rendimiento orgánico vs. pago',
+  'How much each search channel brings, and how it is changing.': 'Cuánto aporta cada canal de búsqueda y cómo evoluciona.',
+  'SEO performance by country': 'Rendimiento SEO por país',
+  'Which markets drive organic traffic and revenue.': 'Qué mercados aportan tráfico e ingresos orgánicos.',
+  'URL and keyword analysis': 'Análisis de URLs y keywords',
+  'Organic performance by page and query, brand and non-brand.': 'Rendimiento orgánico por página y búsqueda, marca y no marca.',
+  'Google Ads performance': 'Rendimiento de Google Ads',
+  'Paid search spend, clicks and conversions by landing page.': 'Inversión, clics y conversiones de búsqueda de pago por página de destino.',
+  'AI traffic monitor': 'Monitor de tráfico de IA',
+  'Sessions arriving from ChatGPT, Perplexity, Claude and Gemini.': 'Sesiones que llegan desde ChatGPT, Perplexity, Claude y Gemini.',
+  'Client view': 'Vista de cliente',
+  'Exit client view': 'Salir de vista de cliente',
+  'Print / PDF': 'Imprimir / PDF',
+  'Keyword detail': 'Detalle por keyword',
+  'Language': 'Idioma',
+  '{start} to {end}': 'del {start} al {end}',
+  '{n} days': '{n} días',
+  'Client not named': 'Cliente sin nombre',
+  'Prepared with OneSearch on {date}': 'Preparado con OneSearch el {date}',
+  'Source: Google Ads, Google Search Console and GA4': 'Fuente: Google Ads, Google Search Console y GA4',
+  'Proprietary & Confidential': 'Propiedad y confidencial',
+
+  // ---- shared labels ----
+  'Reduce': 'Reducir',
+  'Increase': 'Aumentar',
+  'Keep as is': 'Mantener',
+  'Too few clicks': 'Pocos clics',
+  'Low': 'Baja',
+  'Medium': 'Media',
+  'High': 'Alta',
+  'Unknown': 'Desconocida',
+  'Brand': 'Marca',
+  '{low} to {high}': 'de {low} a {high}',
+  '{n} keyword': '{n} keyword',
+  '{n} keywords': '{n} keywords',
+  'How often your ad did not show or was outranked on this keyword. The higher it is, the less we cut.': 'Con qué frecuencia tu anuncio no se mostró o fue superado en esta keyword. Cuanto mayor es, menos recortamos.',
+  ' Your ad did not show or was outranked on {share} of searches.': ' Tu anuncio no se mostró o fue superado en el {share} de las búsquedas.',
+  ' Your ad shows on {share} of searches.': ' Tu anuncio se muestra en el {share} de las búsquedas.',
+
+  // ---- Summary ----
+  'The headline': 'El titular',
+  " (sample data, not a client's)": ' (datos de ejemplo, no de un cliente)',
+  'Loading Google Ads keywords…': 'Cargando las keywords de Google Ads…',
+  'Nothing to recommend yet. Connect Google Ads and Search Console in Settings to see which keywords can take less paid spend and which need more.': 'Todavía no hay nada que recomendar. Conecta Google Ads y Search Console en Ajustes para ver qué keywords admiten menos inversión de pago y cuáles necesitan más.',
+  'No recommendation yet: Search Console did not load, so paid keywords cannot be compared with their organic position.': 'Todavía no hay recomendación: Search Console no se ha cargado, así que no se pueden comparar las keywords de pago con su posición orgánica.',
+  "Connect Search Console in Settings, choose this client's site and refresh. Until then every keyword is kept as is.": 'Conecta Search Console en Ajustes, elige el sitio de este cliente y actualiza. Hasta entonces, todas las keywords se mantienen.',
+  'You can cut paid search by about <hl>{amount} a month ({share})</hl> on {keywords} where you already rank at the top organically.': 'Puedes recortar la búsqueda de pago en unos <hl>{amount} al mes ({share})</hl> en {keywords} donde ya posicionas arriba en orgánico.',
+  'You can cut paid search by about <hl>{amount} a month ({share})</hl> on {keywords} where you already rank at the top organically, and move {moved} of it to {moreKeywords} where organic is beyond page one.': 'Puedes recortar la búsqueda de pago en unos <hl>{amount} al mes ({share})</hl> en {keywords} donde ya posicionas arriba en orgánico, y mover {moved} a {moreKeywords} donde el orgánico está más allá de la primera página.',
+  'No keyword goes to zero: we keep a minimum everywhere so a competitor cannot take your ad slot.': 'Ninguna keyword se queda a cero: mantenemos un mínimo en todas para que un competidor no ocupe tu espacio de anuncio.',
+  'Expected loss: {clicks} clicks in a period like this one, which is why we test in steps.': 'Pérdida esperada: {clicks} clics en un periodo como este; por eso se prueba por pasos.',
+  'Expected loss: {clicks} clicks and {conversions} conversions in a period like this one, which is why we test in steps.': 'Pérdida esperada: {clicks} clics y {conversions} conversiones en un periodo como este; por eso se prueba por pasos.',
+  'No paid spend should come down this period. {keywords} where organic is beyond page one can take about <hl>{amount} more a month</hl>.': 'Este periodo no conviene bajar la inversión de pago. {keywords} donde el orgánico está más allá de la primera página admiten unos <hl>{amount} más al mes</hl>.',
+  'No change recommended this period. No keyword has both a top {n} organic result and room to cut safely.': 'Este periodo no se recomienda ningún cambio. Ninguna keyword tiene a la vez un resultado orgánico en el top {n} y margen para recortar con seguridad.',
+  'Keywords are only reduced when the organic result is in the top {n}, gets clicks, and the ad is not under pressure in the auction.': 'Solo se reduce una keyword cuando el resultado orgánico está en el top {n}, recibe clics y el anuncio no está bajo presión en la subasta.',
+  'See the keyword-by-keyword plan': 'Ver el plan keyword a keyword',
+  'Why it is worth testing': 'Por qué merece la pena probarlo',
+  'Real cost per added click': 'Coste real por clic añadido',
+  'On these keywords an ad click looks like it costs {cpc}, but part of those clicks would have arrived through the organic result anyway. This is what each click the ads really add costs.': 'En estas keywords un clic de anuncio parece costar {cpc}, pero parte de esos clics habría llegado igualmente por el resultado orgánico. Esto es lo que cuesta cada clic que los anuncios añaden de verdad.',
+  'Expected loss': 'Pérdida esperada',
+  '{clicks} clicks': '{clicks} clics',
+  '{share} of all search clicks on these keywords (paid + organic)': '{share} de todos los clics de búsqueda en estas keywords (pago + orgánico)',
+  'paid clicks organic is not expected to pick up': 'clics de pago que no se espera que recoja el orgánico',
+  ', and {conversions} conversions': ', y {conversions} conversiones',
+  '{clicks} of the clicks removed still arrive through your organic result.': '{clicks} de los clics retirados siguen llegando por tu resultado orgánico.',
+  'Auction pressure on these keywords': 'Presión en la subasta en estas keywords',
+  'How often your ad did not show or was outranked. The higher it is, the less we cut.': 'Con qué frecuencia tu anuncio no se mostró o fue superado. Cuanto mayor es, menos recortamos.',
+  'Reduce here first': 'Reducir primero aquí',
+  'Largest savings where you already rank in the top {n} organically.': 'Mayores ahorros donde ya posicionas en el top {n} orgánico.',
+  'Nothing to reduce in this period.': 'Nada que reducir en este periodo.',
+  'Organic position {rank} · may lose {clicks} clicks': 'Posición orgánica {rank} · puede perder {clicks} clics',
+  'Auction pressure': 'Presión en la subasta',
+  '{change} · saves {amount}': '{change} · ahorra {amount}',
+  'And {n} more in the keyword plan.': 'Y {n} más en el plan por keyword.',
+  'Add budget here': 'Añadir presupuesto aquí',
+  'Organic is beyond page one, ads convert efficiently, and the ad is missing from part of the searches.': 'El orgánico está más allá de la primera página, los anuncios convierten con eficiencia y el anuncio falta en parte de las búsquedas.',
+  'No keyword meets the conditions in this period.': 'Ninguna keyword cumple las condiciones en este periodo.',
+  'Organic position {rank}': 'Posición orgánica {rank}',
+  ' · your ad did not show or was outranked on {share} of searches': ' · tu anuncio no se mostró o fue superado en el {share} de las búsquedas',
+  ' · about {n} more conversions': ' · unas {n} conversiones más',
+  "Extra conversions are an estimate at today's cost per conversion.": 'Las conversiones adicionales son una estimación al coste por conversión actual.',
+  'Net effect in a period like this one:': 'Efecto neto en un periodo como este:',
+  '{down} down, {up} up,': '{down} menos, {up} más,',
+  '{amount} saved': '{amount} de ahorro',
+  '{amount} more invested': '{amount} más de inversión',
+  'How to run the test': 'Cómo hacer el test',
+  'Start with the reductions under low auction pressure. Lower bids or budgets in steps, not at once.': 'Empieza por las reducciones con presión baja en la subasta. Baja pujas o presupuestos por pasos, no de golpe.',
+  'Watch total clicks and conversions for each keyword (paid + organic), not paid alone.': 'Vigila los clics y conversiones totales de cada keyword (pago + orgánico), no solo los de pago.',
+  'Run each step for two weeks. Stop and go back one step if total clicks on a keyword fall by more than the upper figure shown here.': 'Mantén cada paso dos semanas. Para y vuelve un paso atrás si los clics totales de una keyword caen más que la cifra superior que se muestra aquí.',
+  'Move part of the saving to the keywords in "Add budget here".': 'Mueve parte del ahorro a las keywords de "Añadir presupuesto aquí".',
+  'Assumptions': 'Supuestos',
+  'These are estimates to design a test, not a forecast.': 'Son estimaciones para diseñar un test, no una previsión.',
+  'The share of clicks that still arrive ({rank1} at organic position 1, {rank2to4} at positions 2 to 4) starts from a Google study across industries from 2012. Your own test will replace it.': 'La parte de clics que sigue llegando ({rank1} en posición orgánica 1, {rank2to4} en posiciones 2 a 4) parte de un estudio de Google de 2012 con varios sectores. Tu propio test la sustituirá.',
+  'The more often your ad does not show or is outranked on a keyword, the smaller the cut. Brand terms are cut less. A keyword with no organic data for its exact text is kept as is.': 'Cuanto más a menudo tu anuncio no se muestra o es superado en una keyword, menor es el recorte. Los términos de marca se recortan menos. Una keyword sin datos orgánicos para su texto exacto se mantiene.',
+  'Only keywords with at least {min} paid clicks in the period are judged: {judged} of {total} keywords, covering {share} of spend.': 'Solo se valoran las keywords con al menos {min} clics de pago en el periodo: {judged} de {total} keywords, que cubren el {share} de la inversión.',
+  'Organic and Paid mean Organic Search and Paid Search only. Social, shopping and video are left out.': 'Orgánico y pago significan solo Organic Search y Paid Search. Social, shopping y vídeo quedan fuera.',
+  'Search in this period': 'La búsqueda en este periodo',
+  'Organic Search sessions': 'Sesiones de Organic Search',
+  'Paid Search sessions': 'Sesiones de Paid Search',
+  'Paid share of search': 'Peso del pago en búsqueda',
+  'of search sessions come through ads': 'de las sesiones de búsqueda llegan por anuncios',
+  'Connect GA4 in Settings to see organic and paid sessions here.': 'Conecta GA4 en Ajustes para ver aquí las sesiones orgánicas y de pago.',
+  'Spend on keywords analysed': 'Inversión en las keywords analizadas',
+  'Google Ads, this period': 'Google Ads, este periodo',
+  'Google Ads, this period. Whole account: {amount}.': 'Google Ads, este periodo. Cuenta completa: {amount}.',
+  '{change} vs previous · ': '{change} vs. anterior · ',
+
+  // ---- recommendations panel, plan and monthly report ----
+  'May lose {clicks} clicks': 'Puede perder {clicks} clics',
+  ' on {date}': ' el {date}',
+  'Do not reduce': 'No reducir',
+  'Plan for {keyword}': 'Plan para {keyword}',
+  'Date applied for {keyword}': 'Fecha de aplicación para {keyword}',
+  'Note for {keyword}': 'Nota para {keyword}',
+  'Note': 'Nota',
+  'Not decided': 'Sin decidir',
+  'Agreed': 'Acordado',
+  'Applied': 'Aplicado',
+  'Reverted': 'Revertido',
+  'Keyword': 'Keyword',
+  'Action': 'Acción',
+  'Organic position': 'Posición orgánica',
+  'Spend now': 'Inversión actual',
+  'Suggested': 'Sugerida',
+  'Expected effect': 'Efecto esperado',
+  'Why': 'Por qué',
+  'Agreed plan': 'Plan acordado',
+  'All': 'Todas',
+  'Where paid spend can move': 'Dónde se puede mover la inversión de pago',
+  'Keyword by keyword: reduce where you already rank at the top organically, increase where organic is beyond page one and ads have room. No keyword goes to zero: we keep a minimum everywhere so a competitor cannot take your ad slot.': 'Keyword a keyword: reducir donde ya posicionas arriba en orgánico, aumentar donde el orgánico está más allá de la primera página y los anuncios tienen margen. Ninguna keyword se queda a cero: mantenemos un mínimo en todas para que un competidor no ocupe tu espacio de anuncio.',
+  'Export CSV': 'Exportar CSV',
+  'Can come down': 'Se puede bajar',
+  'in this period · about {monthly} a month · {share} of keyword spend': 'en este periodo · unos {monthly} al mes · {share} de la inversión en keywords',
+  'An ad click here looks like it costs {cpc}, but part of those clicks would arrive through the organic result anyway.': 'Un clic de anuncio aquí parece costar {cpc}, pero parte de esos clics llegaría igualmente por el resultado orgánico.',
+  'Shown when there are keywords to reduce.': 'Se muestra cuando hay keywords que reducir.',
+  'Clicks you may lose': 'Clics que puedes perder',
+  '{share} of all search clicks on these keywords': '{share} de todos los clics de búsqueda en estas keywords',
+  ' · {conversions} conversions': ' · {conversions} conversiones',
+  'This is the price of the saving.': 'Es el precio del ahorro.',
+  'Clicks that still arrive': 'Clics que siguen llegando',
+  'of the paid clicks removed, expected to come through your organic result instead': 'de los clics de pago retirados, que se espera que lleguen por tu resultado orgánico',
+  'Add budget': 'Añadir presupuesto',
+  'on {keywords} where organic is beyond page one': 'en {keywords} donde el orgánico está más allá de la primera página',
+  '{agreed} agreed · {applied} applied · {reverted} reverted · {held} marked do not reduce.': '{agreed} acordadas · {applied} aplicadas · {reverted} revertidas · {held} marcadas como no reducir.',
+  'nothing recorded yet. Use the last column to note what was agreed with the client and when it was applied.': 'todavía no hay nada registrado. Usa la última columna para anotar lo acordado con el cliente y cuándo se aplicó.',
+  'Shared with the team.': 'Compartido con el equipo.',
+  'Saved in this browser only.': 'Guardado solo en este navegador.',
+  'Keyword recommendations need Google Ads keywords and Search Console. Connect both in Settings.': 'Las recomendaciones por keyword necesitan las keywords de Google Ads y Search Console. Conecta ambos en Ajustes.',
+  'Filter by action': 'Filtrar por acción',
+  'Search keyword': 'Buscar keyword',
+  'Search keyword…': 'Buscar keyword…',
+  'No keywords in this group.': 'No hay keywords en este grupo.',
+  'Show {n} more of {total}': 'Mostrar {n} más de {total}',
+  'Keyword recommendations': 'Recomendaciones por keyword',
+  'No keyword meets the conditions for a reduction in this period.': 'Ninguna keyword cumple las condiciones para una reducción en este periodo.',
+  'Keywords to reduce': 'Keywords a reducir',
+  'No keyword meets the conditions for an increase in this period.': 'Ninguna keyword cumple las condiciones para un aumento en este periodo.',
+  'Keywords to increase': 'Keywords a aumentar',
+  'Assumptions and how this is calculated': 'Supuestos y cómo se calcula',
+  'These rules were adjusted for this client in Settings.': 'Estas reglas se han ajustado para este cliente en Ajustes.',
+  'The figures below are the ones in use.': 'Las cifras de abajo son las que se están usando.',
+  'Each Google Ads keyword is matched to the same search query in Search Console for the same period. Keywords with fewer than {min} paid clicks get no recommendation: {judged} of {total} keywords are judged, covering {share} of spend.': 'Cada keyword de Google Ads se cruza con la misma búsqueda en Search Console para el mismo periodo. Las keywords con menos de {min} clics de pago no reciben recomendación: se valoran {judged} de {total} keywords, que cubren el {share} de la inversión.',
+  'Reduce is only proposed when the organic result is in the top {top} and gets at least {clicks} clicks. A keyword with no organic data for its exact text is kept as is, never increased. Positions 2 and 3 get half the cut of position 1.': 'Solo se propone reducir cuando el resultado orgánico está en el top {top} y recibe al menos {clicks} clics. Una keyword sin datos orgánicos para su texto exacto se mantiene, nunca se aumenta. Las posiciones 2 y 3 reciben la mitad del recorte que la posición 1.',
+  'The cut depends on auction pressure (how often your ad did not show or was outranked): up to {low} when low, {medium} when medium, {high} when high. Brand terms: {brandLow}, {brandMedium} and {brandHigh} under high pressure. Unknown pressure counts as medium.': 'El recorte depende de la presión en la subasta (con qué frecuencia tu anuncio no se mostró o fue superado): hasta el {low} con presión baja, {medium} con media y {high} con alta. Términos de marca: {brandLow}, {brandMedium} y {brandHigh} con presión alta. La presión desconocida cuenta como media.',
+  'no cut at all': 'ningún recorte',
+  'Clicks that still arrive: {rank1} of removed paid clicks at organic position 1, {rank2to4} at positions 2 to 4 (upper end; the lower end is half).': 'Clics que siguen llegando: {rank1} de los clics de pago retirados en posición orgánica 1, {rank2to4} en posiciones 2 a 4 (extremo superior; el inferior es la mitad).',
+  'These rates are set per client in Settings.': 'Estas tasas se fijan por cliente en Ajustes.',
+  'These rates come from a Google study across industries from 2012. Your own test results will replace them.': 'Estas tasas vienen de un estudio de Google de 2012 con varios sectores. Los resultados de tu propio test las sustituirán.',
+  'Increase is proposed when organic is beyond position {rank} or absent, ads convert at or below the account average cost per conversion, and the ad did not show or was outranked on at least {share} of searches. Extra conversions assume today\'s cost per conversion holds.': 'Se propone aumentar cuando el orgánico está más allá de la posición {rank}, los anuncios convierten igual o mejor que el coste por conversión medio de la cuenta y el anuncio no se mostró o fue superado en al menos el {share} de las búsquedas. Las conversiones adicionales suponen que se mantiene el coste por conversión actual.',
+  'These are estimates to design a test, not a forecast. Change spend in steps and compare total clicks (paid + organic) before and after.': 'Son estimaciones para diseñar un test, no una previsión. Cambia la inversión por pasos y compara los clics totales (pago + orgánico) antes y después.',
+  'not analysed': 'no analizada',
+  'None.': 'Ninguna.',
+  'now {action}': 'ahora {action}',
+  'was {action}': 'antes {action}',
+  'And {n} more.': 'Y {n} más.',
+  'Monthly report': 'Informe mensual',
+  'Save this client for the team (Settings, step 4) to keep a report each month and see what changed since the last one.': 'Guarda este cliente para el equipo (Ajustes, paso 4) para conservar un informe cada mes y ver qué ha cambiado desde el anterior.',
+  'Once shared clients are set up in Cloudflare, each month\'s report can be saved here and compared with the next.': 'Cuando los clientes compartidos estén configurados en Cloudflare, el informe de cada mes se podrá guardar aquí y comparar con el siguiente.',
+  'Report saved for the team.': 'Informe guardado para el equipo.',
+  'Report deleted.': 'Informe borrado.',
+  'Since {period}': 'Desde el periodo {period}',
+  'This period was saved by {who} on {date}.': 'Este periodo lo guardó {who} el {date}.',
+  'the team': 'el equipo',
+  'This period is not saved yet for {client}.': 'Este periodo aún no está guardado para {client}.',
+  'This period is not saved yet.': 'Este periodo aún no está guardado.',
+  'Compare with an earlier report': 'Comparar con un informe anterior',
+  'Compare with {period}': 'Comparar con {period}',
+  'Update saved report': 'Actualizar informe guardado',
+  'Save this report': 'Guardar este informe',
+  'No earlier report to compare with. Save this one, and next month this block will show which keywords changed and why.': 'No hay un informe anterior con el que comparar. Guarda este y el mes que viene este bloque mostrará qué keywords han cambiado y por qué.',
+  'Loading the earlier report…': 'Cargando el informe anterior…',
+  'Can come down, per month': 'Se puede bajar, al mes',
+  'No longer on the reduce list': 'Ya no están en la lista de reducir',
+  'New on the reduce list': 'Nuevas en la lista de reducir',
+  'No longer on the increase list': 'Ya no están en la lista de aumentar',
+  'New on the increase list': 'Nuevas en la lista de aumentar',
+  'Not a like for like comparison:': 'La comparación no es equivalente:',
+  ' the recommendation rules for this client changed between the two reports;': ' las reglas de recomendación de este cliente cambiaron entre los dos informes;',
+  ' the recommendation model was updated between the two reports;': ' el modelo de recomendación se actualizó entre los dos informes;',
+  ' the periods are {a} and {b} days long;': ' los periodos duran {a} y {b} días;',
+  'read the changes with that in mind.': 'ten eso en cuenta al leer los cambios.',
+  'Delete the {date} report for everyone': 'Borrar el informe del {date} para todos',
+  'Cancel': 'Cancelar',
+  'Delete the earlier report': 'Borrar el informe anterior',
+
+  // ---- why each keyword gets its recommendation ----
+  'reason.tooFew': 'Menos de {min} clics de pago en el periodo. No hay datos suficientes para recomendar un cambio.',
+  'reason.brandDefend': 'Término de marca en posición orgánica {rank} con presión {pressure} en la subasta (el anuncio no se mostró o fue superado en el {lost} de las búsquedas). Mantener la inversión para defender la marca.',
+  'reason.reduce': 'Posición orgánica {rank}{brand}, presión {pressure} en la subasta. Recortar un {cut} y mantener el {keep} como mínimo, para que un competidor no ocupe el espacio de anuncio. Probar por pasos y vigilar los clics totales (pago + orgánico).',
+  'reason.noOrganicData': 'No hay datos orgánicos en Search Console para el texto exacto de esta keyword, así que no podemos saber si los anuncios son la única presencia. Revisa los términos de búsqueda que activa antes de cambiar la inversión.',
+  'reason.increaseNoShare': 'El pago es la única presencia real aquí (posición orgánica {rank}) y convierte, pero no hay dato de cuota de impresiones, así que no se puede medir el margen de crecimiento.',
+  'reason.increase': 'Posición orgánica {rank}, así que el pago es la única presencia real. Convierte igual o mejor que el coste por conversión medio de la cuenta, y el anuncio no se mostró o fue superado en el {lost} de las búsquedas. Subir un {step} y revisar.',
+  'reason.inefficient': 'El pago es la única presencia real aquí, pero su coste por conversión está por encima de la media de la cuenta. Corregir la eficiencia antes de añadir presupuesto.',
+  'reason.noRoom': 'El pago es la única presencia real aquí y ya se muestra en casi todas las búsquedas (solo falta en el {lost}). No hay margen para crecer subiendo pujas.',
+  'reason.topButFewClicks': 'Posición orgánica {rank}, pero menos de {min} clics orgánicos en el periodo. Mantener el pago hasta que el orgánico demuestre que se lleva el clic.',
+  'reason.notStrong': 'La posición orgánica {rank} no es lo bastante fuerte para sustituir los clics de pago. Mantener la inversión; antes es una oportunidad de SEO.',
+  'reason.noConversions': 'El pago es la única presencia real aquí y no tiene conversiones en el periodo. Revisar la keyword antes de cambiar el presupuesto.',
+  'reason.doNotReduce': 'Marcada como "no reducir" para este cliente{note}. El modelo habría propuesto un recorte del {cut}.',
+  'pressure.low': 'baja',
+  'pressure.medium': 'media',
+  'pressure.high': 'alta',
+  'pressure.unknown': 'desconocida (tratada como media)',
+};
+
+const DICTIONARIES: Record<Lang, Record<string, string>> = { en: {}, es: ES };
+
+const fill = (text: string, params?: Params) =>
+  params ? text.replace(/\{(\w+)\}/g, (match, key) => (key in params ? String(params[key]) : match)) : text;
+
+export const translate = (lang: Lang, text: string, params?: Params): string =>
+  fill(DICTIONARIES[lang][text] ?? text, params);
+
+const LOCALE: Record<Lang, string> = { en: 'en-US', es: 'es-ES' };
+
+export const formatNumber = (lang: Lang, value: number, decimals = 0): string =>
+  value.toLocaleString(LOCALE[lang], {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+    // Spanish does not group four-digit numbers by default ("4521"); in a report "4.521" reads better.
+    useGrouping: 'always',
+  } as unknown as Intl.NumberFormatOptions);
+
+// The sentence explaining a recommendation, in the language given.
+export const reasonText = (lang: Lang, rec: KeywordRecommendation): string => {
+  if (lang === 'en' || !rec.why) return rec.reason;
+  const key = `reason.${rec.why.code}`;
+  if (!(key in DICTIONARIES[lang])) return rec.reason;
+  const p: Params = {};
+  Object.entries(rec.why.params).forEach(([name, value]) => {
+    if (name === 'pressure') p[name] = translate(lang, `pressure.${value}`);
+    else if (name === 'brand') p[name] = value ? `, ${translate(lang, 'Brand').toLowerCase()}` : '';
+    else if (name === 'note') p[name] = value ? `: ${value}` : '';
+    else if (typeof value === 'number' && ['lost', 'cut', 'keep', 'step'].includes(name)) p[name] = `${Math.round(value * 100)}%`;
+    else if (typeof value === 'number' && name === 'rank') p[name] = formatNumber(lang, value, 1);
+    else p[name] = String(value);
+  });
+  return translate(lang, key, p);
+};
+
+// Text with <hl>highlighted</hl> or <b>bold</b> parts.
+const renderRich = (text: string): React.ReactNode =>
+  text.split(/(<hl>.*?<\/hl>|<b>.*?<\/b>)/g).map((part, i) => {
+    if (part.startsWith('<hl>')) return <span key={i} className="text-[#F8B133]">{part.slice(4, -5)}</span>;
+    if (part.startsWith('<b>')) return <span key={i} className="font-bold text-slate-900">{part.slice(3, -4)}</span>;
+    return <React.Fragment key={i}>{part}</React.Fragment>;
+  });
+
+const LangContext = createContext<Lang>('en');
+export const LangProvider = LangContext.Provider;
+
+export const useI18n = () => {
+  const lang = useContext(LangContext);
+  const tr = (text: string, params?: Params) => translate(lang, text, params);
+  const int = (value: number) => formatNumber(lang, Math.round(value));
+  return {
+    lang,
+    tr,
+    rich: (text: string, params?: Params) => renderRich(tr(text, params)),
+    int,
+    dec: (value: number, decimals: number) => formatNumber(lang, value, decimals),
+    pct: (value: number) => `${Math.round(value * 100)}%`,
+    money: (symbol: string, value: number, decimals = 0) => withCurrency(symbol, formatNumber(lang, decimals ? value : Math.round(value), decimals)),
+    range: (r: { low: number; high: number }) => (Math.round(r.low) === Math.round(r.high) ? int(r.low) : tr('{low} to {high}', { low: int(r.low), high: int(r.high) })),
+    keywords: (n: number) => tr(n === 1 ? '{n} keyword' : '{n} keywords', { n: int(n) }),
+    reason: (rec: KeywordRecommendation) => reasonText(lang, rec),
+  };
+};

@@ -2,6 +2,7 @@ import React from 'react';
 import { Layers, Globe, Target, LogOut, Bot, Settings, Megaphone, Zap, LayoutDashboard, PanelLeftClose } from 'lucide-react';
 import { DashboardTab } from '../types';
 import { TAB_META } from '../navigation';
+import { useI18n } from '../i18n';
 import type { ClientProfile } from '../clientProfiles';
 
 const NAV_GROUPS: { heading: string | null; items: { tab: DashboardTab; icon: React.ReactNode }[] }[] = [
@@ -36,6 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpen, setIsOpen, activeTab, setActiveTab, user, handleLogout, setIsSettingsOpen,
   clients = [], activeClientId = null, onSelectClient
 }) => {
+  const { tr } = useI18n();
   const go = (tab: DashboardTab) => {
     setActiveTab(tab);
     // On small screens the menu covers the page, so close it after choosing.
@@ -55,7 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <img src="/logo.png" alt="OneSearch logo" className="w-9 h-9 rounded-xl object-cover" />
           <div>
             <p className="jf-display text-2xl text-white">OneSearch</p>
-            <p className="text-[11px] font-bold text-slate-400 mt-1">Paid and organic as one channel</p>
+            <p className="text-[11px] font-bold text-slate-400 mt-1">{tr('Paid and organic as one channel')}</p>
           </div>
         </div>
         <button onClick={() => setIsOpen(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10" title="Hide menu" aria-label="Hide menu">
@@ -65,14 +67,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {clients.length > 0 && onSelectClient && (
         <div className="px-4 pb-4">
-          <label htmlFor="client-switcher" className="block mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">Client</label>
+          <label htmlFor="client-switcher" className="block mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">{tr('Client')}</label>
           <select
             id="client-switcher"
             value={activeClientId || ''}
             onChange={e => onSelectClient(e.target.value || null)}
             className="w-full bg-white/5 border border-white/10 rounded-xl text-[13px] font-bold text-white px-3 py-2.5 outline-none cursor-pointer focus:border-[#F8B133]"
           >
-            <option value="" className="text-black">Choose a client...</option>
+            <option value="" className="text-black">{tr('Choose a client...')}</option>
             {clients.map(c => <option key={c.id} value={c.id} className="text-black">{c.name}</option>)}
           </select>
         </div>
@@ -81,7 +83,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <nav className="flex-1 overflow-y-auto px-3 pb-4 space-y-5">
         {NAV_GROUPS.map((group, gi) => (
           <div key={gi}>
-            {group.heading && <p className="px-3 mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">{group.heading}</p>}
+            {group.heading && <p className="px-3 mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">{tr(group.heading)}</p>}
             <div className="space-y-1">
               {group.items.map(({ tab, icon }) => {
                 const active = activeTab === tab;
@@ -95,7 +97,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     }`}
                   >
                     {React.cloneElement(icon as React.ReactElement<any>, { size: 17, className: 'flex-shrink-0' })}
-                    <span>{TAB_META[tab].label}</span>
+                    <span>{tr(TAB_META[tab].label)}</span>
                   </button>
                 );
               })}
@@ -118,13 +120,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onClick={() => setIsSettingsOpen(true)}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold text-slate-300 hover:bg-white/5 hover:text-white"
         >
-          <Settings size={17} /> Settings
+          <Settings size={17} /> {tr('Settings')}
         </button>
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold text-slate-400 hover:bg-white/5 hover:text-white"
         >
-          <LogOut size={17} /> Sign out
+          <LogOut size={17} /> {tr('Sign out')}
         </button>
       </div>
     </aside>

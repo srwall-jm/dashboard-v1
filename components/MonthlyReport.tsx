@@ -6,30 +6,34 @@ import {
   fetchSnapshotList, fetchSnapshot, saveSnapshotRemote, deleteSnapshotRemote,
 } from '../snapshots';
 import { ACTION_STYLE } from '../theme';
+import { useI18n } from '../i18n';
 
 const int = (value: number) => Math.round(value).toLocaleString('en-US');
 const SHOWN = 5;
 
-const actionLabel = (action: KeywordMove['to']) => (action === 'ABSENT' ? 'not analysed' : ACTION_STYLE[action].label.toLowerCase());
 
-const MoveList: React.FC<{ title: string; moves: KeywordMove[]; side: 'from' | 'to' }> = ({ title, moves, side }) => (
+const MoveList: React.FC<{ title: string; moves: KeywordMove[]; side: 'from' | 'to' }> = ({ title, moves, side }) => {
+  const { tr, lang } = useI18n();
+  const actionLabel = (action: KeywordMove['to']) => (action === 'ABSENT' ? tr('not analysed') : tr(ACTION_STYLE[action].label).toLowerCase());
+  return (
   <div>
     <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600 mb-2">{title} · {moves.length}</p>
     {moves.length === 0 ? (
-      <p className="text-sm text-slate-500">None.</p>
+      <p className="text-sm text-slate-500">{tr('None.')}</p>
     ) : (
       <ul className="space-y-2">
         {moves.slice(0, SHOWN).map(m => (
           <li key={m.keyword} className="text-sm">
             <span className="font-semibold text-slate-900 break-words">{m.keyword}</span>
-            <span className="text-slate-600"> · {side === 'to' ? `now ${actionLabel(m.to)}` : `was ${actionLabel(m.from)}`}: {m.why}.</span>
+            <span className="text-slate-600"> · {side === 'to' ? tr('now {action}', { action: actionLabel(m.to) }) : tr('was {action}', { action: actionLabel(m.from) })}{lang === 'en' ? `: ${m.why}.` : '.'}</span>
           </li>
         ))}
-        {moves.length > SHOWN && <li className="text-xs font-medium text-slate-500">And {moves.length - SHOWN} more.</li>}
+        {moves.length > SHOWN && <li className="text-xs font-medium text-slate-500">{tr('And {n} more.', { n: moves.length - SHOWN })}</li>}
       </ul>
     )}
   </div>
-);
+  );
+};
 
 // Saves the report of the period on screen for the chosen client, and shows what changed since an earlier one.
 export const MonthlyReport: React.FC<{
@@ -48,7 +52,9 @@ export const MonthlyReport: React.FC<{
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const money = (value: number) => `${withCurrency(currencySymbol, int(value))}`;
+  const i18n = useI18n();
+  const { tr } = i18n;
+  const money = (value: number) => i18n.money(currencySymbol, value);
   const currentId = current ? snapshotIdOf(current.periodStart, current.periodEnd) : null;
   const savedCurrent = list.find(s => s.id === currentId) || null;
   const others = list.filter(s => s.id !== currentId);
@@ -90,10 +96,8 @@ export const MonthlyReport: React.FC<{
       <section className="print:hidden bg-white px-6 py-4 rounded-2xl border border-dashed border-slate-300 flex items-start gap-3">
         <History size={18} className="text-slate-500 flex-shrink-0 mt-0.5" aria-hidden="true" />
         <p className="text-sm text-slate-600">
-          <span className="font-semibold text-slate-900">Monthly report.</span>{' '}
-          {available
-            ? 'Save this client for the team (Settings, step 4) to keep a report each month and see what changed since the last one.'
-            : 'Once shared clients are set up in Cloudflare, each month\'s report can be saved here and compared with the next.'}
+          <span className="font-semibold text-slate-900">{tr('Monthly report')}.</span>{' '}
+          {available ? tr('Save this client for the team (Settings, step 4) to keep a report each month and see what changed since the last one.') : tr('Once shared clients are set up in Cloudflare, each month\'s report can be saved here and compared with the next.')}
         </p>
       </section>
     );
@@ -105,7 +109,7 @@ export const MonthlyReport: React.FC<{
     try {
       const header = await saveSnapshotRemote(clientId, current);
       setList(prev => [header, ...prev.filter(s => s.id !== header.id)].sort((a, b) => (a.id < b.id ? 1 : -1)));
-      setMessage({ kind: 'ok', text: 'Report saved for the team.' });
+      setMessage({ kind: 'ok', text: tr('Report saved for the team.') });
     } catch (err: any) {
       setMessage({ kind: 'error', text: err?.message || 'The report could not be saved.' });
     } finally {
@@ -120,7 +124,7 @@ export const MonthlyReport: React.FC<{
       await deleteSnapshotRemote(clientId, compareId);
       setList(prev => prev.filter(s => s.id !== compareId));
       setCompareId(null);
-      setMessage({ kind: 'ok', text: 'Report deleted.' });
+      setMessage({ kind: 'ok', text: tr('Report deleted.') });
     } catch (err: any) {
       setMessage({ kind: 'error', text: err?.message || 'The report could not be deleted.' });
     } finally {
@@ -137,25 +141,25 @@ export const MonthlyReport: React.FC<{
           <div className="flex items-center gap-2">
             <History size={18} className="text-slate-600" aria-hidden="true" />
             <h3 id="monthly-report" className="jf-display text-xl text-slate-900">
-              {diff ? `Since ${diff.previousPeriod}` : 'Monthly report'}
+              {diff ? tr('Since {period}', { period: tr('{start} to {end}', { start: compare!.periodStart, end: compare!.periodEnd }) }) : tr('Monthly report')}
             </h3>
           </div>
           <p className="text-xs font-medium text-slate-600 mt-1">
             {savedCurrent
-              ? `This period was saved by ${savedCurrent.savedBy || 'the team'} on ${(savedCurrent.savedAt || '').slice(0, 10)}.`
-              : `This period is not saved yet${clientName ? ` for ${clientName}` : ''}.`}
+              ? tr('This period was saved by {who} on {date}.', { who: savedCurrent.savedBy || tr('the team'), date: (savedCurrent.savedAt || '').slice(0, 10) })
+              : clientName ? tr('This period is not saved yet for {client}.', { client: clientName }) : tr('This period is not saved yet.')}
           </p>
         </div>
         {!presentation && (
           <div className="print:hidden flex flex-wrap items-center gap-2">
             {others.length > 0 && (
               <select
-                aria-label="Compare with an earlier report"
+                aria-label={tr('Compare with an earlier report')}
                 value={compareId || ''}
                 onChange={e => setCompareId(e.target.value || null)}
                 className="bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 px-3 py-2 outline-none cursor-pointer"
               >
-                {others.map(s => <option key={s.id} value={s.id}>Compare with {s.periodStart} to {s.periodEnd}</option>)}
+                {others.map(s => <option key={s.id} value={s.id}>{tr('Compare with {period}', { period: tr('{start} to {end}', { start: s.periodStart, end: s.periodEnd }) })}</option>)}
               </select>
             )}
             <button
@@ -164,7 +168,7 @@ export const MonthlyReport: React.FC<{
               disabled={busy || !current}
               className="flex items-center gap-2 px-4 py-2 bg-jf-yellow hover:bg-jf-yellow-dark text-slate-950 rounded-lg text-xs font-semibold disabled:opacity-40"
             >
-              <Save size={14} aria-hidden="true" /> {savedCurrent ? 'Update saved report' : 'Save this report'}
+              <Save size={14} aria-hidden="true" /> {savedCurrent ? tr('Update saved report') : tr('Save this report')}
             </button>
           </div>
         )}
@@ -174,27 +178,25 @@ export const MonthlyReport: React.FC<{
 
       {!diff ? (
         <p className="text-sm text-slate-600 mt-4">
-          {others.length === 0
-            ? 'No earlier report to compare with. Save this one, and next month this block will show which keywords changed and why.'
-            : 'Loading the earlier report…'}
+          {others.length === 0 ? tr('No earlier report to compare with. Save this one, and next month this block will show which keywords changed and why.') : tr('Loading the earlier report…')}
         </p>
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5">
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Can come down, per month</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">{tr('Can come down, per month')}</p>
               <p className="jf-figure text-3xl text-slate-900 mt-1 tabular-nums flex items-center gap-2 flex-wrap">
                 {money(diff.spendCutMonthlyBefore)} <ArrowRight size={18} className="text-slate-400" aria-hidden="true" /> {money(diff.spendCutMonthlyNow)}
               </p>
             </div>
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Keywords to reduce</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">{tr('Keywords to reduce')}</p>
               <p className="jf-figure text-3xl text-slate-900 mt-1 tabular-nums flex items-center gap-2">
                 {diff.reduceBefore} <ArrowRight size={18} className="text-slate-400" aria-hidden="true" /> {diff.reduceNow}
               </p>
             </div>
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Keywords to increase</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">{tr('Keywords to increase')}</p>
               <p className="jf-figure text-3xl text-slate-900 mt-1 tabular-nums flex items-center gap-2">
                 {diff.increaseBefore} <ArrowRight size={18} className="text-slate-400" aria-hidden="true" /> {diff.increaseNow}
               </p>
@@ -202,19 +204,19 @@ export const MonthlyReport: React.FC<{
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 mt-6">
-            <MoveList title="No longer on the reduce list" moves={diff.leftReduce} side="to" />
-            <MoveList title="New on the reduce list" moves={diff.joinedReduce} side="from" />
-            <MoveList title="No longer on the increase list" moves={diff.leftIncrease} side="to" />
-            <MoveList title="New on the increase list" moves={diff.joinedIncrease} side="from" />
+            <MoveList title={tr('No longer on the reduce list')} moves={diff.leftReduce} side="to" />
+            <MoveList title={tr('New on the reduce list')} moves={diff.joinedReduce} side="from" />
+            <MoveList title={tr('No longer on the increase list')} moves={diff.leftIncrease} side="to" />
+            <MoveList title={tr('New on the increase list')} moves={diff.joinedIncrease} side="from" />
           </div>
 
           {(diff.rulesChanged || diff.modelChanged || differentLength) && (
             <p className="text-xs font-medium text-[#B45309] mt-5">
-              Not a like for like comparison:
-              {diff.rulesChanged ? ' the recommendation rules for this client changed between the two reports;' : ''}
-              {diff.modelChanged ? ' the recommendation model was updated between the two reports;' : ''}
-              {differentLength ? ` the periods are ${compare!.periodDays} and ${current!.periodDays} days long;` : ''}
-              {' '}read the changes with that in mind.
+              {tr('Not a like for like comparison:')}
+              {diff.rulesChanged ? tr(' the recommendation rules for this client changed between the two reports;') : ''}
+              {diff.modelChanged ? tr(' the recommendation model was updated between the two reports;') : ''}
+              {differentLength ? tr(' the periods are {a} and {b} days long;', { a: compare!.periodDays, b: current!.periodDays }) : ''}
+              {' '}{tr('read the changes with that in mind.')}
             </p>
           )}
 
@@ -222,12 +224,12 @@ export const MonthlyReport: React.FC<{
             <div className="print:hidden mt-5 flex items-center gap-2">
               {confirmDelete ? (
                 <>
-                  <button type="button" onClick={remove} disabled={busy} className="px-3 py-1.5 bg-[#B91C1C] text-white rounded-lg text-xs font-semibold disabled:opacity-40">Delete the {compare!.periodStart} report for everyone</button>
-                  <button type="button" onClick={() => setConfirmDelete(false)} className="px-3 py-1.5 text-xs font-semibold text-slate-600">Cancel</button>
+                  <button type="button" onClick={remove} disabled={busy} className="px-3 py-1.5 bg-[#B91C1C] text-white rounded-lg text-xs font-semibold disabled:opacity-40">{tr('Delete the {date} report for everyone', { date: compare!.periodStart })}</button>
+                  <button type="button" onClick={() => setConfirmDelete(false)} className="px-3 py-1.5 text-xs font-semibold text-slate-600">{tr('Cancel')}</button>
                 </>
               ) : (
                 <button type="button" onClick={() => setConfirmDelete(true)} className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-[#B91C1C]">
-                  <Trash2 size={13} aria-hidden="true" /> Delete the earlier report
+                  <Trash2 size={13} aria-hidden="true" /> {tr('Delete the earlier report')}
                 </button>
               )}
             </div>

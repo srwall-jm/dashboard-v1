@@ -19,6 +19,7 @@ Changed (independent design review)
 
 Fixed
 - Avg. CPC and Avg. CPA in Google Ads showed no currency symbol.
+- The page header was cut off on narrow screens.
 - Changing the client, the dates or the accounts while data was loading could let the older load overwrite the newer one, or count Search Console clicks twice. Each load is now numbered and a superseded one writes nothing. The same applies to the GA4 and Search Console loads, and their previous figures are cleared when a load fails.
 - The keyword load no longer starts before the data it depends on has finished loading.
 - The GA4 dimension selector offered dimensions (source, landing page, device) that left organic and paid at zero without saying so. It now offers only channel group, medium and source / medium.
@@ -38,6 +39,7 @@ Fixed
 - Connecting Google Ads right after typing the developer token (a first visit, or a new browser) sent the request without the token and listed no accounts until the page was reloaded.
 
 Added
+- Language selector (English and Spanish) for what the client reads: Summary, spend recommendations with the reason for each keyword, monthly report, agreed plan, menu, page header and print. Numbers follow the language ("45.991 €" in Spanish). The choice is kept per client and saved with a shared client. Analyst screens (Settings, data notices, the other sections) are still in English.
 - Agreed plan per keyword in Spend recommendations: mark a keyword as agreed, applied (with its date) or reverted, add a note, or mark it "do not reduce". A keyword marked that way is kept as is and leaves the saving figures. Shared with the team for a shared client, otherwise kept in the browser. Measuring what happened after a change is not built yet.
 - Monthly report per client: save the report of a period from the Summary and, next time, see what changed since it: monthly saving potential, how many keywords to reduce and increase, and which keywords left or joined each list and why. Stored with the shared client in Cloudflare KV; needs access to be restricted.
 - Recommendation rules editable per client in Settings (largest cuts by competition, clicks organic keeps, increase step, minimum clicks). No cut can exceed 90%, and cuts cannot grow as competition rises. Rules are saved with the shared client profile.
