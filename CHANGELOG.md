@@ -3,6 +3,7 @@
 ## Unreleased
 
 Added
+- The Google Ads developer token and OAuth Client ID can be stored in Cloudflare (`GOOGLE_ADS_DEVELOPER_TOKEN`, `GOOGLE_ADS_OAUTH_CLIENT_ID`). The proxy adds the token on the server, only for requests verified by Cloudflare Access, and both fields disappear from Settings.
 - Access restricted to `@jellyfish.com` through Cloudflare Access. The functions verify the Access token on every request (pages, Google Ads proxy, insights). Off until `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` are set; the dashboard shows a notice while it is off. Setup steps in the README.
 - Google Ads accounts are chosen per client in Settings. Only the ticked accounts are read; the whole manager account is never added up. With several accounts and none chosen, no paid data loads and a notice asks to pick them.
 - Summary page as the landing page: headline saving, context figures, top keywords to reduce and to increase, how to act.

@@ -14,6 +14,9 @@ interface SettingsModalProps {
   developerToken: string;
   setDeveloperToken: (token: string) => void;
   googleAdsClientId: string;
+  developerTokenManaged?: boolean;
+  developerTokenWaitingForAccess?: boolean;
+  oauthClientIdManaged?: boolean;
   setGoogleAdsClientId: (id: string) => void;
   brandRegexStr: string;
   setBrandRegexStr: (str: string) => void;
@@ -51,6 +54,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   aiProvider, setAiProvider, openaiKey, setOpenaiKey,
   developerToken, setDeveloperToken,
   googleAdsClientId, setGoogleAdsClientId,
+  developerTokenManaged = false, developerTokenWaitingForAccess = false, oauthClientIdManaged = false,
   brandRegexStr, setBrandRegexStr,
   ga4Auth, gscAuth, googleAdsAuth,
   handleConnectGa4, handleConnectGsc, handleConnectGoogleAds,
@@ -169,12 +173,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               />
             )}
 
-            {/* Developer Token Input - NEW */}
+            {/* Developer Token */}
+            {developerTokenManaged ? (
             <div className="mt-8 pt-6 border-t border-slate-100">
                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                    <div className="w-full sm:w-1/3">
                        <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest block mb-1">Google Ads Developer Token</label>
-                       <p className="text-[9px] text-slate-400">Required for API requests to Google Ads.</p>
+                   </div>
+                   <div className="w-full sm:w-2/3">
+                       <p className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] font-bold text-emerald-800">
+                           Managed by the agency in Cloudflare. Nothing to enter here.
+                       </p>
+                   </div>
+               </div>
+            </div>
+            ) : (
+            <div className="mt-8 pt-6 border-t border-slate-100">
+               <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                   <div className="w-full sm:w-1/3">
+                       <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest block mb-1">Google Ads Developer Token</label>
+                       <p className="text-[9px] text-slate-400">Required for API requests to Google Ads. One token for the whole agency, not one per client.</p>
+                       {developerTokenWaitingForAccess && (
+                         <p className="text-[9px] text-amber-700 font-bold mt-1">A token is stored in Cloudflare but is not used until access to the site is restricted.</p>
+                       )}
                    </div>
                    <div className="w-full sm:w-2/3">
                        <input 
@@ -194,8 +215,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                    </div>
                </div>
             </div>
+            )}
 
-            {/* Google Ads OAuth Client ID - NEW */}
+            {/* Google Ads OAuth Client ID */}
+            {oauthClientIdManaged ? (
+            <div className="mt-6 pt-6 border-t border-slate-100">
+               <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                   <div className="w-full sm:w-1/3">
+                       <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest block mb-1">Google Ads OAuth Client ID</label>
+                   </div>
+                   <div className="w-full sm:w-2/3">
+                       <p className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] font-bold text-emerald-800">
+                           Managed by the agency in Cloudflare. Nothing to enter here.
+                       </p>
+                   </div>
+               </div>
+            </div>
+            ) : (
             <div className="mt-6 pt-6 border-t border-slate-100">
                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                    <div className="w-full sm:w-1/3">
@@ -211,11 +247,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                            placeholder="xxxxxxxx.apps.googleusercontent.com" 
                        />
                        <p className="text-[9px] text-slate-400 mt-1.5 flex items-center gap-1">
-                           <Settings2 size={10} /> Changes take effect the next time you press "Connect Google Ads". Each Developer Token is permanently paired to the Cloud project of the Client ID used the first time it succeeds, so use a different Client ID per client.
+                           <Settings2 size={10} /> Changes take effect the next time you press "Connect Google Ads". Each Developer Token is permanently paired to the Cloud project of the Client ID used the first time it succeeds, so always use the agency's own token and Client ID together. They are the same for every client.
                        </p>
                    </div>
                </div>
             </div>
+            )}
           </section>
 
           <div className="w-full h-px bg-slate-200" />

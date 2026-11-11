@@ -56,6 +56,8 @@ const App: React.FC = () => {
   // 'open': the functions answer but Access is not configured yet.
   // 'unknown': no session endpoint (local `npm run dev`).
   const [accessSession, setAccessSession] = useState<{ status: 'loading' | 'protected' | 'open' | 'unknown'; email?: string }>({ status: 'loading' });
+  // Google Ads credentials the agency keeps in Cloudflare, so nobody types them in Settings.
+  const [agencyAds, setAgencyAds] = useState<{ developerTokenOnServer: boolean; developerTokenWaitingForAccess: boolean; oauthClientId: string | null }>({ developerTokenOnServer: false, developerTokenWaitingForAccess: false, oauthClientId: null });
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +66,13 @@ const App: React.FC = () => {
       .then(async (resp): Promise<Session> => {
         if (!resp.ok || !(resp.headers.get('content-type') || '').includes('application/json')) return { status: 'unknown' };
         const body = await resp.json();
+        if (!cancelled && body?.googleAds) {
+          setAgencyAds({
+            developerTokenOnServer: body.googleAds.developerTokenOnServer === true,
+            developerTokenWaitingForAccess: body.googleAds.developerTokenWaitingForAccess === true,
+            oauthClientId: typeof body.googleAds.oauthClientId === 'string' && body.googleAds.oauthClientId ? body.googleAds.oauthClientId : null,
+          });
+        }
         if (body?.protected === true && body.email) return { status: 'protected', email: String(body.email) };
         return body?.protected === false ? { status: 'open' } : { status: 'unknown' };
       })
@@ -1777,7 +1786,7 @@ const App: React.FC = () => {
   // belongs to. Re-initializes whenever the client picks a different Client ID.
   useEffect(() => {
     localStorage.setItem('google_ads_client_id', googleAdsClientId);
-    const clientIdToUse = (googleAdsClientId || '').trim() || DEFAULT_CLIENT_ID;
+    const clientIdToUse = agencyAds.oauthClientId || (googleAdsClientId || '').trim() || DEFAULT_CLIENT_ID;
 
     const initializeGoogleAdsOAuth = () => {
       if (typeof window !== 'undefined' && (window as any).google && (window as any).google.accounts) {
@@ -1799,7 +1808,7 @@ const App: React.FC = () => {
       }
     };
     initializeGoogleAdsOAuth();
-  }, [googleAdsClientId]);
+  }, [googleAdsClientId, agencyAds.oauthClientId]);
   
   const handleLoginSuccess = (credentialToken: string) => {
     try {
@@ -2100,6 +2109,9 @@ const App: React.FC = () => {
         setDeveloperToken={setDeveloperToken}
         googleAdsClientId={googleAdsClientId}
         setGoogleAdsClientId={setGoogleAdsClientId}
+        developerTokenManaged={agencyAds.developerTokenOnServer}
+        developerTokenWaitingForAccess={agencyAds.developerTokenWaitingForAccess}
+        oauthClientIdManaged={Boolean(agencyAds.oauthClientId)}
         brandRegexStr={brandRegexStr} 
         setBrandRegexStr={setBrandRegexStr}
         ga4Auth={ga4Auth} 

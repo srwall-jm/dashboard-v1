@@ -34,17 +34,18 @@ Variables (Pages project > Settings > Variables and Secrets):
 | --- | --- | --- |
 | `GEMINI_API_KEY` | Secret, server side | Gemini insights. Without it the button returns a clear message and OpenAI still works. |
 | `GEMINI_MODEL` | Optional, server side | Changing the Gemini model without a code change. |
-| `VITE_GOOGLE_ADS_DEVELOPER_TOKEN` | Optional, build time | Agency-wide fallback token. It ends up in the public JavaScript, so prefer the Settings field. |
+| `GOOGLE_ADS_DEVELOPER_TOKEN` | Secret, server side | The agency's Google Ads developer token (one for all clients). Added by the proxy, never sent to the browser, and only used once access is restricted (see "Restricting access"). The field disappears from Settings. |
+| `GOOGLE_ADS_OAUTH_CLIENT_ID` | Server side | The OAuth Client ID of the same Google Cloud project as that token. The field disappears from Settings. |
+| `VITE_GOOGLE_ADS_DEVELOPER_TOKEN` | Optional, build time | Old fallback. It ends up in the public JavaScript: remove it once `GOOGLE_ADS_DEVELOPER_TOKEN` is set. |
 
 ## Setting up a client
 
 In the dashboard, open Settings and:
 
 1. Connect GA4 and Search Console, then pick the property and the site.
-2. Paste the Google Ads Developer Token (Basic or Standard access).
-3. Paste the OAuth Client ID that belongs to the same Google Cloud project as that token, then press Connect Google Ads.
-4. Tick the Google Ads accounts that belong to the client. With a manager account, nothing is read until this is done.
-5. Set the branded keyword regex for the client.
+2. Press Connect Google Ads. If the agency credentials are not stored in Cloudflare yet (see Variables above), first paste the Developer Token (Basic or Standard access) and the OAuth Client ID of the same Google Cloud project. Both are the agency's, the same for every client.
+3. Tick the Google Ads accounts that belong to the client. With a manager account, nothing is read until this is done.
+4. Set the branded keyword regex for the client.
 
 These values are saved in the browser, so today each person sets them up once per browser.
 
