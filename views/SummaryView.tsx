@@ -41,8 +41,10 @@ export const SummaryView: React.FC<{
   isSample?: boolean;
   // Search Console queries did not load: nothing can be compared, so nothing is recommended.
   organicMissing?: boolean;
+  // Shown right under the headline: what changed since the last saved report.
+  afterHeadline?: React.ReactNode;
   onOpenRecommendations: () => void;
-}> = ({ recommendations, summary, settings = DEFAULT_SETTINGS, channelStats, globalMetrics, currencySymbol, periodDays, comparisonEnabled, isLoading, isSample, organicMissing = false, onOpenRecommendations }) => {
+}> = ({ recommendations, summary, settings = DEFAULT_SETTINGS, channelStats, globalMetrics, currencySymbol, periodDays, comparisonEnabled, isLoading, isSample, organicMissing = false, afterHeadline, onOpenRecommendations }) => {
   const money = (value: number) => `${currencySymbol}${int(value)}`;
   const money2 = (value: number) => `${currencySymbol}${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   // Everything in the headline is per month, so cuts and increases can be compared.
@@ -121,6 +123,8 @@ export const SummaryView: React.FC<{
         </button>
         </div>
       </section>
+
+      {afterHeadline}
 
       {/* 2. Why it is worth testing */}
       {nReduce > 0 && (

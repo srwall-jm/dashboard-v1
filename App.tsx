@@ -11,6 +11,8 @@ import { generateMockBridgeData, generateMockAiTrafficData, generateMockKeywordS
 import { KeywordSignal, ShareRow, combineShares, buildRecommendations, RecommendationOverrides, settingsFromOverrides } from './recommendations';
 import { RecommendationRulesPanel } from './components/RecommendationRulesPanel';
 import { TAB_META } from './navigation';
+import { buildSnapshot } from './snapshots';
+import { MonthlyReport } from './components/MonthlyReport';
 import { ClientProfile, ClientProfileInput, ClientProfileList, fetchClientProfiles, saveClientProfile, deleteClientProfile } from './clientProfiles';
 import { PinnedAdsAccounts, clientKeyOf, resolveAdsAccounts, loadPinnedAdsAccounts, savePinnedAdsAccounts } from './adsAccounts';
 import { SummaryView } from './views/SummaryView';
@@ -2224,6 +2226,21 @@ const App: React.FC = () => {
     setTabInsights(prev => Object.fromEntries(Object.keys(prev).map(k => [k, null])));
   }, [adsClientKey, filters.dateRange.start, filters.dateRange.end]);
 
+  // The report of the period on screen, as it would be saved. Null while there is nothing to save.
+  const currentSnapshot = useMemo(() => {
+    if (summaryRecs.recommendations.length === 0 || !organicQueriesLoaded) return null;
+    return buildSnapshot({
+      periodStart: filters.dateRange.start,
+      periodEnd: filters.dateRange.end,
+      periodDays,
+      currencySymbol,
+      rules: rulesByClient[adsClientKey],
+      summary: summaryRecs.summary,
+      recommendations: summaryRecs.recommendations,
+      warnings: Object.values(dataWarnings),
+    });
+  }, [summaryRecs, organicQueriesLoaded, filters.dateRange.start, filters.dateRange.end, periodDays, currencySymbol, rulesByClient, adsClientKey, dataWarnings]);
+
   const SAMPLE_BRIDGE_TABS = [DashboardTab.SUMMARY, DashboardTab.PPC_SEO_BRIDGE, DashboardTab.GOOGLE_ADS_PERFORMANCE, DashboardTab.SEARCH_EFFICIENCY];
   const nothingConnected = !gscAuth?.token && !ga4Auth?.token && !googleAdsAuth?.token;
   const isShowingSampleData =
@@ -2597,6 +2614,17 @@ const App: React.FC = () => {
               comparisonEnabled={filters.comparison.enabled}
               isLoading={isGoogleAdsKeywordsLoading || isLoadingBridge}
               onOpenRecommendations={() => setActiveTab(DashboardTab.SEARCH_EFFICIENCY)}
+              afterHeadline={
+                <MonthlyReport
+                  clientId={activeProfile?.id || null}
+                  clientName={activeProfile?.name}
+                  available={clientProfiles.available}
+                  current={currentSnapshot}
+                  currencySymbol={currencySymbol}
+                  presentation={clientView}
+                  isSample={isShowingSampleData}
+                />
+              }
             />
           )}
 
