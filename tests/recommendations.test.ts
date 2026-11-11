@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  recommendKeyword, recommendKeywords, summarizeRecommendations, getPressure, getRecoveryRate, combineShares,
+  recommendKeyword, recommendKeywords, summarizeRecommendations, getPressure, getRecoveryRate, combineShares, coverSearchTerms,
   DEFAULT_SETTINGS, settingsFromOverrides, overridesFromSettings, isDefaultSettings, MAX_ALLOWED_CUT, type KeywordSignal,
 } from '../recommendations';
 
@@ -286,5 +286,56 @@ describe('no advice from missing data', () => {
     expect(s.counts.REDUCE).toBe(0);
     expect(s.counts.INCREASE).toBe(0);
     expect(s.spendCut).toBe(0);
+  });
+});
+
+describe('keywords judged by their search terms', () => {
+  const term = (t: string, cost: number, organicRank: number | null, organicClicks = 200) => ({ term: t, cost, clicks: cost / 2, organicRank, organicClicks });
+
+  it('measures how much of the spend is on searches where organic holds the top', () => {
+    const cover = coverSearchTerms([term('a', 600, 1.2), term('b', 300, 7), term('c', 100, null, 0)], 1250)!;
+    expect(cover.coverage).toBeCloseTo(0.8);
+    expect(cover.topOrganicShare).toBeCloseTo(0.6);
+    expect(cover.topOrganicRank).toBeCloseTo(1.2);
+    expect(cover.terms.map(t => t.term)).toEqual(['a', 'b', 'c']);
+    expect(coverSearchTerms([], 100)).toBeNull();
+  });
+
+  it('does not count a top position that gets almost no clicks', () => {
+    expect(coverSearchTerms([term('a', 500, 1, 3), term('b', 500, 1)], 1000)!.topOrganicShare).toBeCloseTo(0.5);
+  });
+
+  it('keeps a broad keyword whose own text ranks first but whose money goes elsewhere', () => {
+    const searchTerms = coverSearchTerms([term('running shoes', 200, 1.1), term('cheap trainers online', 500, null, 0), term('best sneakers 2026', 300, 18, 2)], 1000);
+    const r = recommendKeyword(signal({ searchTerms }), 40);
+    expect(r.action).toBe('HOLD');
+    expect(r.spendCut).toBe(0);
+    expect(r.why).toEqual({ code: 'mostlyOtherSearches', params: { share: 0.2, top: 3 } });
+    expect(r.reason).toMatch(/Only 20% of this keyword's spend/);
+  });
+
+  it('reduces a keyword whose text has no organic data when most of its searches are won organically, and only on that share', () => {
+    const searchTerms = coverSearchTerms([term('vuelos baratos madrid', 700, 1.3), term('vuelos low cost', 300, 12, 5)], 1000);
+    const r = recommendKeyword(signal({ organicRank: null, organicClicks: 0, organicImpressions: 0, searchTerms }), 40);
+    expect(r.action).toBe('REDUCE');
+    // low pressure, position 1: 50% cap, applied to the 70% of spend where organic holds the top
+    expect(r.changePct).toBeCloseTo(-0.35);
+    expect(r.suggestedSpend).toBeCloseTo(650);
+    expect(r.why!.code).toBe('reduceTerms');
+    expect(r.searchTerms!.terms).toHaveLength(2);
+  });
+
+  it('falls back to the keyword text when the known search terms cover too little of the spend', () => {
+    const searchTerms = coverSearchTerms([term('something else', 300, null, 0)], 1000);
+    expect(searchTerms!.coverage).toBeCloseTo(0.3);
+    const r = recommendKeyword(signal({ searchTerms }), 40);
+    expect(r.action).toBe('REDUCE');
+    expect(r.why!.code).toBe('reduce');
+  });
+
+  it('still never cuts to zero', () => {
+    const searchTerms = coverSearchTerms([term('a', 1000, 1)], 1000);
+    const r = recommendKeyword(signal({ searchTerms }), 40);
+    expect(r.suggestedSpend).toBeGreaterThanOrEqual(500);
   });
 });

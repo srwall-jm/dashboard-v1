@@ -31,6 +31,29 @@ export interface KeywordSignal {
   organicRank: number | null;
   organicClicks: number;
   organicImpressions: number;
+  // What the keyword really spends on: its search terms, each matched to the same query in
+  // Search Console. Absent when search terms could not be read; the keyword text is used then.
+  searchTerms?: SearchTermCover | null;
+}
+
+// One search term a keyword showed ads for, with the organic result for that exact search.
+export interface SearchTermStat {
+  term: string;
+  cost: number;
+  clicks: number;
+  organicRank: number | null;
+  organicClicks: number;
+}
+
+export interface SearchTermCover {
+  // Share of the keyword's spend that its known search terms account for (Google hides low volume ones).
+  coverage: number;
+  // Share of that spend on searches where the organic result is in the top positions and gets clicks.
+  topOrganicShare: number;
+  // Organic position on those searches, weighted by spend.
+  topOrganicRank: number | null;
+  // The largest search terms by spend, to show what is behind the keyword.
+  terms: SearchTermStat[];
 }
 
 export interface RecommendationSettings {
@@ -43,6 +66,11 @@ export interface RecommendationSettings {
   };
   // Organic position up to which a reduction is considered at all.
   maxRankForReduce: number;
+  // A keyword judged by its search terms is only reduced when at least this share of its spend
+  // is on searches where organic holds the top. The cut applies to that share only.
+  minTopOrganicShare: number;
+  // Search terms are trusted only when they account for at least this share of the keyword's spend.
+  minTermCoverage: number;
   // Organic clicks in the period below which a top position is not taken as proof that organic gets the click.
   minOrganicClicks: number;
   // Organic position from which paid is considered the only real presence.
@@ -72,6 +100,8 @@ export const DEFAULT_SETTINGS: RecommendationSettings = {
     brand: { low: 0.25, medium: 0.15, high: 0 },
   },
   maxRankForReduce: 3,
+  minTopOrganicShare: 0.5,
+  minTermCoverage: 0.5,
   minOrganicClicks: 10,
   minRankForIncrease: 10,
   minRankLostForIncrease: 0.2,
@@ -110,6 +140,8 @@ export interface KeywordRecommendation {
   // Paid clicks removed by the cut that are expected to be lost.
   clicksAtRisk: Range;
   conversionsAtRisk: Range;
+  // The search terms behind the keyword, when they were read.
+  searchTerms: SearchTermCover | null;
   // The same reason as `reason`, as a case and its figures, so it can be written in other languages.
   why: { code: string; params: Record<string, string | number | boolean> } | null;
   // What an ad click that organic would not have got really costs.
@@ -117,6 +149,29 @@ export interface KeywordRecommendation {
   // INCREASE only: conversions the extra spend buys at today's cost per conversion. An estimate.
   expectedExtraConversions: number | null;
 }
+
+export const coverSearchTerms = (
+  terms: SearchTermStat[],
+  keywordCost: number,
+  settings: RecommendationSettings = DEFAULT_SETTINGS
+): SearchTermCover | null => {
+  const termsCost = terms.reduce((sum, t) => sum + t.cost, 0);
+  if (terms.length === 0 || termsCost <= 0) return null;
+  let topCost = 0;
+  let topRankSum = 0;
+  terms.forEach(t => {
+    if (t.organicRank !== null && t.organicRank <= settings.maxRankForReduce && t.organicClicks >= settings.minOrganicClicks) {
+      topCost += t.cost;
+      topRankSum += t.organicRank * t.cost;
+    }
+  });
+  return {
+    coverage: keywordCost > 0 ? Math.min(1, termsCost / keywordCost) : 1,
+    topOrganicShare: topCost / termsCost,
+    topOrganicRank: topCost > 0 ? topRankSum / topCost : null,
+    terms: [...terms].sort((a, b) => b.cost - a.cost).slice(0, 5),
+  };
+};
 
 export const getPressure = (signal: KeywordSignal, settings: RecommendationSettings = DEFAULT_SETTINGS): Pressure => {
   const lost = signal.rankLostShare;
@@ -157,7 +212,13 @@ export const recommendKeyword = (
   const effectivePressure: 'low' | 'medium' | 'high' = pressure === 'unknown' ? 'medium' : pressure;
   const avgCpc = signal.paidClicks > 0 ? signal.cost / signal.paidClicks : 0;
   const organicCtr = signal.organicImpressions > 0 ? signal.organicClicks / signal.organicImpressions : null;
-  const recovery = getRecoveryRate(signal.organicRank, settings);
+  // When the keyword's search terms are known and cover enough of its spend, they decide: a broad
+  // keyword is judged by where its money actually goes, not by the one search that shares its text.
+  const cover = signal.searchTerms && signal.searchTerms.coverage >= settings.minTermCoverage ? signal.searchTerms : null;
+  const textStrong = signal.organicRank !== null && signal.organicRank <= settings.maxRankForReduce && signal.organicClicks >= settings.minOrganicClicks;
+  const strongOrganic = cover ? cover.topOrganicShare >= settings.minTopOrganicShare : textStrong;
+  const reduceRank = cover ? (cover.topOrganicRank ?? signal.organicRank ?? settings.maxRankForReduce) : (signal.organicRank ?? settings.maxRankForReduce);
+  const recovery = getRecoveryRate(strongOrganic ? reduceRank : signal.organicRank, settings);
   const cpa = signal.paidConversions > 0 ? signal.cost / signal.paidConversions : null;
 
   const base: KeywordRecommendation = {
@@ -165,6 +226,7 @@ export const recommendKeyword = (
     isBrand: signal.isBrand,
     action: 'HOLD',
     reason: '',
+    searchTerms: signal.searchTerms ?? null,
     why: null,
     pressure,
     risk: null,
@@ -198,19 +260,20 @@ export const recommendKeyword = (
   }
 
   const rank = signal.organicRank;
-  const strongOrganic = rank !== null && rank <= settings.maxRankForReduce && signal.organicClicks >= settings.minOrganicClicks;
 
   if (strongOrganic) {
     const caps = signal.isBrand ? settings.maxCut.brand : settings.maxCut.nonBrand;
     // Positions 2 and 3 keep far fewer clicks than position 1, so the cut is halved.
-    const cut = Math.round(caps[effectivePressure] * (rank! <= 1.5 ? 1 : 0.5) * 100) / 100;
+    // With search terms, the cut only applies to the share of spend where organic holds the top.
+    const share = cover ? cover.topOrganicShare : 1;
+    const cut = Math.round(caps[effectivePressure] * (reduceRank <= 1.5 ? 1 : 0.5) * share * 100) / 100;
 
     if (cut <= 0) {
       return {
         ...base,
         action: 'HOLD',
-        reason: `Brand term at organic position ${rankText(rank!)} with ${pressureText[pressure]} (${pct(signal.rankLostShare || 0)} of searches where the ad did not show or was outranked). Keep spend to defend the brand.`,
-      why: { code: 'brandDefend', params: { rank: rank!, pressure, lost: signal.rankLostShare || 0 } },
+        reason: `Brand term at organic position ${rankText(reduceRank)} with ${pressureText[pressure]} (${pct(signal.rankLostShare || 0)} of searches where the ad did not show or was outranked). Keep spend to defend the brand.`,
+      why: { code: 'brandDefend', params: { rank: reduceRank, pressure, lost: signal.rankLostShare || 0 } },
       };
     }
 
@@ -229,8 +292,22 @@ export const recommendKeyword = (
       clicksRecovered: { low: clicksRemoved * recoveryLow, high: clicksRemoved * recovery },
       clicksAtRisk: atRisk,
       conversionsAtRisk: { low: atRisk.low * cvr, high: atRisk.high * cvr },
-      reason: `Organic position ${rankText(rank!)}${signal.isBrand ? ', brand term' : ''}, ${pressureText[pressure]}. Cut ${pct(cut)} and keep ${pct(1 - cut)} as the minimum, so a competitor cannot take the ad slot. Test in steps and watch total clicks (paid + organic).`,
-        why: { code: 'reduce', params: { rank: rank!, brand: signal.isBrand, pressure, cut, keep: 1 - cut } },
+      reason: cover
+        ? `${pct(share)} of this keyword's spend is on searches where you rank in the top ${settings.maxRankForReduce} (average position ${rankText(reduceRank)})${signal.isBrand ? ', brand term' : ''}, ${pressureText[pressure]}. Cut ${pct(cut)} and keep ${pct(1 - cut)} as the minimum, so a competitor cannot take the ad slot. Test in steps and watch total clicks (paid + organic).`
+        : `Organic position ${rankText(reduceRank)}${signal.isBrand ? ', brand term' : ''}, ${pressureText[pressure]}. Cut ${pct(cut)} and keep ${pct(1 - cut)} as the minimum, so a competitor cannot take the ad slot. Test in steps and watch total clicks (paid + organic).`,
+        why: cover
+          ? { code: 'reduceTerms', params: { share, top: settings.maxRankForReduce, rank: reduceRank, brand: signal.isBrand, pressure, cut, keep: 1 - cut } }
+          : { code: 'reduce', params: { rank: reduceRank, brand: signal.isBrand, pressure, cut, keep: 1 - cut } },
+    };
+  }
+
+  if (cover && (textStrong || rank === null)) {
+    return {
+      ...base,
+      action: 'HOLD',
+      incrementalCpc: null,
+      reason: `Only ${pct(cover.topOrganicShare)} of this keyword's spend is on searches where you rank in the top ${settings.maxRankForReduce}. The rest depends on the ad, so cutting the keyword would lose those searches. Move the searches you already win to their own exact match keyword before reducing.`,
+      why: { code: 'mostlyOtherSearches', params: { share: cover.topOrganicShare, top: settings.maxRankForReduce } },
     };
   }
 

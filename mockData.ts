@@ -1,6 +1,6 @@
 
 import { DailyData, KeywordData, ChannelType, QueryType, BridgeData, AiTrafficData, KeywordBridgeData } from './types';
-import type { KeywordSignal } from './recommendations';
+import { coverSearchTerms, type KeywordSignal } from './recommendations';
 
 export const COUNTRIES = ['Spain', 'Mexico', 'United States', 'United Kingdom', 'France', 'Germany', 'Italy', 'Portugal'];
 const QUERY_TYPES: QueryType[] = ['Branded', 'Non-Branded'];
@@ -295,7 +295,7 @@ export const generateMockKeywordSignals = (): KeywordSignal[] => {
     keyword, isBrand: false, cost: cost / 4, paidClicks, paidImpressions: paidClicks * 12, paidConversions,
     organicRank, organicClicks, organicImpressions, impressionShare, rankLostShare, topImpressionShare: null,
   });
-  return [
+  const signals: KeywordSignal[] = [
     row('running shoes', 4200, 2100, 96, 1.2, 5400, 21000, 0.86, 0.04),
     row('trail running shoes', 2600, 1150, 51, 1.4, 2300, 9800, 0.71, 0.18),
     row('waterproof running jacket', 1900, 820, 30, 2.3, 1100, 8200, 0.78, 0.07),
@@ -308,4 +308,14 @@ export const generateMockKeywordSignals = (): KeywordSignal[] => {
     row('gps running watch', 2200, 700, 41, 3.0, 0, 3000, 0.74, 0.09),
     row('running headlamp', 38, 14, 1, 1.8, 320, 1500, 0.9, 0.02),
   ];
+  // Search terms for three of them, to show a keyword judged by where its money goes.
+  const terms = (keyword: string, rows: [string, number, number | null, number][]) => {
+    const signal = signals.find(s => s.keyword === keyword);
+    if (!signal) return;
+    signal.searchTerms = coverSearchTerms(rows.map(([term, share, organicRank, organicClicks]) => ({ term, cost: signal.cost * share, clicks: signal.paidClicks * share, organicRank, organicClicks })), signal.cost);
+  };
+  terms('running shoes', [['running shoes', 0.62, 1.2, 5400], ['running shoes men', 0.2, 1.6, 900], ['cheap trainers', 0.12, 9.4, 30]]);
+  terms('trail running shoes', [['trail running shoes', 0.75, 1.4, 2300], ['trail shoes waterproof', 0.18, null, 0]]);
+  terms('waterproof running jacket', [['waterproof running jacket', 0.3, 2.3, 1100], ['rain jacket', 0.45, null, 0], ['windbreaker running', 0.2, 16, 4]]);
+  return signals;
 };

@@ -240,7 +240,14 @@ const ES: Record<string, string> = {
   'Cancel': 'Cancelar',
   'Delete the earlier report': 'Borrar el informe anterior',
 
+  'Searches behind it:': 'Búsquedas que hay detrás:',
+  'When Google Ads search terms can be read, a keyword is judged by the searches it really spends on: it is reduced only if at least {share} of its spend is on searches where you rank in the top {top}, and the cut applies to that share only.': 'Cuando se pueden leer los términos de búsqueda de Google Ads, cada keyword se valora por las búsquedas en las que realmente invierte: solo se reduce si al menos el {share} de su inversión está en búsquedas donde posicionas en el top {top}, y el recorte se aplica solo a esa parte.',
+  'no organic data': 'sin datos orgánicos',
+  'position {rank}': 'posición {rank}',
+
   // ---- why each keyword gets its recommendation ----
+  'reason.reduceTerms': 'El {share} de la inversión de esta keyword está en búsquedas donde posicionas en el top {top} (posición media {rank}){brand}, presión {pressure} en la subasta. Recortar un {cut} y mantener el {keep} como mínimo, para que un competidor no ocupe el espacio de anuncio. Probar por pasos y vigilar los clics totales (pago + orgánico).',
+  'reason.mostlyOtherSearches': 'Solo el {share} de la inversión de esta keyword está en búsquedas donde posicionas en el top {top}. El resto depende del anuncio, así que recortar la keyword perdería esas búsquedas. Mueve las búsquedas que ya ganas a su propia keyword de concordancia exacta antes de reducir.',
   'reason.tooFew': 'Menos de {min} clics de pago en el periodo. No hay datos suficientes para recomendar un cambio.',
   'reason.brandDefend': 'Término de marca en posición orgánica {rank} con presión {pressure} en la subasta (el anuncio no se mostró o fue superado en el {lost} de las búsquedas). Mantener la inversión para defender la marca.',
   'reason.reduce': 'Posición orgánica {rank}{brand}, presión {pressure} en la subasta. Recortar un {cut} y mantener el {keep} como mínimo, para que un competidor no ocupe el espacio de anuncio. Probar por pasos y vigilar los clics totales (pago + orgánico).',
@@ -287,7 +294,7 @@ export const reasonText = (lang: Lang, rec: KeywordRecommendation): string => {
     if (name === 'pressure') p[name] = translate(lang, `pressure.${value}`);
     else if (name === 'brand') p[name] = value ? `, ${translate(lang, 'Brand').toLowerCase()}` : '';
     else if (name === 'note') p[name] = value ? `: ${value}` : '';
-    else if (typeof value === 'number' && ['lost', 'cut', 'keep', 'step'].includes(name)) p[name] = `${Math.round(value * 100)}%`;
+    else if (typeof value === 'number' && ['lost', 'cut', 'keep', 'step', 'share'].includes(name)) p[name] = `${Math.round(value * 100)}%`;
     else if (typeof value === 'number' && name === 'rank') p[name] = formatNumber(lang, value, 1);
     else p[name] = String(value);
   });

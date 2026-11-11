@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { translate, formatNumber, reasonText, isLang } from '../i18n';
-import { recommendKeyword, buildRecommendations, type KeywordSignal } from '../recommendations';
+import { recommendKeyword, buildRecommendations, coverSearchTerms, type KeywordSignal } from '../recommendations';
 
 const signal = (over: Partial<KeywordSignal> = {}): KeywordSignal => ({
   keyword: 'running shoes', isBrand: false, cost: 1000, paidClicks: 500, paidImpressions: 10000, paidConversions: 25,
@@ -85,6 +85,14 @@ describe('reasonText', () => {
       expect(es, r.why!.code).not.toMatch(/\{\w+\}/);
     });
     expect(codes.size).toBe(11);
+  });
+
+  it('explains in Spanish a keyword judged by its search terms', () => {
+    const cover = (rows: [string, number, number | null][]) => coverSearchTerms(rows.map(([term, cost, organicRank]) => ({ term, cost, clicks: 10, organicRank, organicClicks: organicRank === null ? 0 : 100 })), 1000);
+    const reduce = reasonText('es', recommendKeyword(signal({ searchTerms: cover([['a', 700, 1.3], ['b', 300, null]]) }), 40));
+    expect(reduce).toMatch(/^El 70% de la inversión de esta keyword está en búsquedas donde posicionas en el top 3 \(posición media 1,3\)/);
+    const hold = reasonText('es', recommendKeyword(signal({ searchTerms: cover([['a', 200, 1.3], ['b', 800, null]]) }), 40));
+    expect(hold).toMatch(/^Solo el 20% de la inversión de esta keyword/);
   });
 
   it('translates "do not reduce" with the note', () => {

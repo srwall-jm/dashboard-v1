@@ -179,7 +179,15 @@ const RecTable: React.FC<{
               <td className="py-3 px-3 text-[13px] font-bold text-slate-900 text-right tabular-nums">{r.changePct === 0 ? '—' : money(r.suggestedSpend)}</td>
               <td className="py-3 px-3 text-[13px] font-medium text-slate-700 tabular-nums">{effectText(r, money, i18n)}</td>
               <td className="py-3 px-3"><PressureBadge pressure={r.pressure} impressionShare={r.impressionShare} rankLostShare={r.rankLostShare} /></td>
-              <td className="py-3 px-3 text-xs text-slate-600 max-w-[320px]">{i18n.reason(r)}</td>
+              <td className="py-3 px-3 text-xs text-slate-600 max-w-[340px]">
+                {i18n.reason(r)}
+                {r.searchTerms && r.searchTerms.terms.length > 0 && (
+                  <span className="block mt-1.5 text-[11px] text-slate-500">
+                    <span className="font-semibold text-slate-600">{tr('Searches behind it:')}</span>{' '}
+                    {r.searchTerms.terms.slice(0, 3).map(t => `${t.term} (${t.organicRank === null ? tr('no organic data') : tr('position {rank}', { rank: i18n.dec(t.organicRank, 1) })})`).join(' · ')}
+                  </span>
+                )}
+              </td>
               {plan && (
                 <td className="py-3 px-3">
                   <PlanCell keyword={r.keyword} item={plan[planKeyOf(r.keyword)] || EMPTY_ITEM} onChange={onPlanChange ? item => onPlanChange(r.keyword, item) : undefined} />
@@ -448,6 +456,7 @@ export const KeywordRecommendations: React.FC<{
           <ul className="mt-3 space-y-1.5 text-xs text-slate-600 list-disc pl-4 max-w-3xl">
             {customRules && <li><strong>{tr('These rules were adjusted for this client in Settings.')}</strong> {tr('The figures below are the ones in use.')}</li>}
             <li>{tr('Each Google Ads keyword is matched to the same search query in Search Console for the same period. Keywords with fewer than {min} paid clicks get no recommendation: {judged} of {total} keywords are judged, covering {share} of spend.', { min: s.minPaidClicks, judged: int(summary.judgedKeywords), total: int(recommendations.length), share: pct(summary.judgedSpendShare) })}</li>
+            <li>{tr('When Google Ads search terms can be read, a keyword is judged by the searches it really spends on: it is reduced only if at least {share} of its spend is on searches where you rank in the top {top}, and the cut applies to that share only.', { share: pct(s.minTopOrganicShare), top: s.maxRankForReduce })}</li>
             <li>{tr('Reduce is only proposed when the organic result is in the top {top} and gets at least {clicks} clicks. A keyword with no organic data for its exact text is kept as is, never increased. Positions 2 and 3 get half the cut of position 1.', { top: s.maxRankForReduce, clicks: s.minOrganicClicks })}</li>
             <li>{tr('The cut depends on auction pressure (how often your ad did not show or was outranked): up to {low} when low, {medium} when medium, {high} when high. Brand terms: {brandLow}, {brandMedium} and {brandHigh} under high pressure. Unknown pressure counts as medium.', { low: pct(s.maxCut.nonBrand.low), medium: pct(s.maxCut.nonBrand.medium), high: pct(s.maxCut.nonBrand.high), brandLow: pct(s.maxCut.brand.low), brandMedium: pct(s.maxCut.brand.medium), brandHigh: s.maxCut.brand.high > 0 ? pct(s.maxCut.brand.high) : tr('no cut at all') })}</li>
             <li>{tr('Clicks that still arrive: {rank1} of removed paid clicks at organic position 1, {rank2to4} at positions 2 to 4 (upper end; the lower end is half).', { rank1: pct(s.recovery.rank1), rank2to4: pct(s.recovery.rank2to4) })} {customRules ? tr('These rates are set per client in Settings.') : tr('These rates come from a Google study across industries from 2012. Your own test results will replace them.')}</li>

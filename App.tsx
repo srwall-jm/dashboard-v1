@@ -9,7 +9,7 @@ import GoogleLogin from './GoogleLogin';
 import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry, extractPath, normalizeUrl, parseLocalDate, AI_SOURCE_REGEX_STRING, parseGoogleAdsMetric, isOrganicSearch, isPaidSearch } from './utils';
 import { ga4RunReportAll, gscQueryAll, isAuthExpired } from './dataFetch';
 import { generateMockBridgeData, generateMockAiTrafficData, generateMockKeywordSignals } from './mockData';
-import { KeywordSignal, ShareRow, combineShares, buildRecommendations, RecommendationOverrides, settingsFromOverrides } from './recommendations';
+import { KeywordSignal, ShareRow, SearchTermStat, combineShares, coverSearchTerms, buildRecommendations, RecommendationOverrides, settingsFromOverrides } from './recommendations';
 import { RecommendationRulesPanel } from './components/RecommendationRulesPanel';
 import { TAB_META } from './navigation';
 import { Lang, LANGS, LangProvider, isLang, translate } from './i18n';
@@ -1786,6 +1786,49 @@ const App: React.FC = () => {
             };
         });
 
+        // Search terms: what each keyword really spends on. A broad keyword shows ads for many searches,
+        // so it is judged by them and not by the single search that shares its text.
+        const termsByKeyword: Record<string, Record<string, { cost: number; clicks: number }>> = {};
+        let termsUnavailable = false;
+        const termQuery = `
+            SELECT
+              search_term_view.search_term,
+              segments.keyword.info.text,
+              metrics.clicks,
+              metrics.cost_micros
+            FROM search_term_view
+            WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
+            AND metrics.clicks > 0
+            ORDER BY metrics.cost_micros DESC
+            LIMIT 20000
+        `;
+        for (let i = 0; i < allAccountIds.length; i += 5) {
+            const chunk = allAccountIds.slice(i, i + 5);
+            const termResults = await Promise.all(chunk.map(async id => {
+                const cleanId = id.toString().replace(/-/g, '');
+                if (kwFailures.has(cleanId)) return []; // the account already failed; nothing more to ask
+                const rows = await fetchGoogleAds(termQuery, id);
+                if (kwFailures.has(cleanId)) {
+                    // Search terms are an extra: without them the keyword text is used, and the account is not reported as failed.
+                    kwFailures.delete(cleanId);
+                    termsUnavailable = true;
+                    return [];
+                }
+                return rows;
+            }));
+            termResults.forEach(rows => rows.forEach((row: any) => {
+                const kw = String(row.segments?.keyword?.info?.text || '').toLowerCase().trim();
+                const term = String(row.searchTermView?.searchTerm || '').toLowerCase().trim();
+                if (!kw || !term) return;
+                const byTerm = termsByKeyword[kw] || (termsByKeyword[kw] = {});
+                const entry = byTerm[term] || (byTerm[term] = { cost: 0, clicks: 0 });
+                entry.cost += parseGoogleAdsMetric(row.metrics?.costMicros) / 1000000;
+                entry.clicks += parseGoogleAdsMetric(row.metrics?.clicks);
+            }));
+        }
+        if (bridgeRunAtStart !== bridgeRun.current) return;
+        setWarning('adsTerms', termsUnavailable ? 'Google Ads: search terms could not be read for some accounts. Their keywords are judged by the keyword text only, which is less reliable for broad match.' : null);
+
         // One row per paid keyword, joined to the same query text in Search Console.
         const signals: KeywordSignal[] = Object.entries(googleAdsGlobalKeywordMap).map(([kw, paid]) => {
             const organic = gscQueryTotals.current[kw];
@@ -1800,6 +1843,13 @@ const App: React.FC = () => {
                 organicRank: organic && organic.impressions > 0 ? organic.weightedRankSum / organic.impressions : null,
                 organicClicks: organic?.clicks || 0,
                 organicImpressions: organic?.impressions || 0,
+                searchTerms: coverSearchTerms(
+                    Object.entries(termsByKeyword[kw] || {}).map(([term, t]): SearchTermStat => {
+                        const o = gscQueryTotals.current[term];
+                        return { term, cost: t.cost, clicks: t.clicks, organicRank: o && o.impressions > 0 ? o.weightedRankSum / o.impressions : null, organicClicks: o?.clicks || 0 };
+                    }),
+                    paid.cost
+                ),
             };
         });
         setKeywordSignals(signals);
