@@ -50,6 +50,34 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('seo_suite_user');
     return saved ? JSON.parse(saved) : null;
   });
+
+  // Who Cloudflare Access says is signed in.
+  // 'protected': the site is restricted and the identity comes from Access.
+  // 'open': the functions answer but Access is not configured yet.
+  // 'unknown': no session endpoint (local `npm run dev`).
+  const [accessSession, setAccessSession] = useState<{ status: 'loading' | 'protected' | 'open' | 'unknown'; email?: string }>({ status: 'loading' });
+
+  useEffect(() => {
+    let cancelled = false;
+    type Session = { status: 'protected' | 'open' | 'unknown'; email?: string };
+    fetch('/api/session', { headers: { Accept: 'application/json' } })
+      .then(async (resp): Promise<Session> => {
+        if (!resp.ok || !(resp.headers.get('content-type') || '').includes('application/json')) return { status: 'unknown' };
+        const body = await resp.json();
+        if (body?.protected === true && body.email) return { status: 'protected', email: String(body.email) };
+        return body?.protected === false ? { status: 'open' } : { status: 'unknown' };
+      })
+      .catch((): Session => ({ status: 'unknown' }))
+      .then(next => {
+        if (cancelled) return;
+        setAccessSession(next);
+        if (next.status === 'protected' && next.email) {
+          const name = next.email.split('@')[0].split(/[._-]+/).filter(Boolean).map(part => part[0].toUpperCase() + part.slice(1)).join(' ');
+          setUser({ name: name || next.email, email: next.email, picture: '' });
+        }
+      });
+    return () => { cancelled = true; };
+  }, []);
   
   const [ga4Auth, setGa4Auth] = useState<{ token: string; property: Ga4Property | null } | null>(() => {
     const saved = sessionStorage.getItem('ga4_auth');
@@ -1797,6 +1825,7 @@ const App: React.FC = () => {
     sessionStorage.removeItem('ga4_auth');
     sessionStorage.removeItem('gsc_auth');
     sessionStorage.removeItem('googleads_auth');
+    if (accessSession.status === 'protected') window.location.href = '/cdn-cgi/access/logout';
   };
   
   const handleConnectGa4 = () => { 
@@ -1984,6 +2013,14 @@ const App: React.FC = () => {
     localStorage.setItem('openai_api_key', openaiKey); 
   }, [openaiKey]);
   
+  if (!user && accessSession.status === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
+        <div className="w-10 h-10 border-4 border-slate-900 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div className="min-h-screen bg-white flex flex-col md:flex-row overflow-hidden">
@@ -2221,6 +2258,16 @@ const App: React.FC = () => {
           </div>
         )}
         
+        {accessSession.status === 'open' && (
+          <div className="mb-8 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3 text-rose-800 shadow-sm print:hidden">
+            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-black text-xs uppercase tracking-widest">Access is not restricted yet</p>
+              <p className="font-bold text-xs">Anyone with a Google account can open this dashboard. Set up Cloudflare Access to limit it to @jellyfish.com (README, "Restricting access").</p>
+            </div>
+          </div>
+        )}
+
         {isShowingSampleData && (
           <div className="mb-8 p-4 bg-amber-50 border border-amber-300 rounded-2xl flex items-center gap-3 text-amber-900 shadow-sm">
             <AlertCircle className="w-5 h-5 flex-shrink-0" />

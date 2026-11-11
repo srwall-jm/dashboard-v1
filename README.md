@@ -48,8 +48,32 @@ In the dashboard, open Settings and:
 
 These values are saved in the browser, so today each person sets them up once per browser.
 
+## Restricting access
+
+The site is limited to `@jellyfish.com` accounts with Cloudflare Access. Access asks for a Google sign-in before anything loads, and the functions check the token Access signs on every request (`server/access.js`), so the app, the API and preview URLs are all covered.
+
+Until this is set up, the dashboard shows a red "Access is not restricted yet" notice and anyone with a Google account can open it.
+
+One-time setup, by someone who administers the Cloudflare account (menu names may differ slightly in the Cloudflare dashboard):
+
+1. Zero Trust > Settings > Authentication: add Google as a login method (or keep the one-time PIN by email).
+2. Zero Trust > Access > Applications: add a self-hosted application for the production domain of the Pages project. Add the `*.<project>.pages.dev` domain as well so preview URLs are covered.
+3. Add an Allow policy: emails ending in `@jellyfish.com`.
+4. Copy the application's "Application Audience (AUD) Tag", and note the team domain (`<team>.cloudflareaccess.com`).
+5. Pages project > Settings > Variables and Secrets, for Production and Preview:
+
+| Name | Value |
+| --- | --- |
+| `ACCESS_TEAM_DOMAIN` | `<team>.cloudflareaccess.com` |
+| `ACCESS_AUD` | the AUD tag from step 4 |
+| `ALLOWED_EMAIL_DOMAINS` | Optional, comma separated. Default `jellyfish.com`. |
+
+6. Redeploy. Open the site in a private window: Cloudflare should ask for the sign-in, and the red notice should be gone.
+
+Both variables must be set for the check to switch on. Once they are, a request without a valid Access token is rejected, so set them only after steps 1 to 4 work. To let a specific client in later, add their email to the Access policy and their domain to `ALLOWED_EMAIL_DOMAINS`.
+
 ## Known limits
 
-- The login screen identifies the user but does not restrict who can sign in.
+- Without Cloudflare Access configured (see "Restricting access"), the login screen identifies the user but does not restrict who can sign in.
 - Google connections last about 1 hour and are asked for again in a new tab.
 - Client settings are per browser, not shared across the team.
