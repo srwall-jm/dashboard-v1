@@ -1,5 +1,6 @@
 
 import { DailyData, KeywordData, ChannelType, QueryType, BridgeData, AiTrafficData, KeywordBridgeData } from './types';
+import type { KeywordSignal } from './recommendations';
 
 export const COUNTRIES = ['Spain', 'Mexico', 'United States', 'United Kingdom', 'France', 'Germany', 'Italy', 'Portugal'];
 const QUERY_TYPES: QueryType[] = ['Branded', 'Non-Branded'];
@@ -282,4 +283,28 @@ export const generateMockAiTrafficData = (): AiTrafficData[] => {
     });
   }
   return data;
+};
+
+// Sample keywords for the recommendation panel. One of each situation the model handles.
+export const generateMockKeywordSignals = (): KeywordSignal[] => {
+  const row = (
+    keyword: string, cost: number, paidClicks: number, paidConversions: number,
+    organicRank: number | null, organicClicks: number, organicImpressions: number,
+    impressionShare: number | null, rankLostShare: number | null
+  ): KeywordSignal => ({
+    keyword, isBrand: false, cost: cost / 4, paidClicks, paidImpressions: paidClicks * 12, paidConversions,
+    organicRank, organicClicks, organicImpressions, impressionShare, rankLostShare, topImpressionShare: null,
+  });
+  return [
+    row('running shoes', 4200, 2100, 96, 1.2, 5400, 21000, 0.86, 0.04),
+    row('trail running shoes', 2600, 1150, 51, 1.4, 2300, 9800, 0.71, 0.18),
+    row('waterproof running jacket', 1900, 820, 30, 2.3, 1100, 8200, 0.78, 0.07),
+    row('marathon training plan', 1350, 900, 12, 1.1, 3900, 14000, 0.52, 0.38),
+    row('carbon plate shoes', 3100, 980, 74, 14.5, 60, 5200, 0.44, 0.41),
+    row('running shoes sale', 2800, 1400, 88, null, 0, 0, 0.58, 0.27),
+    row('best running socks', 950, 610, 19, 6.8, 240, 4100, 0.69, 0.12),
+    row('kids running shoes', 1700, 760, 9, 22.0, 15, 1900, 0.35, 0.33),
+    row('gps running watch', 2200, 700, 41, 3.0, 0, 3000, 0.74, 0.09),
+    row('running headlamp', 38, 14, 1, 1.8, 320, 1500, 0.9, 0.02),
+  ];
 };

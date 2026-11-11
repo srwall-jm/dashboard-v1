@@ -7,7 +7,8 @@ import { getDashboardInsights, getOpenAiInsights } from './insightsService';
 import GoogleLogin from './GoogleLogin'; 
 import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry, extractPath, normalizeUrl, parseLocalDate, AI_SOURCE_REGEX_STRING, parseGoogleAdsMetric, isOrganicSearch, isPaidSearch } from './utils';
 import { ga4RunReportAll, gscQueryAll, isAuthExpired } from './dataFetch';
-import { generateMockBridgeData, generateMockAiTrafficData } from './mockData';
+import { generateMockBridgeData, generateMockAiTrafficData, generateMockKeywordSignals } from './mockData';
+import { KeywordSignal, ShareRow, combineShares } from './recommendations';
 // Import New Components and Views
 import { Sidebar } from './components/Sidebar';
 import { SettingsModal } from './components/SettingsModal';
@@ -89,6 +90,10 @@ const App: React.FC = () => {
   const [keywordBridgeDataGA4, setKeywordBridgeDataGA4] = useState<KeywordBridgeData[]>([]);
   const [keywordBridgeDataGoogleAds, setKeywordBridgeDataGoogleAds] = useState<KeywordBridgeData[]>([]);
   const [globalKeywordBridgeDataGoogleAds, setGlobalKeywordBridgeDataGoogleAds] = useState<KeywordBridgeData[]>([]);
+  // One row per paid keyword with its organic counterpart, input of the recommendation model.
+  const [keywordSignals, setKeywordSignals] = useState<KeywordSignal[]>([]);
+  // Search Console totals per query (all URLs together), filled while the bridge data loads.
+  const gscQueryTotals = useRef<Record<string, { clicks: number; impressions: number; weightedRankSum: number }>>({});
   
   const [aiTrafficData, setAiTrafficData] = useState<AiTrafficData[]>([]); 
   const [gscDailyTotals, setGscDailyTotals] = useState<any[]>([]);
@@ -528,6 +533,7 @@ const App: React.FC = () => {
     if (!gscAuth?.token && !ga4Auth?.token && !googleAdsAuth?.token) {
         if (!bridgeDataGA4.length) setBridgeDataGA4(generateMockBridgeData());
         if (!bridgeDataGoogleAds.length) setBridgeDataGoogleAds(generateMockBridgeData());
+        if (!keywordSignals.length) setKeywordSignals(generateMockKeywordSignals());
         setIsLoadingBridge(false);
         return;
     }
@@ -589,6 +595,7 @@ const App: React.FC = () => {
     
     // 1. TRY GSC FETCH (If Available)
     setWarning('gscBridge', null);
+    gscQueryTotals.current = {};
     if (gscAuth?.site && gscAuth.token) {
         try {
             const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
@@ -617,6 +624,12 @@ const App: React.FC = () => {
                     const impressions = row.impressions;
                     const rank = row.position;
                     const cleanPath = normalizeUrl(fullUrl);
+
+                    const queryKey = String(query).toLowerCase().trim();
+                    const queryTotal = gscQueryTotals.current[queryKey] || (gscQueryTotals.current[queryKey] = { clicks: 0, impressions: 0, weightedRankSum: 0 });
+                    queryTotal.clicks += clicks;
+                    queryTotal.impressions += impressions;
+                    queryTotal.weightedRankSum += rank * impressions;
                     
                     // 1. Fill URL Map (Bridge Data)
                     if (!gscUrlMap[cleanPath]) {
@@ -956,15 +969,18 @@ const App: React.FC = () => {
             setIsGoogleAdsKeywordsLoaded(false); // Reset keywords
             setKeywordBridgeDataGoogleAds([]);
             setGlobalKeywordBridgeDataGoogleAds([]);
+            setKeywordSignals([]);
          } catch (err: any) {
              console.error("Error fetching Google Ads data:", err);
              setError(err.message || "Failed to fetch Google Ads data");
              setBridgeDataGoogleAds([]);
              setKeywordBridgeDataGoogleAds([]);
+             setKeywordSignals([]);
          }
     } else {
          setBridgeDataGoogleAds([]);
          setKeywordBridgeDataGoogleAds([]);
+         setKeywordSignals([]);
     }
     
     // 3. TRY GA4 FETCH (If Available)
@@ -1166,18 +1182,30 @@ const App: React.FC = () => {
     const googleAdsGlobalKeywordMap: Record<string, { clicks: number, conversions: number, cost: number, impressions: number }> = {};
     const googleAdsKeywordUrlMap: Record<string, { clicks: number, conversions: number, cost: number }> = {};
     
-    const googleAdsKwQuery = `
-        SELECT 
+    const buildKwQuery = (withShares: boolean) => `
+        SELECT
           ad_group_criterion.keyword.text,
           ad_group_criterion.final_urls,
-          metrics.cost_micros, 
-          metrics.clicks, 
+          metrics.cost_micros,
+          metrics.clicks,
           metrics.conversions,
-          metrics.impressions
+          metrics.impressions${withShares ? `,
+          metrics.search_impression_share,
+          metrics.search_rank_lost_impression_share,
+          metrics.search_top_impression_share` : ''}
         FROM keyword_view
         WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
         AND metrics.clicks > 0
     `;
+    // Impression share tells how hard competitors push on each keyword.
+    // If an account rejects those fields, the keyword load still works without them.
+    const kwShareRows: Record<string, ShareRow[]> = {};
+    let sharesUnavailable = false;
+    const parseShare = (value: any): number | null => {
+        if (value === undefined || value === null || value === '') return null;
+        const n = Number(value);
+        return Number.isFinite(n) ? n : null;
+    };
 
     const kwFailures = new Map<string, string>();
     setWarning('adsKeywords', null);
@@ -1222,7 +1250,16 @@ const App: React.FC = () => {
         const chunkSize = 5; 
         for (let i = 0; i < allAccountIds.length; i += chunkSize) {
             const chunk = allAccountIds.slice(i, i + chunkSize);
-            const results = await Promise.all(chunk.map(id => fetchGoogleAds(googleAdsKwQuery, id)));
+            const results = await Promise.all(chunk.map(async id => {
+                const cleanId = id.toString().replace(/-/g, '');
+                const rows = await fetchGoogleAds(buildKwQuery(true), id);
+                if (!kwFailures.has(cleanId)) return rows;
+                // Retry without impression share before reporting the account as failed.
+                kwFailures.delete(cleanId);
+                const basicRows = await fetchGoogleAds(buildKwQuery(false), id);
+                if (!kwFailures.has(cleanId)) sharesUnavailable = true;
+                return basicRows;
+            }));
             
             results.forEach((accountKwRows) => {
                 accountKwRows.forEach((row: any) => {
@@ -1243,6 +1280,13 @@ const App: React.FC = () => {
                     googleAdsGlobalKeywordMap[cleanKw].conversions += conversions;
                     googleAdsGlobalKeywordMap[cleanKw].impressions += impressions;
                     googleAdsGlobalKeywordMap[cleanKw].cost += cost;
+
+                    (kwShareRows[cleanKw] || (kwShareRows[cleanKw] = [])).push({
+                        impressions,
+                        impressionShare: parseShare(metrics?.searchImpressionShare),
+                        rankLostShare: parseShare(metrics?.searchRankLostImpressionShare),
+                        topImpressionShare: parseShare(metrics?.searchTopImpressionShare),
+                    });
 
                     const finalUrls: string[] = row.adGroupCriterion?.finalUrls || row.adGroupCriterion?.final_urls || [];
                     if (Array.isArray(finalUrls) && finalUrls.length > 0) {
@@ -1381,6 +1425,25 @@ const App: React.FC = () => {
                 actionLabel: avgRank !== null && avgRank <= 3 && item.paidSessions > 0 ? "REVIEW" : "MAINTAIN"
             };
         });
+
+        // One row per paid keyword, joined to the same query text in Search Console.
+        const signals: KeywordSignal[] = Object.entries(googleAdsGlobalKeywordMap).map(([kw, paid]) => {
+            const organic = gscQueryTotals.current[kw];
+            return {
+                keyword: kw,
+                isBrand: false, // set in the view, the brand regex can change after loading
+                cost: paid.cost,
+                paidClicks: paid.clicks,
+                paidImpressions: paid.impressions,
+                paidConversions: paid.conversions,
+                ...combineShares(kwShareRows[kw] || []),
+                organicRank: organic && organic.impressions > 0 ? organic.weightedRankSum / organic.impressions : null,
+                organicClicks: organic?.clicks || 0,
+                organicImpressions: organic?.impressions || 0,
+            };
+        });
+        setKeywordSignals(signals);
+        setWarning('adsShares', sharesUnavailable ? 'Google Ads: impression share could not be read for some accounts. Competitive pressure is treated as medium on their keywords, so reductions are more cautious.' : null);
 
         setKeywordBridgeDataGoogleAds(googleAdsKwResults.sort((a, b) => b.paidSessions - a.paidSessions));
         setGlobalKeywordBridgeDataGoogleAds(finalGlobalKwResults.sort((a, b) => b.paidSessions - a.paidSessions));
@@ -2219,6 +2282,10 @@ const App: React.FC = () => {
                  isBranded={isBranded}
                  onRefresh={handleManualRefresh}
                  queryTypeFilter={filters.queryType}
+                 keywordSignals={keywordSignals}
+                 periodDays={Math.round((parseLocalDate(filters.dateRange.end).getTime() - parseLocalDate(filters.dateRange.start).getTime()) / 86400000) + 1}
+                 clientName={gscAuth?.site?.siteUrl || ga4Auth?.property?.name || ''}
+                 periodLabel={`${filters.dateRange.start} to ${filters.dateRange.end}`}
               />
           )}
           

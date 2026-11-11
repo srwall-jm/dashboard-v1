@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+Added
+- Keyword recommendations in Search Efficiency: reduce, hold or increase per keyword, with the reason, the suggested spend, and the clicks kept by organic and at risk. Spend is never recommended to go to zero; the floor rises with competitive pressure (impression share lost to ad rank) and is higher for brand terms. Assumptions are listed in the panel.
+- Google Ads keyword load reads impression share, with a fallback and a notice when an account does not return it.
+
+Fixed
+- Savings in Search Efficiency were a flat 40% of spend per URL, and the accumulated figure was that number times 2.5. Both now come from the keyword model and refer to the selected period, with a 30 day projection.
+
 Changed
 - "Organic" and "Paid" now mean search only: GA4 `Organic Search` and `Paid Search`. Organic Social, Organic Shopping, Organic Video, Paid Social, Paid Shopping, Paid Video and Paid Other no longer count in the channel KPIs, charts, country tables or the per URL join.
 

@@ -9,6 +9,8 @@ import { KeywordBridgeData, GoogleAdsGlobalMetrics } from '../types';
 import { KpiCard } from '../components/KpiCard';
 import { EmptyState } from '../components/EmptyState';
 import { exportToCSV } from '../utils';
+import { KeywordSignal, recommendKeywords, summarizeRecommendations } from '../recommendations';
+import { KeywordRecommendations } from '../components/KeywordRecommendations';
 
 interface UrlEfficiencyRow {
   url: string;
@@ -42,11 +44,24 @@ export const SearchEfficiencyView: React.FC<{
   isBranded?: (text: string) => boolean;
   onRefresh?: () => void;
   queryTypeFilter: 'All' | 'Branded' | 'Non-Branded';
-}> = ({ urlData, keywordData, currencySymbol, globalMetrics, totalGscClicks, isLoading, isBranded, onRefresh, queryTypeFilter }) => {
+  keywordSignals?: KeywordSignal[];
+  periodDays?: number;
+  clientName?: string;
+  periodLabel?: string;
+}> = ({ urlData, keywordData, currencySymbol, globalMetrics, totalGscClicks, isLoading, isBranded, onRefresh, queryTypeFilter, keywordSignals = [], periodDays = 30, clientName, periodLabel }) => {
   const [clusterFilter, setClusterFilter] = useState<'All' | 'Cannibalization Risk' | 'Paid Reliance' | 'Paid Gap'>('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ppcCost', direction: 'desc' });
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
+
+  // 0. Keyword recommendations (reduce / hold / increase), the source of every saving figure in this view
+  const { recommendations, recSummary } = useMemo(() => {
+    const signals = keywordSignals
+      .map(k => ({ ...k, isBrand: isBranded ? isBranded(k.keyword) : k.isBrand }))
+      .filter(k => queryTypeFilter === 'All' || (queryTypeFilter === 'Branded' ? k.isBrand : !k.isBrand));
+    const recs = recommendKeywords(signals);
+    return { recommendations: recs, recSummary: summarizeRecommendations(recs, periodDays) };
+  }, [keywordSignals, isBranded, queryTypeFilter, periodDays]);
 
   // 1. Data Processing Engine & Scorecard Calculations
   const { filteredData, metrics } = useMemo(() => {
@@ -175,7 +190,6 @@ export const SearchEfficiencyView: React.FC<{
         // Clustering
         if (urlData.avgOrganicRank !== null && urlData.avgOrganicRank <= 3 && urlData.ppcCost > 0) {
             urlData.cluster = 'Cannibalization Risk';
-            potentialSavings += urlData.ppcCost * 0.4; // Estimate 40% savings
         } else if ((urlData.avgOrganicRank === null || urlData.avgOrganicRank > 10) && urlData.ppcCost > 0) {
             urlData.cluster = 'Paid Reliance';
         } else if (urlData.organicClicks > 0 && (!urlData.ppcCost || urlData.ppcCost === 0)) {
@@ -198,8 +212,9 @@ export const SearchEfficiencyView: React.FC<{
         totalCost = globalMetrics.totalCost;
     }
     
+    // Savings come from the keyword model, never from a flat percentage of spend.
+    potentialSavings = Math.min(recSummary.spendCut, totalCost);
     const optimizedSpend = totalCost - potentialSavings;
-    const accumulatedSavings = potentialSavings * 2.5;
 
     const overallTotalTraffic = totalOrganicClicks + totalPaidSessions;
     const avgPaidShare = overallTotalTraffic > 0 ? (totalPaidSessions / overallTotalTraffic) * 100 : 0;
@@ -213,9 +228,9 @@ export const SearchEfficiencyView: React.FC<{
 
     return { 
         filteredData: result, 
-        metrics: { totalCost, potentialSavings, optimizedSpend, accumulatedSavings, avgPaidShare, topCannibalizedUrls } 
+        metrics: { totalCost, potentialSavings, optimizedSpend, avgPaidShare, topCannibalizedUrls } 
     };
-  }, [urlData, keywordData, clusterFilter, queryTypeFilter, searchTerm, globalMetrics, isBranded]);
+  }, [urlData, keywordData, clusterFilter, queryTypeFilter, searchTerm, globalMetrics, isBranded, recSummary]);
 
   // 3. Sorting
   const sortedData = useMemo(() => {
@@ -400,19 +415,19 @@ export const SearchEfficiencyView: React.FC<{
                  <PiggyBank size={64} />
              </div>
              <p className="text-slate-100 font-bold uppercase tracking-widest text-xs mb-2 flex items-center gap-2">
-                 <Zap size={14} /> Potential Monthly Savings
+                 <Zap size={14} /> Spend that can come down
              </p>
              <h3 className="text-4xl font-black tracking-tight">{currencySymbol}{formatCurrency(metrics.potentialSavings, 0)}</h3>
-             <p className="text-slate-100 text-sm mt-2 font-medium">From Optimization</p>
+             <p className="text-slate-100 text-sm mt-2 font-medium">In this period, about {currencySymbol}{formatCurrency(recSummary.spendCutMonthly, 0)} a month</p>
          </div>
 
          <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 p-6 rounded-[32px] text-white shadow-lg shadow-indigo-500/20 relative overflow-hidden">
              <div className="absolute top-0 right-0 p-6 opacity-20">
                  <TrendingDown size={64} />
              </div>
-             <p className="text-indigo-100 font-bold uppercase tracking-widest text-xs mb-2">Total Synergy Saved</p>
-             <h3 className="text-4xl font-black tracking-tight">{currencySymbol}{formatCurrency(metrics.accumulatedSavings, 0)}</h3>
-             <p className="text-indigo-200 text-sm mt-2 font-medium">Accumulated over time</p>
+             <p className="text-indigo-100 font-bold uppercase tracking-widest text-xs mb-2">Clicks at risk</p>
+             <h3 className="text-4xl font-black tracking-tight">{Math.round(recSummary.clicksAtRisk.low).toLocaleString('en-US')}–{Math.round(recSummary.clicksAtRisk.high).toLocaleString('en-US')}</h3>
+             <p className="text-indigo-200 text-sm mt-2 font-medium">Paid clicks that may be lost with the cut</p>
          </div>
 
          <div className="bg-gradient-to-br from-amber-400 to-amber-600 p-6 rounded-[32px] text-white shadow-lg shadow-amber-500/20 relative overflow-hidden">
@@ -424,6 +439,17 @@ export const SearchEfficiencyView: React.FC<{
              <p className="text-amber-100 text-sm mt-2 font-medium">Paid vs Organic Traffic</p>
          </div>
       </div>
+
+      {/* Section 1b: Keyword recommendations */}
+      <KeywordRecommendations
+        recommendations={recommendations}
+        summary={recSummary}
+        currencySymbol={currencySymbol}
+        periodDays={periodDays}
+        periodLabel={periodLabel}
+        clientName={clientName}
+        isLoading={isLoading}
+      />
 
       {/* Section 2: Chart */}
       <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
