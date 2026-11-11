@@ -6,6 +6,7 @@ import {
   DollarSign, TrendingDown, PiggyBank, Target, AlertTriangle, CheckCircle, Search, FileText, Info, Zap, ChevronUp, ChevronDown, Key, ExternalLink, Filter, ChevronRight, RefreshCw
 } from 'lucide-react';
 import { KeywordBridgeData, GoogleAdsGlobalMetrics } from '../types';
+import { SortableTh } from '../components/SortableTh';
 import { KpiCard } from '../components/KpiCard';
 import { EmptyState } from '../components/EmptyState';
 import { exportToCSV } from '../utils';
@@ -372,20 +373,7 @@ export const SearchEfficiencyView: React.FC<{
   };
 
   const SortableHeader = ({ label, sortKey, align = 'right', title }: { label: string, sortKey: keyof UrlEfficiencyRow, align?: 'left' | 'center' | 'right', title?: string }) => (
-    <th 
-        className={`py-2 px-2 text-[11px] font-bold text-slate-500 uppercase tracking-tight cursor-pointer hover:text-indigo-600 hover:bg-slate-50 transition-colors select-none text-${align}`}
-        onClick={() => handleSort(sortKey)}
-        title={title}
-    >
-        <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}>
-            <span className="whitespace-nowrap">{label}</span>
-            {title && <Info size={8} className="text-slate-300" />}
-            <div className="flex flex-col">
-                <ChevronUp size={8} className={`${sortConfig.key === sortKey && sortConfig.direction === 'asc' ? 'text-indigo-600' : 'text-slate-300'}`} />
-                <ChevronDown size={8} className={`${sortConfig.key === sortKey && sortConfig.direction === 'desc' ? 'text-indigo-600' : 'text-slate-300'}`} />
-            </div>
-        </div>
-    </th>
+    <SortableTh label={label} align={align} title={title} active={sortConfig.key === sortKey} direction={sortConfig.direction} onSort={() => handleSort(sortKey)} />
   );
 
   if (isLoading && urlData.length === 0) {
@@ -514,6 +502,8 @@ export const SearchEfficiencyView: React.FC<{
                               <tr 
                                   className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors cursor-pointer ${expandedUrl === row.url ? 'bg-slate-50/80' : ''}`}
                                   onClick={() => toggleRow(row.url)}
+                                  tabIndex={0}
+                                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); (() => toggleRow(row.url))(); } }}
                               >
                                   <td className="py-2 px-2 text-slate-500">
                                       <ChevronRight size={14} className={`transition-transform ${expandedUrl === row.url ? 'rotate-90' : ''}`} />

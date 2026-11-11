@@ -3,6 +3,10 @@
 ## Unreleased
 
 Changed (independent design review)
+- Donut charts replaced by sorted bars with written figures; scatter plots use one colour, labelled axes and country names; AI traffic quality is written, not a coloured dot.
+- Older tables: sortable headers are buttons with a sort direction, and expandable rows open from the keyboard.
+- Settings reorganised as the four steps to set up a client, with agency-wide credentials in a collapsed block.
+- Numbers always use one locale.
 - Summary rewritten around the client's decision: headline per month with cuts and increases together, the real cost of each click the ads add, expected loss in proportion, what each increase buys, a net line, a test stop rule and the assumptions.
 - Spend recommendations: duplicated cards, the two-bar chart and the mislabelled "Top cannibalized URLs" block removed; sortable keyword table; the URL table moved to a collapsed analyst detail.
 - Client view and print show two complete tables (Reduce, Increase) with assumptions, no controls, and a header with client, period and date. Print is A4 landscape.

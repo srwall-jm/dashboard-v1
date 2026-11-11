@@ -1694,7 +1694,7 @@ const App: React.FC = () => {
         ],
       }, { maxRows: 300000 });
       if (ga4Data.truncated) {
-        setWarning('ga4', `GA4: loaded ${ga4Data.rows.length.toLocaleString()} of ${(ga4Data.totalRows || 0).toLocaleString()} rows. Sessions and revenue are understated. Use a shorter date range.`);
+        setWarning('ga4', `GA4: loaded ${ga4Data.rows.length.toLocaleString('en-US')} of ${(ga4Data.totalRows || 0).toLocaleString('en-US')} rows. Sessions and revenue are understated. Use a shorter date range.`);
       }
       
       const currentStart = parseInt(filters.dateRange.start.replace(/-/g, ''), 10);
@@ -2057,14 +2057,14 @@ const App: React.FC = () => {
       if (activeTab === DashboardTab.ORGANIC_VS_PAID) {
         summary = `
           Context: Analysis of Organic vs Paid Search funnels.
-          Organic Stats: ${channelStats.organic.current.sessions} sessions, ${currencySymbol}${channelStats.organic.current.revenue.toLocaleString()} revenue, ${channelStats.organic.current.cr.toFixed(2)}% CR.
-          Paid Stats: ${channelStats.paid.current.sessions} sessions, ${currencySymbol}${channelStats.paid.current.revenue.toLocaleString()} revenue, ${channelStats.paid.current.cr.toFixed(2)}% CR.
+          Organic Stats: ${channelStats.organic.current.sessions} sessions, ${currencySymbol}${channelStats.organic.current.revenue.toLocaleString('en-US')} revenue, ${channelStats.organic.current.cr.toFixed(2)}% CR.
+          Paid Stats: ${channelStats.paid.current.sessions} sessions, ${currencySymbol}${channelStats.paid.current.revenue.toLocaleString('en-US')} revenue, ${channelStats.paid.current.cr.toFixed(2)}% CR.
           Search Weight: ${channelStats.shares.sessions.current.toFixed(1)}% share.
         `;
       } else if (activeTab === DashboardTab.SEO_BY_COUNTRY) {
         summary = `
           Context: Market-level SEO efficiency.
-          Organic GA4 Rev: ${currencySymbol}${channelStats.organic.current.revenue.toLocaleString()}.
+          Organic GA4 Rev: ${currencySymbol}${channelStats.organic.current.revenue.toLocaleString('en-US')}.
         `;
       } else if (activeTab === DashboardTab.PPC_SEO_BRIDGE) {
         const primaryBridgeData = bridgeDataGoogleAds.length > 0 ? bridgeDataGoogleAds : bridgeDataGA4;
@@ -2082,7 +2082,7 @@ const App: React.FC = () => {
           const avgCpa = totalConv > 0 ? totalCost / totalConv : 0;
           summary = `
             Context: Google Ads / Paid Search Performance Analysis by URL.
-            Total Spend: ${currencySymbol}${totalCost.toLocaleString()}.
+            Total Spend: ${currencySymbol}${totalCost.toLocaleString('en-US')}.
             Total Conversions: ${totalConv}.
             Average CPA: ${currencySymbol}${avgCpa.toFixed(2)}.
             Look for high CPA URLs and efficient high-volume URLs in the data provided.
@@ -2100,7 +2100,7 @@ const App: React.FC = () => {
          summary = `
            Context: Search Efficiency & Cost Savings.
            Goal: Identify wasted spend (Cannibalization) and incremental growth opportunities.
-           Estimated Potential Brand Savings (Brand Tax): ${currencySymbol}${brandTax.toLocaleString()}.
+           Estimated Potential Brand Savings (Brand Tax): ${currencySymbol}${brandTax.toLocaleString('en-US')}.
            The dashboard highlights where we pay for Brand terms despite ranking #1 organically.
          `;
       }

@@ -29,14 +29,14 @@ const QueryDetailRow: React.FC<{ query: string, rank: number | null, clicks: num
         </span>
       ) : '-'}
     </td>
-    <td className="text-right py-2 text-[11px] font-bold text-slate-700">{clicks.toLocaleString()}</td>
+    <td className="text-right py-2 text-[11px] font-bold text-slate-700">{clicks.toLocaleString('en-US')}</td>
     <td className="text-right py-2 text-[11px] font-bold text-indigo-600">
         <div className="flex flex-col items-end">
             {isLoading ? (
               <span className="text-[11px] text-slate-500 animate-pulse italic">Loading…</span>
             ) : (
               <>
-                <span>{paidClicks.toLocaleString()}</span>
+                <span>{paidClicks.toLocaleString('en-US')}</span>
                 <span className="text-[11px] text-rose-500">{currencySymbol}{paidCost.toFixed(2)}</span>
               </>
             )}
@@ -315,10 +315,10 @@ const BridgeAnalysisTable: React.FC<{
             <div className="flex flex-col gap-2">
               <div>
                 <div className="flex items-center gap-3">
-                    <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">{title}</h4>
+                    <h4 className="text-base font-bold text-slate-900">{title}</h4>
                     {headerContent}
                 </div>
-                <p className="text-[11px] font-bold text-slate-600">{subTitle}</p>
+                <p className="text-xs font-medium text-slate-600 mt-0.5">{subTitle}</p>
               </div>
               <div className="flex bg-slate-100 p-1 rounded-xl w-fit">
                 <button onClick={() => setViewMode('url')} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase transition-all ${viewMode === 'url' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>
@@ -385,8 +385,8 @@ const BridgeAnalysisTable: React.FC<{
                           </div>
                       </td>
                       <td className="py-3 px-4 text-center"><span className="text-[11px] font-bold text-slate-600">{row.organicRank ? `#${row.organicRank.toFixed(1)}` : '-'}</span></td>
-                      <td className="py-3 px-4 text-right"><span className="text-[11px] font-bold text-emerald-600">{row.organicSessions.toLocaleString()}</span></td>
-                      <td className="py-3 px-4 text-right"><span className="text-[11px] font-bold text-indigo-600">{row.ppcSessions.toLocaleString()}</span></td>
+                      <td className="py-3 px-4 text-right"><span className="text-[11px] font-bold text-emerald-600">{row.organicSessions.toLocaleString('en-US')}</span></td>
+                      <td className="py-3 px-4 text-right"><span className="text-[11px] font-bold text-indigo-600">{row.ppcSessions.toLocaleString('en-US')}</span></td>
                       <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className={`h-full ${row.blendedCostRatio > 0.5 ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${row.blendedCostRatio * 100}%` }} /></div>
@@ -453,8 +453,8 @@ const BridgeAnalysisTable: React.FC<{
                       <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/80 transition-colors">
                         <td className="py-3 px-4"><div className="flex items-center gap-2"><Key size={10} className="text-slate-500" /><span className="text-[11px] font-bold text-slate-800">{row.keyword}</span></div></td>
                         <td className="py-3 px-4 text-center">{row.organicRank ? <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${row.organicRank <= 3 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>#{row.organicRank.toFixed(1)}</span> : <span className="text-[11px] text-slate-500">-</span>}</td>
-                        <td className="py-3 px-4 text-right"><span className="text-[11px] font-bold text-emerald-600">{row.organicClicks.toLocaleString()}</span></td>
-                        <td className="py-3 px-4 text-right"><span className={`text-[11px] font-bold ${row.paidSessions > 0 ? 'text-indigo-600' : 'text-slate-500'}`}>{row.paidSessions.toLocaleString()}</span></td>
+                        <td className="py-3 px-4 text-right"><span className="text-[11px] font-bold text-emerald-600">{row.organicClicks.toLocaleString('en-US')}</span></td>
+                        <td className="py-3 px-4 text-right"><span className={`text-[11px] font-bold ${row.paidSessions > 0 ? 'text-indigo-600' : 'text-slate-500'}`}>{row.paidSessions.toLocaleString('en-US')}</span></td>
                          <td className="py-3 px-4 text-right"><span className="text-[11px] font-bold text-slate-600">{row.paidCvr.toFixed(2)}%</span></td>
                         <td className="py-3 px-4 text-right">
                           <div className="group relative inline-block">
@@ -476,7 +476,7 @@ const BridgeAnalysisTable: React.FC<{
       <div className="bg-slate-900 p-6 md:p-8 rounded-2xl border border-slate-800 shadow-2xl relative overflow-hidden">
          <div className="flex justify-between items-center mb-6 z-10 relative">
             <div>
-                <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Sessions Performance (Time Overlay)</h4>
+                <h4 className="text-base font-bold text-slate-900">Sessions Performance (Time Overlay)</h4>
                 <p className="text-[11px] font-bold text-white">Aggregated Performance for {selectedUrls.size} Selected URLs ({dataSourceName} Scope)</p>
             </div>
             <div className="p-2 bg-white/10 rounded-xl">

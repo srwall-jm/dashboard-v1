@@ -72,7 +72,7 @@ export const DateRangeSelector: React.FC<{
       </button>
 
       {isOpen && (
-        <div className="absolute top-full mt-2 left-0 w-[480px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] overflow-hidden flex">
+        <div className="absolute top-full mt-2 left-0 w-[min(480px,calc(100vw-2rem))] bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] overflow-hidden flex">
           <div className="w-1/2 border-r border-slate-100 bg-slate-50/50 max-h-[420px] overflow-y-auto custom-scrollbar">
             <div className="p-2 grid grid-cols-1 gap-0.5">
               {ranges.map((r) => (

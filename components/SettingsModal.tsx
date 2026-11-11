@@ -97,12 +97,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Content - Scrollable */}
         <div className="overflow-y-auto p-8 space-y-8 custom-scrollbar bg-slate-50">
           
-          {clientProfilePanel}
-
           {/* Section 1: Data Connectors */}
           <section className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
             <div className="flex items-center gap-2 mb-4 text-slate-900">
-               <h3 className="text-sm font-bold uppercase tracking-wide text-slate-900">Data Connectors</h3>
+               <h3 className="text-sm font-bold text-slate-900">1. Connect Google and choose this client's data</h3>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -185,6 +183,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               />
             )}
 
+          </section>
+
+          {/* Section 3: SEO Settings */}
+          <section>
+            <div className="flex items-center gap-2 mb-4 text-slate-900">
+              <div className="p-2 bg-slate-100 rounded-lg"><Settings2 size={16} className="text-indigo-600" /></div>
+              <h3 className="text-sm font-bold">2. Brand terms</h3>
+            </div>
+            
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                <label className="text-[11px] font-bold uppercase text-slate-500 tracking-wide block mb-2">Branded Keyword Regex</label>
+                <div className="flex gap-4">
+                    <input type="text" value={brandRegexStr} onChange={e => setBrandRegexStr(e.target.value)} className="flex-1 bg-white border border-slate-200 rounded-xl text-xs p-3 font-mono outline-none focus:ring-2 ring-indigo-500" placeholder="brand|shop|store" />
+                    <div className="w-24 flex-shrink-0 flex items-center justify-center bg-white border border-slate-200 rounded-xl text-[11px] font-bold text-slate-500 uppercase">
+                        Regex
+                    </div>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-2">Words that identify the brand, separated by |. Case insensitive. Brand keywords are cut less in the recommendations, and the Branded / Non-Branded filter uses them.</p>
+            </div>
+          </section>
+
+          {recommendationRulesPanel}
+
+          {clientProfilePanel}
+
+          {/* Set once for the whole agency, not per client */}
+          <details className="bg-white rounded-2xl border border-slate-200">
+            <summary className="px-6 py-4 cursor-pointer text-sm font-bold text-slate-900">
+              Agency setup (once)
+              <span className="block text-xs font-medium text-slate-600 mt-0.5">Google Ads developer token, OAuth Client ID and the AI engine. The same for every client.</span>
+            </summary>
+            <div className="px-6 pb-6 space-y-8">
+              <div>
             {/* Developer Token */}
             {developerTokenManaged ? (
             <div className="mt-8 pt-6 border-t border-slate-100">
@@ -265,15 +296,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                </div>
             </div>
             )}
-          </section>
-
-          <div className="w-full h-px bg-slate-200" />
-
+              </div>
           {/* Section 2: AI Engines */}
           <section>
             <div className="flex items-center gap-2 mb-4 text-slate-900">
               <div className="p-2 bg-slate-100 rounded-lg"><Cpu size={16} className="text-indigo-600" /></div>
-              <h3 className="text-sm font-bold uppercase tracking-wide">AI Analysis Engines</h3>
+              <h3 className="text-sm font-bold">AI engine for written insights</h3>
             </div>
             
             <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
@@ -305,29 +333,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
             </div>
           </section>
-
-          <div className="w-full h-px bg-slate-100" />
-
-          {recommendationRulesPanel}
-
-          {/* Section 3: SEO Settings */}
-          <section>
-            <div className="flex items-center gap-2 mb-4 text-slate-900">
-              <div className="p-2 bg-slate-100 rounded-lg"><Settings2 size={16} className="text-indigo-600" /></div>
-              <h3 className="text-sm font-bold uppercase tracking-wide">SEO Definitions</h3>
             </div>
-            
-            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                <label className="text-[11px] font-bold uppercase text-slate-500 tracking-wide block mb-2">Branded Keyword Regex</label>
-                <div className="flex gap-4">
-                    <input type="text" value={brandRegexStr} onChange={e => setBrandRegexStr(e.target.value)} className="flex-1 bg-white border border-slate-200 rounded-xl text-xs p-3 font-mono outline-none focus:ring-2 ring-indigo-500" placeholder="brand|shop|store" />
-                    <div className="w-24 flex-shrink-0 flex items-center justify-center bg-white border border-slate-200 rounded-xl text-[11px] font-bold text-slate-500 uppercase">
-                        Regex
-                    </div>
-                </div>
-                <p className="text-[11px] text-slate-500 mt-2">Use a pipe | to separate terms. Case insensitive. Used to categorize queries as "Branded" or "Non-Branded".</p>
-            </div>
-          </section>
+          </details>
 
         </div>
         

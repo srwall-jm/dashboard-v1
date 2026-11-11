@@ -28,7 +28,7 @@ export const ClientProfilePanel: React.FC<{
       <section className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
         <div className="flex items-center gap-2 mb-2 text-slate-900">
           <Users size={16} />
-          <h3 className="text-sm font-bold uppercase tracking-wide">Shared clients</h3>
+          <h3 className="text-sm font-bold">4. Save as a client for the team</h3>
         </div>
         <p className="text-xs text-slate-500">
           {unavailableReason === 'storage'
@@ -83,7 +83,7 @@ export const ClientProfilePanel: React.FC<{
     <section className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
       <div className="flex items-center gap-2 mb-1 text-slate-900">
         <Users size={16} />
-        <h3 className="text-sm font-bold uppercase tracking-wide">Shared clients</h3>
+        <h3 className="text-sm font-bold">4. Save as a client for the team</h3>
       </div>
       <p className="text-xs text-slate-500 mb-4">
         Save the setup below (GA4 property, Search Console site, Google Ads accounts, brand regex) as a client the whole team can open.
