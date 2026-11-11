@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeUrl, extractPath, normalizeCountry, parseGoogleAdsMetric, aggregateData, formatDate } from '../utils';
+import { normalizeUrl, extractPath, normalizeCountry, parseGoogleAdsMetric, aggregateData, formatDate, isOrganicSearch, isPaidSearch } from '../utils';
 import type { DailyData } from '../types';
 
 describe('normalizeUrl', () => {
@@ -68,5 +68,37 @@ describe('aggregateData', () => {
 describe('formatDate', () => {
   it('formats as YYYY-MM-DD in local time', () => {
     expect(formatDate(new Date(2026, 0, 5))).toBe('2026-01-05');
+  });
+});
+
+describe('isOrganicSearch / isPaidSearch', () => {
+  it('keeps only the search channels of the default channel group', () => {
+    expect(isOrganicSearch('Organic Search')).toBe(true);
+    expect(isPaidSearch('Paid Search')).toBe(true);
+    for (const other of ['Organic Social', 'Organic Shopping', 'Organic Video', 'Direct', 'Referral']) {
+      expect(isOrganicSearch(other)).toBe(false);
+    }
+    for (const other of ['Paid Social', 'Paid Shopping', 'Paid Video', 'Paid Other', 'Cross-network', 'Display']) {
+      expect(isPaidSearch(other)).toBe(false);
+    }
+  });
+
+  it('ignores case and surrounding spaces', () => {
+    expect(isOrganicSearch(' organic search ')).toBe(true);
+    expect(isPaidSearch('PAID SEARCH')).toBe(true);
+  });
+
+  it('reads the medium when the dimension is medium or source / medium', () => {
+    expect(isOrganicSearch('organic')).toBe(true);
+    expect(isOrganicSearch('google / organic')).toBe(true);
+    expect(isPaidSearch('cpc')).toBe(true);
+    expect(isPaidSearch('bing / cpc')).toBe(true);
+    expect(isPaidSearch('facebook / paid_social')).toBe(false);
+    expect(isOrganicSearch('google / cpc')).toBe(false);
+  });
+
+  it('handles missing values', () => {
+    expect(isOrganicSearch(undefined)).toBe(false);
+    expect(isPaidSearch('')).toBe(false);
   });
 });

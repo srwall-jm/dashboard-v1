@@ -188,3 +188,25 @@ export const aggregateData = (data: DailyData[]) => {
       abs: { sessions: currSum.sessions - prevSum.sessions, sales: currSum.sales - prevSum.sales, revenue: currSum.revenue - prevSum.revenue, addToCarts: currSum.addToCarts - prevSum.addToCarts, checkouts: currSum.checkouts - prevSum.checkouts }
     };
 };
+
+// "Organic" and "Paid" in the dashboard mean search only. With the default
+// GA4 dimension (sessionDefaultChannelGroup) that is exactly "Organic Search"
+// and "Paid Search", so Organic Social, Organic Shopping, Organic Video,
+// Paid Social, Paid Shopping, Paid Video and Paid Other are left out.
+// When the user switches the dimension to medium or source / medium, the
+// search mediums are used instead ("organic", "cpc", "ppc").
+const channelMedium = (channel: string | undefined | null): string => {
+  const value = (channel || '').trim().toLowerCase();
+  const slash = value.lastIndexOf(' / ');
+  return slash >= 0 ? value.slice(slash + 3).trim() : value;
+};
+
+export const isOrganicSearch = (channel: string | undefined | null): boolean => {
+  const medium = channelMedium(channel);
+  return medium === 'organic search' || medium === 'organic';
+};
+
+export const isPaidSearch = (channel: string | undefined | null): boolean => {
+  const medium = channelMedium(channel);
+  return medium === 'paid search' || medium === 'cpc' || medium === 'ppc';
+};
