@@ -43,6 +43,8 @@ export interface RecommendationSettings {
   };
   // Organic position up to which a reduction is considered at all.
   maxRankForReduce: number;
+  // Organic clicks in the period below which a top position is not taken as proof that organic gets the click.
+  minOrganicClicks: number;
   // Organic position from which paid is considered the only real presence.
   minRankForIncrease: number;
   // Share of impressions lost to ad rank from which there is room to grow.
@@ -70,6 +72,7 @@ export const DEFAULT_SETTINGS: RecommendationSettings = {
     brand: { low: 0.25, medium: 0.15, high: 0 },
   },
   maxRankForReduce: 3,
+  minOrganicClicks: 10,
   minRankForIncrease: 10,
   minRankLostForIncrease: 0.2,
   increaseStep: 0.2,
@@ -136,10 +139,10 @@ const pct = (value: number) => `${Math.round(value * 100)}%`;
 const rankText = (rank: number) => rank.toFixed(1);
 
 const pressureText: Record<Pressure, string> = {
-  low: 'low competitor pressure',
-  medium: 'medium competitor pressure',
-  high: 'high competitor pressure',
-  unknown: 'competitor pressure unknown, treated as medium',
+  low: 'low auction pressure',
+  medium: 'medium auction pressure',
+  high: 'high auction pressure',
+  unknown: 'auction pressure unknown, treated as medium',
 };
 
 export const recommendKeyword = (
@@ -191,7 +194,7 @@ export const recommendKeyword = (
   }
 
   const rank = signal.organicRank;
-  const strongOrganic = rank !== null && rank <= settings.maxRankForReduce && signal.organicClicks > 0;
+  const strongOrganic = rank !== null && rank <= settings.maxRankForReduce && signal.organicClicks >= settings.minOrganicClicks;
 
   if (strongOrganic) {
     const caps = signal.isBrand ? settings.maxCut.brand : settings.maxCut.nonBrand;
@@ -202,7 +205,7 @@ export const recommendKeyword = (
       return {
         ...base,
         action: 'HOLD',
-        reason: `Brand term at organic position ${rankText(rank!)} with ${pressureText[pressure]} (${pct(signal.rankLostShare || 0)} of searches missed because competitors outrank the ad). Keep spend to defend the brand.`,
+        reason: `Brand term at organic position ${rankText(rank!)} with ${pressureText[pressure]} (${pct(signal.rankLostShare || 0)} of searches where the ad did not show or was outranked). Keep spend to defend the brand.`,
       };
     }
 
@@ -225,14 +228,23 @@ export const recommendKeyword = (
     };
   }
 
-  const weakOrganic = rank === null || rank > settings.minRankForIncrease;
+  if (rank === null) {
+    return {
+      ...base,
+      action: 'HOLD',
+      incrementalCpc: null,
+      reason: 'No organic data was found for this exact keyword text in Search Console, so we cannot tell whether ads are the only presence. Check the search terms it triggers before changing spend.',
+    };
+  }
+
+  const weakOrganic = rank > settings.minRankForIncrease;
   if (weakOrganic && signal.paidConversions > 0) {
     const efficient = benchmarkCpa === null || (cpa !== null && cpa <= benchmarkCpa);
     if (efficient && signal.rankLostShare === null) {
       return {
         ...base,
         action: 'HOLD',
-        reason: `Paid is the only real presence here (${rank === null ? 'no organic ranking' : `organic position ${rankText(rank)}`}) and it converts, but impression share is not available, so room to grow cannot be measured.`,
+        reason: `Paid is the only real presence here (organic position ${rankText(rank)}) and it converts, but impression share is not available, so room to grow cannot be measured.`,
       };
     }
     if (efficient && signal.rankLostShare !== null && signal.rankLostShare >= settings.minRankLostForIncrease) {
@@ -242,7 +254,7 @@ export const recommendKeyword = (
         changePct: settings.increaseStep,
         suggestedSpend: signal.cost * (1 + settings.increaseStep),
         expectedExtraConversions: cpa !== null && cpa > 0 ? (signal.cost * settings.increaseStep) / cpa : null,
-        reason: `${rank === null ? 'No organic ranking' : `Organic position ${rankText(rank)}`}, so paid is the only real presence. It converts at or below the account average cost per conversion, and ${pct(signal.rankLostShare)} of searches are missed because competitors outrank the ad. Raise ${pct(settings.increaseStep)} and review.`,
+        reason: `Organic position ${rankText(rank)}, so paid is the only real presence. It converts at or below the account average cost per conversion, and ${pct(signal.rankLostShare)} of searches are missed because the ad did not show or was outranked. Raise ${pct(settings.increaseStep)} and review.`,
       };
     }
     if (!efficient) {
@@ -255,16 +267,16 @@ export const recommendKeyword = (
     return {
       ...base,
       action: 'HOLD',
-      reason: `Paid is the only real presence here and already shows on most searches (only ${pct(signal.rankLostShare || 0)} missed to competitors). No room to grow by raising bids.`,
+      reason: `Paid is the only real presence here and already shows on most searches (only ${pct(signal.rankLostShare || 0)} missed). No room to grow by raising bids.`,
     };
   }
 
-  if (rank !== null && rank <= settings.minRankForIncrease) {
+  if (rank <= settings.minRankForIncrease) {
     return {
       ...base,
       action: 'HOLD',
       reason: rank <= settings.maxRankForReduce
-        ? `Organic position ${rankText(rank)} but no organic clicks recorded in the period. Keep paid until organic proves it gets the click.`
+        ? `Organic position ${rankText(rank)} but fewer than ${settings.minOrganicClicks} organic clicks in the period. Keep paid until organic proves it gets the click.`
         : `Organic position ${rankText(rank)} is not strong enough to replace paid clicks. Keep spend; this is an SEO opportunity first.`,
     };
   }

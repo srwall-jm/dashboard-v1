@@ -137,6 +137,9 @@ const App: React.FC = () => {
   const [globalKeywordBridgeDataGoogleAds, setGlobalKeywordBridgeDataGoogleAds] = useState<KeywordBridgeData[]>([]);
   // One row per paid keyword with its organic counterpart, input of the recommendation model.
   const [keywordSignals, setKeywordSignals] = useState<KeywordSignal[]>([]);
+  // False when paid keywords loaded but Search Console queries did not: then nothing can be compared.
+  const [organicQueriesLoaded, setOrganicQueriesLoaded] = useState(true);
+  const isShowingSampleDataRef = useRef(false);
   // Search Console totals per query (all URLs together), filled while the bridge data loads.
   const gscQueryTotals = useRef<Record<string, { clicks: number; impressions: number; weightedRankSum: number }>>({});
   
@@ -155,6 +158,14 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   // Non-blocking notices about incomplete data (row caps, accounts that failed), keyed by source.
   const [dataWarnings, setDataWarnings] = useState<Record<string, string>>({});
+  // The Google sign-in callbacks are created once. They read the current selections from here,
+  // so reconnecting after a token expires keeps the client that is on screen.
+  const ga4AuthRef = useRef(ga4Auth); ga4AuthRef.current = ga4Auth;
+  const ga4CurrencyRef = useRef<string | null>(null);
+  const gscAuthRef = useRef(gscAuth); gscAuthRef.current = gscAuth;
+  const googleAdsAuthRef = useRef(googleAdsAuth); googleAdsAuthRef.current = googleAdsAuth;
+  const selectedGoogleAdsCustomerRef = useRef(selectedGoogleAdsCustomer); selectedGoogleAdsCustomerRef.current = selectedGoogleAdsCustomer;
+
   const setWarning = (key: string, message: string | null) =>
     setDataWarnings(prev => {
       if (!message && !(key in prev)) return prev;
@@ -178,6 +189,28 @@ const App: React.FC = () => {
       return next;
     });
   };
+
+  // --- Brand terms, per client. No default: a guessed regex silently changes which keywords are protected. ---
+  const [brandByClient, setBrandByClient] = useState<Record<string, string>>(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('brand_regex_by_client') || '{}');
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch { return {}; }
+  });
+  // Carried over once from the single value older versions kept, unless it was the old built-in default.
+  const legacyBrandRegex = useMemo(() => {
+    const saved = localStorage.getItem('brand_regex') || '';
+    return saved === 'shop|brand|pro|sports' ? '' : saved;
+  }, []);
+  const brandRegexStr = brandByClient[adsClientKey] ?? legacyBrandRegex;
+  const setBrandForClient = (key: string, value: string) => {
+    setBrandByClient(prev => {
+      const next = { ...prev, [key]: value };
+      try { localStorage.setItem('brand_regex_by_client', JSON.stringify(next)); } catch { /* still applies for this session */ }
+      return next;
+    });
+  };
+  const setBrandRegexStr = (value: string) => setBrandForClient(adsClientKey, value);
 
   // --- Recommendation rules, per client (same key as the Google Ads accounts) ---
   const [rulesByClient, setRulesByClient] = useState<Record<string, RecommendationOverrides>>(() => {
@@ -216,8 +249,13 @@ const App: React.FC = () => {
     setActiveProfileId(profile?.id || null);
     if (profile) localStorage.setItem('active_client_profile', profile.id); else localStorage.removeItem('active_client_profile');
     if (!profile) { pendingProfile.current = null; return; }
+    if (!gscAuth?.token && !ga4Auth?.token && !googleAdsAuth?.token) {
+      // Sample figures must not sit under a real client's name.
+      setBridgeDataGA4([]); setBridgeDataGoogleAds([]); setKeywordSignals([]);
+    }
 
-    if (profile.brandRegex) setBrandRegexStr(profile.brandRegex);
+    // Always set, even when empty: a client saved without brand terms must not inherit another client's.
+    setBrandForClient(clientKeyOf(profile.ga4PropertyId, profile.gscSiteUrl), profile.brandRegex || '');
     setRulesForClient(clientKeyOf(profile.ga4PropertyId, profile.gscSiteUrl), profile.recommendation || null);
     if (profile.adsAccountIds.length > 0) {
       const key = clientKeyOf(profile.ga4PropertyId, profile.gscSiteUrl);
@@ -322,7 +360,6 @@ const App: React.FC = () => {
   const [clientView, setClientView] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
-  const [brandRegexStr, setBrandRegexStr] = useState(() => localStorage.getItem('brand_regex') || 'shop|brand|pro|sports');
   const [grouping, setGrouping] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   
   const [aiProvider, setAiProvider] = useState<'gemini' | 'openai'>(() => {
@@ -408,6 +445,8 @@ const App: React.FC = () => {
 
   const isBranded = (text: string) => {
     if (!text || text.trim() === '') return false;
+    // An empty pattern matches everything; no brand terms means nothing is brand.
+    if (!brandRegexStr.trim()) return false;
     try {
       const regex = new RegExp(brandRegexStr, 'i');
       return regex.test(text.trim().toLowerCase());
@@ -447,7 +486,7 @@ const App: React.FC = () => {
         });
       });
       setAvailableProperties(props);
-      if (props.length > 0 && !ga4Auth?.property) {
+      if (props.length > 0 && !ga4AuthRef.current?.property) {
         setGa4Auth({ token, property: props[0] });
       }
     } catch (e) {
@@ -465,6 +504,7 @@ const App: React.FC = () => {
       const data = await resp.json();
       if (data.currencyCode) {
         setCurrencySymbol(CURRENCY_SYMBOLS[data.currencyCode] || data.currencyCode);
+        ga4CurrencyRef.current = data.currencyCode || null;
       }
     } catch (e) {
       console.error("Error fetching property details:", e);
@@ -505,7 +545,7 @@ const App: React.FC = () => {
       const data = await resp.json();
       const sites = data.siteEntry || [];
       setAvailableSites(sites);
-      if (sites.length > 0 && !gscAuth?.site) {
+      if (sites.length > 0 && !gscAuthRef.current?.site) {
         setGscAuth({ token, site: sites[0] });
       }
     } catch (e) {
@@ -553,10 +593,10 @@ const App: React.FC = () => {
         setAvailableGoogleAdsCustomers(customers);
         
         if (customers.length > 0) {
-           if (!googleAdsAuth?.customer) {
+           if (!googleAdsAuthRef.current?.customer) {
                setGoogleAdsAuth({ token, customer: customers[0] });
            }
-           if (!selectedGoogleAdsCustomer) {
+           if (!selectedGoogleAdsCustomerRef.current) {
                const defaultCust = customers[0];
                setSelectedGoogleAdsCustomer(defaultCust);
                fetchGoogleAdsSubAccounts(token, defaultCust.id);
@@ -735,6 +775,12 @@ const App: React.FC = () => {
     
     // --- MOCK FALLBACK IF NOTHING CONNECTED ---
     if (!gscAuth?.token && !ga4Auth?.token && !googleAdsAuth?.token) {
+        // A chosen client never gets sample figures under its name.
+        if (activeProfileId) {
+            setBridgeDataGA4([]); setBridgeDataGoogleAds([]); setKeywordSignals([]);
+            setIsLoadingBridge(false);
+            return;
+        }
         if (!bridgeDataGA4.length) setBridgeDataGA4(generateMockBridgeData());
         if (!bridgeDataGoogleAds.length) setBridgeDataGoogleAds(generateMockBridgeData());
         if (!keywordSignals.length) setKeywordSignals(generateMockKeywordSignals());
@@ -927,8 +973,10 @@ const App: React.FC = () => {
          `;
 
          // Query 3: Customer-level metrics (The most accurate "Overview" total)
+         const adsCurrencies = new Set<string>();
          const googleAdsCustomerQuery = `
             SELECT 
+              customer.currency_code,
               segments.date,
               metrics.cost_micros, 
               metrics.clicks, 
@@ -1031,6 +1079,8 @@ const App: React.FC = () => {
                     customerResults.forEach(res => {
                         if (Array.isArray(res)) {
                             for (const row of res) {
+                                const currencyCode = row.customer?.currencyCode;
+                                if (currencyCode) adsCurrencies.add(String(currencyCode));
                                 const metrics = row.metrics;
                                 const segments = row.segments;
                                 const date = segments?.date;
@@ -1068,6 +1118,19 @@ const App: React.FC = () => {
                 
                 setGoogleAdsGlobalMetrics(globalMetrics);
                 globalAvgCpc = globalMetrics.avgCpc; // Used for fallback
+
+                // Paid amounts are in the accounts' own currency, which is not necessarily the GA4 property's.
+                const adsCodes = Array.from(adsCurrencies);
+                if (adsCodes.length > 1) {
+                    setWarning('adsCurrency', `Google Ads: the accounts chosen for this client use different currencies (${adsCodes.join(', ')}). Their spend is added up without conversion, so paid amounts are not reliable. Choose accounts in one currency.`);
+                } else if (adsCodes.length === 1 && !ga4AuthRef.current?.property) {
+                    setCurrencySymbol(CURRENCY_SYMBOLS[adsCodes[0]] || adsCodes[0]);
+                    setWarning('adsCurrency', null);
+                } else if (adsCodes.length === 1 && ga4CurrencyRef.current && ga4CurrencyRef.current !== adsCodes[0]) {
+                    setWarning('adsCurrency', `Google Ads spend is in ${adsCodes[0]} but the GA4 property reports in ${ga4CurrencyRef.current}. Paid amounts are shown with the GA4 currency symbol and are not converted.`);
+                } else {
+                    setWarning('adsCurrency', null);
+                }
             }
             
             // 1. Process URLs for Bridge Data (source of truth for URL-level metrics)
@@ -1180,11 +1243,17 @@ const App: React.FC = () => {
              setBridgeDataGoogleAds([]);
              setKeywordBridgeDataGoogleAds([]);
              setKeywordSignals([]);
+             setGoogleAdsGlobalMetrics(null);
+             setGoogleAdsDailyTotals([]);
          }
     } else {
          setBridgeDataGoogleAds([]);
          setKeywordBridgeDataGoogleAds([]);
          setKeywordSignals([]);
+         // Totals of the previous client must not stay under the new one's name.
+         setGoogleAdsGlobalMetrics(null);
+         setGoogleAdsDailyTotals([]);
+         setWarning('adsCurrency', null);
     }
     
     // 3. TRY GA4 FETCH (If Available)
@@ -1647,6 +1716,9 @@ const App: React.FC = () => {
             };
         });
         setKeywordSignals(signals);
+        const hasOrganicQueries = Object.keys(gscQueryTotals.current).length > 0;
+        setOrganicQueriesLoaded(hasOrganicQueries);
+        setWarning('recsOrganic', hasOrganicQueries ? null : 'Search Console queries are not loaded, so paid keywords cannot be compared with their organic position. Connect Search Console in Settings, choose the site and refresh. No recommendation is made until then.');
         setWarning('adsShares', sharesUnavailable ? 'Google Ads: impression share could not be read for some accounts. Competitive pressure is treated as medium on their keywords, so reductions are more cautious.' : null);
 
         setKeywordBridgeDataGoogleAds(googleAdsKwResults.sort((a, b) => b.paidSessions - a.paidSessions));
@@ -1885,7 +1957,7 @@ const App: React.FC = () => {
           prompt: '',
           callback: (resp: any) => {
             if (resp.access_token) {
-              const newAuth = { token: resp.access_token, property: ga4Auth?.property || null };
+              const newAuth = { token: resp.access_token, property: ga4AuthRef.current?.property || null };
               setGa4Auth(newAuth);
               sessionStorage.setItem('ga4_auth', JSON.stringify(newAuth));
               fetchGa4Properties(resp.access_token);
@@ -1899,7 +1971,7 @@ const App: React.FC = () => {
           prompt: '',
           callback: (resp: any) => {
             if (resp.access_token) {
-              const newAuth = { token: resp.access_token, site: gscAuth?.site || null };
+              const newAuth = { token: resp.access_token, site: gscAuthRef.current?.site || null };
               setGscAuth(newAuth);
               sessionStorage.setItem('gsc_auth', JSON.stringify(newAuth));
               fetchGscSites(resp.access_token);
@@ -1928,7 +2000,7 @@ const App: React.FC = () => {
             prompt: '',
             callback: (resp: any) => {
               if (resp.access_token) {
-                const newAuth = { token: resp.access_token, customer: googleAdsAuth?.customer || null };
+                const newAuth = { token: resp.access_token, customer: googleAdsAuthRef.current?.customer || null };
                 setGoogleAdsAuth(newAuth);
                 sessionStorage.setItem('googleads_auth', JSON.stringify(newAuth));
                 fetchGoogleAdsCustomers(resp.access_token);
@@ -2098,13 +2170,21 @@ const App: React.FC = () => {
           Top Sources identified in list.
         `;
       } else if (activeTab === DashboardTab.SEARCH_EFFICIENCY) {
-         const primaryData = bridgeDataGoogleAds.length > 0 ? bridgeDataGoogleAds : bridgeDataGA4;
-         const brandTax = primaryData.filter(d => isBranded(d.query) && d.organicRank !== null && d.organicRank <= 1.5).reduce((acc, d) => acc + d.ppcCost, 0);
+         const r = summaryRecs.summary;
+         const top = (action: string) => summaryRecs.recommendations
+           .filter(x => x.action === action)
+           .sort((a, b) => Math.abs(b.suggestedSpend - b.currentSpend) - Math.abs(a.suggestedSpend - a.currentSpend))
+           .slice(0, 8)
+           .map(x => `${x.keyword}: ${currencySymbol}${Math.round(x.currentSpend)} to ${currencySymbol}${Math.round(x.suggestedSpend)} (organic position ${x.organicRank === null ? 'unknown' : x.organicRank.toFixed(1)}, auction pressure ${x.pressure})`)
+           .join('; ');
          summary = `
-           Context: Search Efficiency & Cost Savings.
-           Goal: Identify wasted spend (Cannibalization) and incremental growth opportunities.
-           Estimated Potential Brand Savings (Brand Tax): ${currencySymbol}${brandTax.toLocaleString('en-US')}.
-           The dashboard highlights where we pay for Brand terms despite ranking #1 organically.
+           Context: keyword by keyword plan to move paid search spend, for a client presentation.
+           Rules you must respect: no keyword is ever taken to zero, a minimum always stays so a competitor cannot take the ad slot. These are estimates to design a test, not a forecast. Use only the figures below; do not invent numbers.
+           Spend analysed: ${currencySymbol}${Math.round(r.spendAnalysed)}. Can come down: ${currencySymbol}${Math.round(r.spendCut)} on ${r.counts.REDUCE} keywords. Extra budget proposed: ${currencySymbol}${Math.round(r.spendToIncrease)} on ${r.counts.INCREASE} keywords. Net: ${currencySymbol}${Math.round(r.netChange)}.
+           Paid clicks that may be lost: ${Math.round(r.clicksAtRisk.low)} to ${Math.round(r.clicksAtRisk.high)}. Clicks expected to still arrive through organic: ${Math.round(r.clicksRecovered.low)} to ${Math.round(r.clicksRecovered.high)}.
+           Largest reductions: ${top('REDUCE') || 'none'}.
+           Largest increases: ${top('INCREASE') || 'none'}.
+           Kept as is: ${r.counts.HOLD} keywords. Too few clicks to judge: ${r.counts.NO_DATA}.
          `;
       }
       
@@ -2134,11 +2214,22 @@ const App: React.FC = () => {
     [keywordSignals, brandRegexStr, filters.queryType, periodDays, recommendationSettings]
   );
 
+  useEffect(() => {
+    const needsBrand = keywordSignals.length > 0 && !brandRegexStr.trim() && !isShowingSampleDataRef.current;
+    setWarning('brandTerms', needsBrand ? "Brand terms are not set for this client, so every keyword is treated as non-brand and brand keywords may be cut more than they should. Set them in Settings, step 2." : null);
+  }, [keywordSignals.length, brandRegexStr]);
+
+  // AI text written for one client or period must not stay above another's data.
+  useEffect(() => {
+    setTabInsights(prev => Object.fromEntries(Object.keys(prev).map(k => [k, null])));
+  }, [adsClientKey, filters.dateRange.start, filters.dateRange.end]);
+
   const SAMPLE_BRIDGE_TABS = [DashboardTab.SUMMARY, DashboardTab.PPC_SEO_BRIDGE, DashboardTab.GOOGLE_ADS_PERFORMANCE, DashboardTab.SEARCH_EFFICIENCY];
   const nothingConnected = !gscAuth?.token && !ga4Auth?.token && !googleAdsAuth?.token;
   const isShowingSampleData =
     (SAMPLE_BRIDGE_TABS.includes(activeTab) && nothingConnected && (bridgeDataGA4.length > 0 || bridgeDataGoogleAds.length > 0)) ||
     (activeTab === DashboardTab.AI_TRAFFIC_MONITOR && !ga4Auth?.property && aiTrafficData.length > 0);
+  isShowingSampleDataRef.current = isShowingSampleData;
 
   const isAnythingLoading = isLoadingGa4 || isLoadingGsc || isLoadingBridge || isLoadingAi || isLoadingGoogleAds;
   
@@ -2146,9 +2237,6 @@ const App: React.FC = () => {
     localStorage.setItem('ai_provider', aiProvider); 
   }, [aiProvider]);
 
-  useEffect(() => {
-    localStorage.setItem('brand_regex', brandRegexStr);
-  }, [brandRegexStr]);
   
   useEffect(() => { 
     localStorage.setItem('openai_api_key', openaiKey); 
@@ -2374,7 +2462,7 @@ const App: React.FC = () => {
             <DateRangeSelector filters={filters} setFilters={setFilters} />
             
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm">
-              <div className="flex items-center gap-2 px-3 py-1.5 sm:border-r border-slate-100">
+              <div className={`items-center gap-2 px-3 py-1.5 sm:border-r border-slate-100 ${activeTab === DashboardTab.SUMMARY || activeTab === DashboardTab.SEARCH_EFFICIENCY ? 'hidden' : 'flex'}`}>
                  <Filter className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
                  <select 
                    className="bg-transparent text-[11px] font-bold uppercase outline-none cursor-pointer w-full" 
@@ -2385,7 +2473,7 @@ const App: React.FC = () => {
                     {availableDimensions.length === 0 && <option value="sessionDefaultChannelGroup">Channel Grouping</option>}
                  </select>
               </div>
-              <div className="flex items-center gap-2 px-3 py-1.5 sm:border-r border-slate-100">
+              <div className={`items-center gap-2 px-3 py-1.5 sm:border-r border-slate-100 ${activeTab === DashboardTab.SUMMARY || activeTab === DashboardTab.SEARCH_EFFICIENCY ? 'hidden' : 'flex'}`}>
                  <Globe className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
                  <select 
                    className="bg-transparent text-[11px] font-bold uppercase outline-none cursor-pointer w-full" 
@@ -2505,6 +2593,7 @@ const App: React.FC = () => {
               settings={recommendationSettings}
               periodDays={periodDays}
               isSample={isShowingSampleData}
+              organicMissing={!organicQueriesLoaded && keywordSignals.length > 0}
               comparisonEnabled={filters.comparison.enabled}
               isLoading={isGoogleAdsKeywordsLoading || isLoadingBridge}
               onOpenRecommendations={() => setActiveTab(DashboardTab.SEARCH_EFFICIENCY)}

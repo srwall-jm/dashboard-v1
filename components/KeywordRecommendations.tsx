@@ -25,7 +25,7 @@ const PAGE = 25;
 export const PressureBadge: React.FC<{ pressure: KeywordRecommendation['pressure']; impressionShare?: number | null; rankLostShare?: number | null }> = ({ pressure, impressionShare, rankLostShare }) => {
   const style = PRESSURE_STYLE[pressure];
   const detail = rankLostShare !== null && rankLostShare !== undefined
-    ? ` Your ad is missing from ${pct(rankLostShare)} of searches because competitors outrank it.`
+    ? ` Your ad did not show or was outranked on ${pct(rankLostShare)} of searches.`
     : impressionShare !== null && impressionShare !== undefined ? ` Your ad shows on ${pct(impressionShare)} of searches.` : '';
   return (
     <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap ${style.badge}`} title={`${PRESSURE_HELP}${detail}`}>
@@ -86,7 +86,7 @@ const RecTable: React.FC<{
           {header('Spend now', 'currentSpend', 'right')}
           {header('Suggested', 'suggestedSpend', 'right')}
           {header('Expected effect', 'impact')}
-          {header('Competitor pressure', null)}
+          {header('Auction pressure', null)}
           {header('Why', null)}
         </tr>
       </thead>
@@ -192,8 +192,8 @@ export const KeywordRecommendations: React.FC<{
       'Clicks you may lose (high)': Math.round(r.clicksAtRisk.high),
       'Expected extra conversions': r.expectedExtraConversions === null ? '' : r.expectedExtraConversions.toFixed(1),
       'Ad shown on % of searches': r.impressionShare === null ? '' : Math.round(r.impressionShare * 100),
-      'Searches missed to competitors %': r.rankLostShare === null ? '' : Math.round(r.rankLostShare * 100),
-      'Competitor pressure': r.pressure,
+      'Searches where the ad did not show or was outranked %': r.rankLostShare === null ? '' : Math.round(r.rankLostShare * 100),
+      'Auction pressure': r.pressure,
       Why: r.reason,
     })), 'Keyword_Recommendations');
   };
@@ -223,7 +223,7 @@ export const KeywordRecommendations: React.FC<{
             {[clientName, periodLabel, `${periodDays} day${periodDays !== 1 ? 's' : ''}`].filter(Boolean).join(' · ')}
           </p>
           <p className="text-sm text-slate-600 mt-2 max-w-2xl">
-            Keyword by keyword: reduce where you already rank at the top organically, increase where ads are your only presence and have room.
+            Keyword by keyword: reduce where you already rank at the top organically, increase where organic is beyond page one and have room.
             No keyword goes to zero. We keep a minimum everywhere so a competitor cannot take your ad slot.
           </p>
         </div>
@@ -267,7 +267,7 @@ export const KeywordRecommendations: React.FC<{
           label="Add budget"
           value={summary.counts.INCREASE > 0 ? money(summary.spendToIncrease) : '—'}
           note={summary.counts.INCREASE > 0
-            ? <>on {summary.counts.INCREASE} keyword{summary.counts.INCREASE !== 1 ? 's' : ''} where ads are your only presence{summary.extraConversions >= 0.5 ? ` · about ${int(summary.extraConversions)} more conversions` : ''}</>
+            ? <>on {summary.counts.INCREASE} keyword{summary.counts.INCREASE !== 1 ? 's' : ''} where organic is beyond page one{summary.extraConversions >= 0.5 ? ` · about ${int(summary.extraConversions)} more conversions` : ''}</>
             : 'No keyword meets the conditions in this period.'}
         />
       </div>
@@ -352,10 +352,10 @@ export const KeywordRecommendations: React.FC<{
           <ul className="mt-3 space-y-1.5 text-xs text-slate-600 list-disc pl-4 max-w-3xl">
             {customRules && <li><strong>These rules were adjusted for this client in Settings.</strong> The figures below are the ones in use.</li>}
             <li>Each Google Ads keyword is matched to the same search query in Search Console for the same period. Keywords with fewer than {s.minPaidClicks} paid clicks get no recommendation: {summary.judgedKeywords} of {recommendations.length} keywords are judged, covering {pct(summary.judgedSpendShare)} of spend.</li>
-            <li>Reduce is only proposed when the organic result is in the top {s.maxRankForReduce} and gets clicks. Positions 2 and 3 get half the cut of position 1.</li>
-            <li>The cut depends on competitor pressure (how often competitors' ads outrank yours): up to {pct(s.maxCut.nonBrand.low)} when low, {pct(s.maxCut.nonBrand.medium)} when medium, {pct(s.maxCut.nonBrand.high)} when high. Brand terms: {pct(s.maxCut.brand.low)}, {pct(s.maxCut.brand.medium)} and {s.maxCut.brand.high > 0 ? pct(s.maxCut.brand.high) : 'no cut at all'} under high pressure. Unknown pressure counts as medium.</li>
+            <li>Reduce is only proposed when the organic result is in the top {s.maxRankForReduce} and gets at least {s.minOrganicClicks} clicks. A keyword with no organic data for its exact text is kept as is, never increased. Positions 2 and 3 get half the cut of position 1.</li>
+            <li>The cut depends on auction pressure (how often your ad did not show or was outranked): up to {pct(s.maxCut.nonBrand.low)} when low, {pct(s.maxCut.nonBrand.medium)} when medium, {pct(s.maxCut.nonBrand.high)} when high. Brand terms: {pct(s.maxCut.brand.low)}, {pct(s.maxCut.brand.medium)} and {s.maxCut.brand.high > 0 ? pct(s.maxCut.brand.high) : 'no cut at all'} under high pressure. Unknown pressure counts as medium.</li>
             <li>Clicks that still arrive: {pct(s.recovery.rank1)} of removed paid clicks at organic position 1, {pct(s.recovery.rank2to4)} at positions 2 to 4 (upper end; the lower end is half). {customRules ? 'These rates are set per client in Settings.' : "These rates come from a Google study across industries from 2012. Your own test results will replace them."}</li>
-            <li>Increase is proposed when organic is beyond position {s.minRankForIncrease} or absent, ads convert at or below the account average cost per conversion, and the ad is missing from at least {pct(s.minRankLostForIncrease)} of searches because competitors outrank it. Extra conversions assume today's cost per conversion holds.</li>
+            <li>Increase is proposed when organic is beyond position {s.minRankForIncrease} or absent, ads convert at or below the account average cost per conversion, and the ad did not show or was outranked on at least {pct(s.minRankLostForIncrease)} of searches. Extra conversions assume today's cost per conversion holds.</li>
             <li>These are estimates to design a test, not a forecast. Change spend in steps and compare total clicks (paid + organic) before and after.</li>
           </ul>
         </div>

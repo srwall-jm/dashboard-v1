@@ -15,6 +15,17 @@ Changed (independent design review)
 
 Fixed
 - Avg. CPC and Avg. CPA in Google Ads showed no currency symbol.
+- A keyword with no organic data for its exact text was read as "no organic ranking" and could be recommended for an increase, even where the client ranks first. It is now kept as is, and nothing is recommended when Search Console queries did not load.
+- A top organic position needs at least 10 organic clicks in the period before a reduction is proposed.
+- Brand terms are stored per client with no default. The old default (`shop|brand|pro|sports`) marked words like "protein" as brand, an empty field marked everything as brand, and a client without brand terms inherited the previous client's.
+- Sample data is no longer shown under a chosen client's name, and AI text is cleared when the client or period changes.
+- Google Ads totals of the previous client stayed on screen after switching to a client with no accounts chosen, or after a failed load.
+- Reconnecting Google after a token expired could silently switch to the property, site or manager account from page load.
+- Google Ads spend was shown with the GA4 currency symbol. The accounts' own currency is now read; a notice appears when accounts mix currencies or differ from GA4.
+- "Last 7/14/28/30 days" covered one day too many and included today, which is never complete.
+- The AI report for spend recommendations was built on "all brand spend at position 1 is waste", against the never-to-zero rule. It now uses the model's figures.
+- The Google Ads proxy forwards only the two read calls the dashboard makes; calls that change an account are refused.
+- "Competitor pressure" renamed "Auction pressure": the figure also includes ads that did not show for reasons other than competitors.
 - GA4 sessions and revenue were read by landing page as well as by day, channel and country, so large sites hit the row cap and totals came out low. The report no longer includes the landing page, which nothing in the menu used; it loads faster and totals are complete.
 - Connecting Google Ads right after typing the developer token (a first visit, or a new browser) sent the request without the token and listed no accounts until the page was reloaded.
 

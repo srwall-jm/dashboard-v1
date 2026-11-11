@@ -39,8 +39,10 @@ export const SummaryView: React.FC<{
   comparisonEnabled: boolean;
   isLoading?: boolean;
   isSample?: boolean;
+  // Search Console queries did not load: nothing can be compared, so nothing is recommended.
+  organicMissing?: boolean;
   onOpenRecommendations: () => void;
-}> = ({ recommendations, summary, settings = DEFAULT_SETTINGS, channelStats, globalMetrics, currencySymbol, periodDays, comparisonEnabled, isLoading, isSample, onOpenRecommendations }) => {
+}> = ({ recommendations, summary, settings = DEFAULT_SETTINGS, channelStats, globalMetrics, currencySymbol, periodDays, comparisonEnabled, isLoading, isSample, organicMissing = false, onOpenRecommendations }) => {
   const money = (value: number) => `${currencySymbol}${int(value)}`;
   const money2 = (value: number) => `${currencySymbol}${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   // Everything in the headline is per month, so cuts and increases can be compared.
@@ -76,11 +78,18 @@ export const SummaryView: React.FC<{
               ? 'Loading Google Ads keywords…'
               : 'Nothing to recommend yet. Connect Google Ads and Search Console in Settings to see which keywords can take less paid spend and which need more.'}
           </h3>
+        ) : organicMissing ? (
+          <>
+            <h3 id="summary-headline" className="text-2xl md:text-3xl font-bold tracking-tight mt-3 max-w-4xl leading-tight" role="status">
+              No recommendation yet: Search Console did not load, so paid keywords cannot be compared with their organic position.
+            </h3>
+            <p className="text-sm text-slate-300 mt-4 max-w-3xl">Connect Search Console in Settings, choose this client's site and refresh. Until then every keyword is kept as is.</p>
+          </>
         ) : nReduce > 0 ? (
           <>
             <h3 id="summary-headline" className="text-2xl md:text-3xl font-bold tracking-tight mt-3 max-w-4xl leading-tight">
               You can cut paid search by about <span className="text-[#F8B133]">{money(summary.spendCutMonthly)} a month ({pct(summary.spendCutShare)})</span> on {plural(nReduce, 'keyword')} where you already rank at the top organically
-              {nIncrease > 0 ? <>, and move {money(monthly(summary.spendToIncrease))} of it to {plural(nIncrease, 'keyword')} where ads are your only presence.</> : '.'}
+              {nIncrease > 0 ? <>, and move {money(monthly(summary.spendToIncrease))} of it to {plural(nIncrease, 'keyword')} where organic is beyond page one.</> : '.'}
             </h3>
             <p className="text-sm text-slate-300 mt-4 max-w-3xl">
               {floorSentence} Expected loss: {range(summary.clicksAtRisk)} clicks
@@ -91,7 +100,7 @@ export const SummaryView: React.FC<{
           <>
             <h3 id="summary-headline" className="text-2xl md:text-3xl font-bold tracking-tight mt-3 max-w-4xl leading-tight">
               {nIncrease > 0
-                ? <>No paid spend should come down this period. {plural(nIncrease, 'keyword')} where ads are your only presence can take about <span className="text-[#F8B133]">{money(monthly(summary.spendToIncrease))} more a month</span>.</>
+                ? <>No paid spend should come down this period. {plural(nIncrease, 'keyword')} where organic is beyond page one can take about <span className="text-[#F8B133]">{money(monthly(summary.spendToIncrease))} more a month</span>.</>
                 : `No change recommended this period. No keyword has both a top ${settings.maxRankForReduce} organic result and room to cut safely.`}
             </h3>
             <p className="text-sm text-slate-300 mt-4 max-w-3xl">{ruleSentence}</p>
@@ -127,7 +136,7 @@ export const SummaryView: React.FC<{
               </>}
             />
             <div className="bg-white p-5 rounded-2xl border border-slate-200 break-inside-avoid">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Competitor pressure on these keywords</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Auction pressure on these keywords</p>
               <ul className="mt-3 space-y-2">
                 {pressureMix.map(m => (
                   <li key={m.level} className="flex items-center justify-between gap-3">
@@ -136,7 +145,7 @@ export const SummaryView: React.FC<{
                   </li>
                 ))}
               </ul>
-              <p className="text-xs font-medium text-slate-600 mt-3">How often competitors' ads outrank yours. The higher it is, the less we cut.</p>
+              <p className="text-xs font-medium text-slate-600 mt-3">How often your ad did not show or was outranked. The higher it is, the less we cut.</p>
             </div>
           </div>
         </section>
@@ -164,7 +173,7 @@ export const SummaryView: React.FC<{
                           {r.isBrand && <span className="ml-2 px-1.5 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600 align-middle">Brand</span>}
                         </p>
                         <p className="text-xs font-medium text-slate-600 mt-1">Organic position {r.organicRank?.toFixed(1)} · may lose {range(r.clicksAtRisk)} clicks</p>
-                        <p className="mt-1.5 flex items-center gap-2 text-xs font-medium text-slate-600">Competitor pressure <PressureBadge pressure={r.pressure} impressionShare={r.impressionShare} rankLostShare={r.rankLostShare} /></p>
+                        <p className="mt-1.5 flex items-center gap-2 text-xs font-medium text-slate-600">Auction pressure <PressureBadge pressure={r.pressure} impressionShare={r.impressionShare} rankLostShare={r.rankLostShare} /></p>
                       </div>
                       <div className="text-right flex-shrink-0">
                         <p className="text-sm font-bold text-slate-900 tabular-nums whitespace-nowrap">{money(r.currentSpend)} → {money(r.suggestedSpend)}</p>
@@ -182,7 +191,7 @@ export const SummaryView: React.FC<{
                 <span className={`p-1.5 rounded-lg ${ACTION_STYLE.INCREASE.badge}`}><ArrowUpRight size={16} aria-hidden="true" /></span>
                 <h3 className="text-base font-bold text-slate-900">Add budget here</h3>
               </div>
-              <p className="text-xs font-medium text-slate-600 mb-4">Ads are your only presence, they convert efficiently, and competitors are taking searches from you.</p>
+              <p className="text-xs font-medium text-slate-600 mb-4">Organic is beyond page one, ads convert efficiently, and the ad is missing from part of the searches.</p>
               {increases.length === 0 ? (
                 <p className="text-sm text-slate-600 py-6">No keyword meets the conditions in this period.</p>
               ) : (
@@ -194,8 +203,8 @@ export const SummaryView: React.FC<{
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-slate-900 break-words">{r.keyword}</p>
                           <p className="text-xs font-medium text-slate-600 mt-1">
-                            {r.organicRank === null ? 'No organic ranking' : `Organic position ${r.organicRank.toFixed(1)}`}
-                            {r.rankLostShare !== null && ` · your ad is missing from ${pct(r.rankLostShare)} of searches because competitors outrank it`}
+                            {`Organic position ${r.organicRank === null ? '—' : r.organicRank.toFixed(1)}`}
+                            {r.rankLostShare !== null && ` · your ad did not show or was outranked on ${pct(r.rankLostShare)} of searches`}
                           </p>
                         </div>
                         <div className="text-right flex-shrink-0">
@@ -233,7 +242,7 @@ export const SummaryView: React.FC<{
             <h3 className="text-base font-bold text-slate-900">How to run the test</h3>
           </div>
           <ol className="space-y-2 text-sm text-slate-600 list-decimal pl-5">
-            <li>Start with the reductions under low competitor pressure. Lower bids or budgets in steps, not at once.</li>
+            <li>Start with the reductions under low auction pressure. Lower bids or budgets in steps, not at once.</li>
             <li>Watch total clicks and conversions for each keyword (paid + organic), not paid alone.</li>
             <li>Run each step for two weeks. Stop and go back one step if total clicks on a keyword fall by more than the upper figure shown here.</li>
             <li>Move part of the saving to the keywords in "Add budget here".</li>
@@ -247,7 +256,7 @@ export const SummaryView: React.FC<{
           <ul className="space-y-2 text-sm text-slate-600 list-disc pl-5">
             <li>These are estimates to design a test, not a forecast.</li>
             <li>The share of clicks that still arrive ({pct(settings.recovery.rank1)} at organic position 1, {pct(settings.recovery.rank2to4)} at positions 2 to 4) starts from a Google study across industries from 2012. Your own test will replace it.</li>
-            <li>The more often competitors' ads outrank yours on a keyword, the smaller the cut. Brand terms are cut less.</li>
+            <li>The more often your ad does not show or is outranked on a keyword, the smaller the cut. Brand terms are cut less. A keyword with no organic data for its exact text is kept as is.</li>
             {hasRecs && <li>Only keywords with at least {settings.minPaidClicks} paid clicks in the period are judged: {summary.judgedKeywords} of {recommendations.length} keywords, covering {pct(summary.judgedSpendShare)} of spend.</li>}
             <li>Organic and Paid mean Organic Search and Paid Search only. Social, shopping and video are left out.</li>
           </ul>

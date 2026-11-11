@@ -123,7 +123,7 @@ describe('recommendKeyword', () => {
   });
 
   it('increases where organic is absent, paid is efficient and there is room', () => {
-    const r = recommendKeyword(signal({ organicRank: null, organicClicks: 0, organicImpressions: 0, rankLostShare: 0.35 }), 50);
+    const r = recommendKeyword(signal({ organicRank: 14, organicClicks: 4, organicImpressions: 900, rankLostShare: 0.35 }), 50);
     expect(r.action).toBe('INCREASE');
     expect(r.suggestedSpend).toBeCloseTo(1200);
     expect(r.spendCut).toBe(0);
@@ -221,7 +221,7 @@ describe('rules adjusted per client', () => {
 describe('the figures that make the argument', () => {
   const recs = recommendKeywords([
     signal(), // reduce: 1000 spend, 500 paid clicks, 900 organic clicks, cut 50%
-    signal({ keyword: 'only ads', organicRank: null, organicClicks: 0, organicImpressions: 0, rankLostShare: 0.35, cost: 400, paidClicks: 200, paidConversions: 20 }),
+    signal({ keyword: 'only ads', organicRank: 22, organicClicks: 0, organicImpressions: 300, rankLostShare: 0.35, cost: 400, paidClicks: 200, paidConversions: 20 }),
     signal({ keyword: 'tiny', paidClicks: 3, cost: 6, paidConversions: 0 }),
   ]);
   const s = summarizeRecommendations(recs, 30);
@@ -259,5 +259,32 @@ describe('the figures that make the argument', () => {
     expect(none.addedClickCost).toBeNull();
     expect(none.lossShareOfSearch).toBeNull();
     expect(none.netChange).toBe(0);
+  });
+});
+
+describe('no advice from missing data', () => {
+  it('never recommends an increase when there is no organic data for the keyword', () => {
+    for (const rankLostShare of [0.05, 0.35, 0.8, null]) {
+      const r = recommendKeyword(signal({ organicRank: null, organicClicks: 0, organicImpressions: 0, rankLostShare }), 50);
+      expect(r.action).toBe('HOLD');
+      expect(r.suggestedSpend).toBe(r.currentSpend);
+      expect(r.reason).toMatch(/No organic data/);
+    }
+  });
+
+  it('does not treat a top position with a handful of clicks as proof', () => {
+    expect(recommendKeyword(signal({ organicClicks: 9 }), 40).action).toBe('HOLD');
+    expect(recommendKeyword(signal({ organicClicks: 10 }), 40).action).toBe('REDUCE');
+  });
+
+  it('with no organic data at all, nothing is reduced or increased', () => {
+    const recs = recommendKeywords([
+      signal({ organicRank: null, organicClicks: 0, organicImpressions: 0 }),
+      signal({ keyword: 'b', organicRank: null, organicClicks: 0, organicImpressions: 0, rankLostShare: 0.5 }),
+    ]);
+    const s = summarizeRecommendations(recs, 30);
+    expect(s.counts.REDUCE).toBe(0);
+    expect(s.counts.INCREASE).toBe(0);
+    expect(s.spendCut).toBe(0);
   });
 });

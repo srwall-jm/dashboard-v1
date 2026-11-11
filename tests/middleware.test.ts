@@ -175,3 +175,32 @@ describe('agency Google Ads credentials kept on the server', () => {
     expect((await waiting.json()).googleAds).toEqual({ developerTokenOnServer: false, developerTokenWaitingForAccess: true, oauthClientId: null });
   });
 });
+
+describe('the Google Ads proxy only reads', () => {
+  const creds = { authorization: 'Bearer google-token', 'developer-token': 'dev-token' };
+
+  it('forwards the two calls the dashboard makes', async () => {
+    const list = await run('/api/googleads/v25/customers:listAccessibleCustomers', {}, creds, 'GET');
+    expect(list.response.status).toBe(200);
+    const search = await run('/api/googleads/v25/customers/1234567890/googleAds:search', {}, creds, 'POST');
+    expect(search.response.status).toBe(200);
+    expect(upstreamCalls).toHaveLength(2);
+  });
+
+  it('refuses calls that change an account, and anything else', async () => {
+    const refused: [string, string][] = [
+      ['/api/googleads/v25/customers/1234567890/googleAds:mutate', 'POST'],
+      ['/api/googleads/v25/customers/1234567890/campaigns:mutate', 'POST'],
+      ['/api/googleads/v25/customers/1234567890/campaignBudgets:mutate', 'POST'],
+      ['/api/googleads/v25/customers/1234567890/googleAds:search', 'GET'],
+      ['/api/googleads/v25/customers:listAccessibleCustomers', 'POST'],
+      ['/api/googleads/v25/customers/1234567890/googleAds:search/../campaigns:mutate', 'POST'],
+      ['/api/googleads/anything', 'GET'],
+    ];
+    for (const [path, method] of refused) {
+      const { response } = await run(path, {}, creds, method);
+      expect(response.status, `${method} ${path}`).toBe(403);
+    }
+    expect(upstreamCalls).toEqual([]);
+  });
+});
