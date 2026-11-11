@@ -42,6 +42,7 @@ interface SettingsModalProps {
   onPinnedGoogleAdsAccountsChange?: (ids: string[]) => void;
   googleAdsClientLabel?: string;
   clientProfilePanel?: React.ReactNode;
+  recommendationRulesPanel?: React.ReactNode;
   setGa4Auth: (auth: any) => void;
   setGscAuth: (auth: any) => void;
   setGoogleAdsAuth: (auth: any) => void;
@@ -62,7 +63,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   ga4Search, setGa4Search, gscSearch, setGscSearch, googleAdsSearch, setGoogleAdsSearch,
   availableProperties, availableSites, availableGoogleAdsCustomers,
   selectedGoogleAdsCustomer, onGoogleAdsCustomerChange,
-  googleAdsSubAccounts = [], pinnedGoogleAdsAccountIds = [], onPinnedGoogleAdsAccountsChange, googleAdsClientLabel, clientProfilePanel,
+  googleAdsSubAccounts = [], pinnedGoogleAdsAccountIds = [], onPinnedGoogleAdsAccountsChange, googleAdsClientLabel, clientProfilePanel, recommendationRulesPanel,
   setGa4Auth, setGscAuth, setGoogleAdsAuth,
   filteredProperties, filteredSites, filteredGoogleAdsCustomers
 }) => {
@@ -298,6 +299,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </section>
 
           <div className="w-full h-px bg-slate-100" />
+
+          {recommendationRulesPanel}
 
           {/* Section 3: SEO Settings */}
           <section>

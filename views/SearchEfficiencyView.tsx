@@ -9,7 +9,7 @@ import { KeywordBridgeData, GoogleAdsGlobalMetrics } from '../types';
 import { KpiCard } from '../components/KpiCard';
 import { EmptyState } from '../components/EmptyState';
 import { exportToCSV } from '../utils';
-import { KeywordSignal, buildRecommendations } from '../recommendations';
+import { KeywordSignal, buildRecommendations, RecommendationSettings, DEFAULT_SETTINGS } from '../recommendations';
 import { KeywordRecommendations } from '../components/KeywordRecommendations';
 
 interface UrlEfficiencyRow {
@@ -46,9 +46,10 @@ export const SearchEfficiencyView: React.FC<{
   queryTypeFilter: 'All' | 'Branded' | 'Non-Branded';
   keywordSignals?: KeywordSignal[];
   periodDays?: number;
+  recommendationSettings?: RecommendationSettings;
   clientName?: string;
   periodLabel?: string;
-}> = ({ urlData, keywordData, currencySymbol, globalMetrics, totalGscClicks, isLoading, isBranded, onRefresh, queryTypeFilter, keywordSignals = [], periodDays = 30, clientName, periodLabel }) => {
+}> = ({ urlData, keywordData, currencySymbol, globalMetrics, totalGscClicks, isLoading, isBranded, onRefresh, queryTypeFilter, keywordSignals = [], periodDays = 30, recommendationSettings = DEFAULT_SETTINGS, clientName, periodLabel }) => {
   const [clusterFilter, setClusterFilter] = useState<'All' | 'Cannibalization Risk' | 'Paid Reliance' | 'Paid Gap'>('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ppcCost', direction: 'desc' });
@@ -56,8 +57,8 @@ export const SearchEfficiencyView: React.FC<{
 
   // 0. Keyword recommendations (reduce / hold / increase), the source of every saving figure in this view
   const { recommendations, summary: recSummary } = useMemo(
-    () => buildRecommendations(keywordSignals, isBranded, queryTypeFilter, periodDays),
-    [keywordSignals, isBranded, queryTypeFilter, periodDays]
+    () => buildRecommendations(keywordSignals, isBranded, queryTypeFilter, periodDays, recommendationSettings),
+    [keywordSignals, isBranded, queryTypeFilter, periodDays, recommendationSettings]
   );
 
   // 1. Data Processing Engine & Scorecard Calculations
@@ -441,6 +442,7 @@ export const SearchEfficiencyView: React.FC<{
       <KeywordRecommendations
         recommendations={recommendations}
         summary={recSummary}
+        settings={recommendationSettings}
         currencySymbol={currencySymbol}
         periodDays={periodDays}
         periodLabel={periodLabel}

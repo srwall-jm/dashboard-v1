@@ -377,3 +377,69 @@ export const buildRecommendations = (
   const recommendations = recommendKeywords(scoped, settings);
   return { recommendations, summary: summarizeRecommendations(recommendations, periodDays) };
 };
+
+// ---- Rules a client can change ----
+// A flat, storable form of the settings worth tuning per client. Values are shares
+// (0.35 = 35%) except minPaidClicks. Anything missing falls back to DEFAULT_SETTINGS.
+export interface RecommendationOverrides {
+  minPaidClicks?: number;
+  cutNonBrandLow?: number;
+  cutNonBrandMedium?: number;
+  cutNonBrandHigh?: number;
+  cutBrandLow?: number;
+  cutBrandMedium?: number;
+  cutBrandHigh?: number;
+  increaseStep?: number;
+  recoveryRank1?: number;
+  recoveryRank2to4?: number;
+}
+
+// No cut may remove more than this share of spend: spend never goes to zero.
+export const MAX_ALLOWED_CUT = 0.9;
+
+const clamp = (value: unknown, min: number, max: number, fallback: number): number => {
+  const n = typeof value === 'number' ? value : Number.NaN;
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+};
+
+// Builds full settings from stored overrides. Out of range values are pulled back in range,
+// and cuts can only stay equal or shrink as pressure rises (low >= medium >= high).
+export const settingsFromOverrides = (overrides: RecommendationOverrides | null | undefined): RecommendationSettings => {
+  const o = overrides || {};
+  const d = DEFAULT_SETTINGS;
+  const cuts = (low: unknown, medium: unknown, high: unknown, base: Record<'low' | 'medium' | 'high', number>) => {
+    const l = clamp(low, 0, MAX_ALLOWED_CUT, base.low);
+    const m = Math.min(l, clamp(medium, 0, MAX_ALLOWED_CUT, base.medium));
+    const h = Math.min(m, clamp(high, 0, MAX_ALLOWED_CUT, base.high));
+    return { low: l, medium: m, high: h };
+  };
+  const rank1 = clamp(o.recoveryRank1, 0, 0.95, d.recovery.rank1);
+  const rank2to4 = Math.min(rank1, clamp(o.recoveryRank2to4, 0, 0.95, d.recovery.rank2to4));
+  return {
+    ...d,
+    minPaidClicks: Math.round(clamp(o.minPaidClicks, 1, 10000, d.minPaidClicks)),
+    maxCut: {
+      nonBrand: cuts(o.cutNonBrandLow, o.cutNonBrandMedium, o.cutNonBrandHigh, d.maxCut.nonBrand),
+      brand: cuts(o.cutBrandLow, o.cutBrandMedium, o.cutBrandHigh, d.maxCut.brand),
+    },
+    increaseStep: clamp(o.increaseStep, 0.05, 1, d.increaseStep),
+    recovery: { rank1, rank2to4, rank5plus: Math.min(rank2to4, d.recovery.rank5plus) },
+  };
+};
+
+export const overridesFromSettings = (s: RecommendationSettings): Required<RecommendationOverrides> => ({
+  minPaidClicks: s.minPaidClicks,
+  cutNonBrandLow: s.maxCut.nonBrand.low,
+  cutNonBrandMedium: s.maxCut.nonBrand.medium,
+  cutNonBrandHigh: s.maxCut.nonBrand.high,
+  cutBrandLow: s.maxCut.brand.low,
+  cutBrandMedium: s.maxCut.brand.medium,
+  cutBrandHigh: s.maxCut.brand.high,
+  increaseStep: s.increaseStep,
+  recoveryRank1: s.recovery.rank1,
+  recoveryRank2to4: s.recovery.rank2to4,
+});
+
+export const isDefaultSettings = (s: RecommendationSettings): boolean =>
+  JSON.stringify(overridesFromSettings(s)) === JSON.stringify(overridesFromSettings(DEFAULT_SETTINGS));

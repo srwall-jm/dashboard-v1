@@ -8,7 +8,8 @@ import GoogleLogin from './GoogleLogin';
 import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry, extractPath, normalizeUrl, parseLocalDate, AI_SOURCE_REGEX_STRING, parseGoogleAdsMetric, isOrganicSearch, isPaidSearch } from './utils';
 import { ga4RunReportAll, gscQueryAll, isAuthExpired } from './dataFetch';
 import { generateMockBridgeData, generateMockAiTrafficData, generateMockKeywordSignals } from './mockData';
-import { KeywordSignal, ShareRow, combineShares, buildRecommendations } from './recommendations';
+import { KeywordSignal, ShareRow, combineShares, buildRecommendations, RecommendationOverrides, settingsFromOverrides } from './recommendations';
+import { RecommendationRulesPanel } from './components/RecommendationRulesPanel';
 import { TAB_META } from './navigation';
 import { ClientProfile, ClientProfileInput, ClientProfileList, fetchClientProfiles, saveClientProfile, deleteClientProfile } from './clientProfiles';
 import { PinnedAdsAccounts, clientKeyOf, resolveAdsAccounts, loadPinnedAdsAccounts, savePinnedAdsAccounts } from './adsAccounts';
@@ -178,6 +179,24 @@ const App: React.FC = () => {
     });
   };
 
+  // --- Recommendation rules, per client (same key as the Google Ads accounts) ---
+  const [rulesByClient, setRulesByClient] = useState<Record<string, RecommendationOverrides>>(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('recommendation_rules_by_client') || '{}');
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch { return {}; }
+  });
+  const recommendationSettings = useMemo(() => settingsFromOverrides(rulesByClient[adsClientKey]), [rulesByClient, adsClientKey]);
+
+  const setRulesForClient = (key: string, overrides: RecommendationOverrides | null) => {
+    setRulesByClient(prev => {
+      const next = { ...prev };
+      if (overrides) next[key] = overrides; else delete next[key];
+      try { localStorage.setItem('recommendation_rules_by_client', JSON.stringify(next)); } catch { /* still applies for this session */ }
+      return next;
+    });
+  };
+
   // --- Shared client profiles (Cloudflare KV). A profile fills in the client setup for anyone on the team. ---
   const [clientProfiles, setClientProfiles] = useState<ClientProfileList>({ available: false, reason: 'offline', clients: [] });
   const [activeProfileId, setActiveProfileId] = useState<string | null>(() => localStorage.getItem('active_client_profile'));
@@ -199,6 +218,7 @@ const App: React.FC = () => {
     if (!profile) { pendingProfile.current = null; return; }
 
     if (profile.brandRegex) setBrandRegexStr(profile.brandRegex);
+    setRulesForClient(clientKeyOf(profile.ga4PropertyId, profile.gscSiteUrl), profile.recommendation || null);
     if (profile.adsAccountIds.length > 0) {
       const key = clientKeyOf(profile.ga4PropertyId, profile.gscSiteUrl);
       setPinnedAdsAccounts(prev => {
@@ -260,6 +280,7 @@ const App: React.FC = () => {
     adsManagerId: (selectedGoogleAdsCustomer?.id || '').replace(/-/g, ''),
     adsAccountIds: activeAdsAccounts.map(a => a.id),
     brandRegex: brandRegexStr,
+    recommendation: rulesByClient[adsClientKey] || undefined,
   });
 
   const handleSaveClientProfile = async (id: string, profile: ClientProfileInput) => {
@@ -2106,8 +2127,8 @@ const App: React.FC = () => {
   const periodLabel = `${filters.dateRange.start} to ${filters.dateRange.end}`;
   const clientName = activeProfile?.name || (gscAuth?.site?.siteUrl || '').replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').replace(/\/$/, '') || ga4Auth?.property?.name || '';
   const summaryRecs = useMemo(
-    () => buildRecommendations(keywordSignals, isBranded, filters.queryType, periodDays),
-    [keywordSignals, brandRegexStr, filters.queryType, periodDays]
+    () => buildRecommendations(keywordSignals, isBranded, filters.queryType, periodDays, recommendationSettings),
+    [keywordSignals, brandRegexStr, filters.queryType, periodDays, recommendationSettings]
   );
 
   const SAMPLE_BRIDGE_TABS = [DashboardTab.SUMMARY, DashboardTab.PPC_SEO_BRIDGE, DashboardTab.GOOGLE_ADS_PERFORMANCE, DashboardTab.SEARCH_EFFICIENCY];
@@ -2246,6 +2267,14 @@ const App: React.FC = () => {
         pinnedGoogleAdsAccountIds={activeAdsAccounts.map(a => a.id)}
         onPinnedGoogleAdsAccountsChange={handlePinnedAdsAccountsChange}
         googleAdsClientLabel={clientName}
+        recommendationRulesPanel={
+          <RecommendationRulesPanel
+            settings={recommendationSettings}
+            onChange={overrides => setRulesForClient(adsClientKey, overrides)}
+            clientLabel={clientName}
+            sharedProfilesAvailable={clientProfiles.available}
+          />
+        }
         clientProfilePanel={
           <ClientProfilePanel
             available={clientProfiles.available}
@@ -2539,6 +2568,7 @@ const App: React.FC = () => {
                  queryTypeFilter={filters.queryType}
                  keywordSignals={keywordSignals}
                  periodDays={periodDays}
+                 recommendationSettings={recommendationSettings}
                  clientName={clientName}
                  periodLabel={periodLabel}
               />
