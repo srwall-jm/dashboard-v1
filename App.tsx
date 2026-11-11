@@ -10,6 +10,7 @@ import { ga4RunReportAll, gscQueryAll, isAuthExpired } from './dataFetch';
 import { generateMockBridgeData, generateMockAiTrafficData, generateMockKeywordSignals } from './mockData';
 import { KeywordSignal, ShareRow, combineShares, buildRecommendations } from './recommendations';
 import { TAB_META } from './navigation';
+import { PinnedAdsAccounts, clientKeyOf, resolveAdsAccounts, loadPinnedAdsAccounts, savePinnedAdsAccounts } from './adsAccounts';
 import { SummaryView } from './views/SummaryView';
 // Import New Components and Views
 import { Sidebar } from './components/Sidebar';
@@ -71,6 +72,8 @@ const App: React.FC = () => {
   // Google Ads: Main Accounts (Managers) and Sub Accounts (Clients)
   const [availableGoogleAdsCustomers, setAvailableGoogleAdsCustomers] = useState<GoogleAdsCustomer[]>([]);
   const [availableGoogleAdsSubAccounts, setAvailableGoogleAdsSubAccounts] = useState<GoogleAdsCustomer[]>([]);
+  // Accounts chosen for each client (GA4 property + Search Console site). The MCC is never added up as a whole.
+  const [pinnedAdsAccounts, setPinnedAdsAccounts] = useState<PinnedAdsAccounts>(loadPinnedAdsAccounts);
   
   // Track selected Manager and selected Sub-account
   const [selectedGoogleAdsCustomer, setSelectedGoogleAdsCustomer] = useState<GoogleAdsCustomer | null>(null);
@@ -119,6 +122,34 @@ const App: React.FC = () => {
       if (message) next[key] = message; else delete next[key];
       return next;
     });
+
+  const adsClientKey = clientKeyOf(ga4Auth?.property?.id, gscAuth?.site?.siteUrl);
+  const adsAccountsForClient = useMemo(
+    () => resolveAdsAccounts(availableGoogleAdsSubAccounts, pinnedAdsAccounts[adsClientKey]),
+    [availableGoogleAdsSubAccounts, pinnedAdsAccounts, adsClientKey]
+  );
+  const activeAdsAccounts = adsAccountsForClient.accounts;
+  const activeAdsAccountsKey = activeAdsAccounts.map(a => a.id).join(',');
+
+  const handlePinnedAdsAccountsChange = (ids: string[]) => {
+    setPinnedAdsAccounts(prev => {
+      const next = { ...prev, [adsClientKey]: ids };
+      savePinnedAdsAccounts(next);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (!googleAdsAuth?.token || availableGoogleAdsSubAccounts.length === 0) {
+      setWarning('adsAccounts', null);
+    } else if (adsAccountsForClient.needsChoice) {
+      setWarning('adsAccounts', `Google Ads: no accounts are chosen for this client. Pick them in Settings (${availableGoogleAdsSubAccounts.length} available). No paid data is loaded until then, so nothing is added up across the whole manager account.`);
+    } else if (adsAccountsForClient.missing.length > 0) {
+      setWarning('adsAccounts', `Google Ads: ${adsAccountsForClient.missing.length} account${adsAccountsForClient.missing.length !== 1 ? 's' : ''} chosen for this client cannot be reached with the current login or manager account (${adsAccountsForClient.missing.join(', ')}). Paid figures are incomplete.`);
+    } else {
+      setWarning('adsAccounts', null);
+    }
+  }, [googleAdsAuth?.token, availableGoogleAdsSubAccounts.length, adsAccountsForClient]);
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => typeof window === 'undefined' || window.innerWidth >= 1280);
   // Client view: the same page without menu, filters or settings, ready to present or print.
@@ -691,7 +722,7 @@ const App: React.FC = () => {
     }
     
     // 2. TRY GOOGLE ADS FETCH (If Available & Selected)
-    if (googleAdsAuth?.token && availableGoogleAdsSubAccounts.length > 0) {
+    if (googleAdsAuth?.token && activeAdsAccounts.length > 0) {
          const googleAdsPaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
          
          // NEW: Granular map with URL||KEYWORD key for specific cost per URL
@@ -809,7 +840,7 @@ const App: React.FC = () => {
             
             // 1. ALWAYS FETCH GLOBAL TOTALS (Customer Level)
             // This ensures scorecards always show "Overall" data regardless of selection
-            const allAccountIds = availableGoogleAdsSubAccounts.map(acc => acc.id);
+            const allAccountIds = activeAdsAccounts.map(acc => acc.id);
 
             let globalMetrics: GoogleAdsGlobalMetrics = {
                 totalCost: 0,
@@ -1180,10 +1211,10 @@ const App: React.FC = () => {
   };
   
   const fetchGoogleAdsKeywords = async () => {
-    if (!googleAdsAuth?.token || isGoogleAdsKeywordsLoading || isGoogleAdsKeywordsLoaded || availableGoogleAdsSubAccounts.length === 0) return;
+    if (!googleAdsAuth?.token || isGoogleAdsKeywordsLoading || isGoogleAdsKeywordsLoaded || activeAdsAccounts.length === 0) return;
     
     setIsGoogleAdsKeywordsLoading(true);
-    const allAccountIds = availableGoogleAdsSubAccounts.map(acc => acc.id);
+    const allAccountIds = activeAdsAccounts.map(acc => acc.id);
     const googleAdsGlobalKeywordMap: Record<string, { clicks: number, conversions: number, cost: number, impressions: number }> = {};
     const googleAdsKeywordUrlMap: Record<string, { clicks: number, conversions: number, cost: number }> = {};
     
@@ -1550,10 +1581,10 @@ const App: React.FC = () => {
         googleAdsAuth?.token && 
         !isGoogleAdsKeywordsLoaded && 
         !isGoogleAdsKeywordsLoading &&
-        availableGoogleAdsSubAccounts.length > 0) {
+        activeAdsAccounts.length > 0) {
       fetchGoogleAdsKeywords();
     }
-  }, [activeTab, isGoogleAdsKeywordsLoaded, isGoogleAdsKeywordsLoading, googleAdsAuth, availableGoogleAdsSubAccounts]);
+  }, [activeTab, isGoogleAdsKeywordsLoaded, isGoogleAdsKeywordsLoading, googleAdsAuth, activeAdsAccountsKey]);
 
   const fetchGscData = async () => {
     if (!gscAuth?.site || !gscAuth.token) return;
@@ -1651,7 +1682,7 @@ const App: React.FC = () => {
   };
   
   useEffect(() => {
-    const bridgeParams = `${ga4Auth?.property?.id}-${gscAuth?.site?.siteUrl}-${selectedGoogleAdsCustomer?.id}-${availableGoogleAdsSubAccounts.length}-${(developerToken || '').trim()}-${filters.dateRange.start}-${filters.dateRange.end}`;
+    const bridgeParams = `${ga4Auth?.property?.id}-${gscAuth?.site?.siteUrl}-${selectedGoogleAdsCustomer?.id}-${activeAdsAccountsKey}-${(developerToken || '').trim()}-${filters.dateRange.start}-${filters.dateRange.end}`;
     const aiParams = `${ga4Auth?.property?.id}-${filters.dateRange.start}-${filters.dateRange.end}`;
 
     if (activeTab === DashboardTab.SUMMARY || activeTab === DashboardTab.ORGANIC_VS_PAID || activeTab === DashboardTab.PPC_SEO_BRIDGE || activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE || activeTab === DashboardTab.SEARCH_EFFICIENCY) {
@@ -1670,7 +1701,7 @@ const App: React.FC = () => {
     ga4Auth?.property?.id, 
     gscAuth?.site?.siteUrl, 
     selectedGoogleAdsCustomer?.id,
-    availableGoogleAdsSubAccounts.length,
+    activeAdsAccountsKey,
     developerToken,
     filters.dateRange.start,
     filters.dateRange.end
@@ -2051,6 +2082,10 @@ const App: React.FC = () => {
         availableGoogleAdsCustomers={availableGoogleAdsCustomers}
         selectedGoogleAdsCustomer={selectedGoogleAdsCustomer}
         onGoogleAdsCustomerChange={handleGoogleAdsCustomerChange}
+        googleAdsSubAccounts={availableGoogleAdsSubAccounts}
+        pinnedGoogleAdsAccountIds={activeAdsAccounts.map(a => a.id)}
+        onPinnedGoogleAdsAccountsChange={handlePinnedAdsAccountsChange}
+        googleAdsClientLabel={clientName}
         setGa4Auth={setGa4Auth} 
         setGscAuth={setGscAuth} 
         setGoogleAdsAuth={setGoogleAdsAuth}
@@ -2369,7 +2404,7 @@ const App: React.FC = () => {
               <h3 className="text-2xl font-black text-slate-900 tracking-tight text-balance">Syncing campaigns</h3>
               <div className="space-y-4">
                 <p className="text-slate-500 text-sm font-medium">
-                  Processing <strong>{availableGoogleAdsSubAccounts.length} account{availableGoogleAdsSubAccounts.length !== 1 ? 's' : ''}</strong>.
+                  Processing <strong>{activeAdsAccounts.length} account{activeAdsAccounts.length !== 1 ? 's' : ''}</strong>.
                 </p>
                 
                 {availableGoogleAdsSubAccounts.length === 1 && (

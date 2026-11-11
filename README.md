@@ -43,7 +43,8 @@ In the dashboard, open Settings and:
 1. Connect GA4 and Search Console, then pick the property and the site.
 2. Paste the Google Ads Developer Token (Basic or Standard access).
 3. Paste the OAuth Client ID that belongs to the same Google Cloud project as that token, then press Connect Google Ads.
-4. Set the branded keyword regex for the client.
+4. Tick the Google Ads accounts that belong to the client. With a manager account, nothing is read until this is done.
+5. Set the branded keyword regex for the client.
 
 These values are saved in the browser, so today each person sets them up once per browser.
 
