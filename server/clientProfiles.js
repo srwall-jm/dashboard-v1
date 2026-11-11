@@ -24,6 +24,24 @@ export const slugify = (value) =>
 
 export const isValidId = (id) => typeof id === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id) && id.length <= 60;
 
+// Recommendation rules adjusted for the client. Shares between 0 and 1, plus a click count.
+// Ranges are enforced again by the app when it reads them (recommendations.ts).
+const RULE_KEYS = [
+  'minPaidClicks', 'cutNonBrandLow', 'cutNonBrandMedium', 'cutNonBrandHigh',
+  'cutBrandLow', 'cutBrandMedium', 'cutBrandHigh', 'increaseStep', 'recoveryRank1', 'recoveryRank2to4',
+];
+
+const sanitizeRules = (input) => {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
+  const rules = {};
+  for (const key of RULE_KEYS) {
+    const value = input[key];
+    if (typeof value !== 'number' || !Number.isFinite(value)) continue;
+    rules[key] = key === 'minPaidClicks' ? Math.min(10000, Math.max(1, Math.round(value))) : Math.min(1, Math.max(0, value));
+  }
+  return Object.keys(rules).length > 0 ? rules : undefined;
+};
+
 const text = (value, max) => (typeof value === 'string' ? value.trim().slice(0, max) : '');
 
 // Keeps only the known fields, trimmed and bounded. Returns { ok, profile } or { ok: false, error }.
@@ -54,6 +72,8 @@ export const sanitizeProfile = (input) => {
   const adsManagerId = text(input.adsManagerId, 20).replace(/-/g, '');
   if (adsManagerId && !/^\d{1,20}$/.test(adsManagerId)) return { ok: false, error: 'The Google Ads manager ID must be a number.' };
 
+  const recommendation = sanitizeRules(input.recommendation);
+
   return {
     ok: true,
     profile: {
@@ -64,6 +84,7 @@ export const sanitizeProfile = (input) => {
       adsManagerId,
       adsAccountIds,
       brandRegex,
+      ...(recommendation ? { recommendation } : {}),
     },
   };
 };

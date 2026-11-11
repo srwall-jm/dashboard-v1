@@ -1,5 +1,7 @@
 // Browser side of the shared client profiles (see server/clientProfiles.js).
 
+import type { RecommendationOverrides } from './recommendations';
+
 export interface ClientProfile {
   id: string;
   name: string;
@@ -9,6 +11,7 @@ export interface ClientProfile {
   adsManagerId: string;
   adsAccountIds: string[];
   brandRegex: string;
+  recommendation?: RecommendationOverrides; // rules adjusted for this client, if any
   updatedBy?: string;
   updatedAt?: string;
 }

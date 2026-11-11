@@ -46,6 +46,7 @@ In the dashboard, open Settings and:
 2. Press Connect Google Ads. If the agency credentials are not stored in Cloudflare yet (see Variables above), first paste the Developer Token (Basic or Standard access) and the OAuth Client ID of the same Google Cloud project. Both are the agency's, the same for every client.
 3. Tick the Google Ads accounts that belong to the client. With a manager account, nothing is read until this is done.
 4. Set the branded keyword regex for the client.
+5. Optional: adjust the recommendation rules (how far paid spend may be cut) if the defaults do not fit the client.
 
 These values are saved in the browser. With shared client profiles set up, save them once as a client in Settings and the rest of the team picks it from the menu.
 

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, Minus, HelpCircle, FileText, Search, ShieldAlert, ChevronDown, ChevronUp } from 'lucide-react';
 import {
-  KeywordRecommendation, RecommendationSummary, RecAction, Range, DEFAULT_SETTINGS,
+  KeywordRecommendation, RecommendationSummary, RecAction, Range, DEFAULT_SETTINGS, RecommendationSettings, isDefaultSettings,
 } from '../recommendations';
 import { exportToCSV } from '../utils';
 
@@ -28,12 +28,13 @@ const PAGE = 25;
 export const KeywordRecommendations: React.FC<{
   recommendations: KeywordRecommendation[];
   summary: RecommendationSummary;
+  settings?: RecommendationSettings;
   currencySymbol: string;
   periodDays: number;
   periodLabel?: string;
   clientName?: string;
   isLoading?: boolean;
-}> = ({ recommendations, summary, currencySymbol, periodDays, periodLabel, clientName, isLoading }) => {
+}> = ({ recommendations, summary, settings, currencySymbol, periodDays, periodLabel, clientName, isLoading }) => {
   const [filter, setFilter] = useState<Filter>('REDUCE');
   const [search, setSearch] = useState('');
   const [visible, setVisible] = useState(PAGE);
@@ -80,7 +81,8 @@ export const KeywordRecommendations: React.FC<{
     { key: 'ALL', label: 'All', count: recommendations.length },
   ];
 
-  const s = DEFAULT_SETTINGS;
+  const s = settings || DEFAULT_SETTINGS;
+  const customRules = !isDefaultSettings(s);
 
   return (
     <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
@@ -217,10 +219,11 @@ export const KeywordRecommendations: React.FC<{
         </button>
         {showMethod && (
           <ul className="mt-3 space-y-1.5 text-[11px] text-slate-600 list-disc pl-4 max-w-3xl">
+            {customRules && <li><strong>These rules were adjusted for this client in Settings.</strong> The figures below are the ones in use.</li>}
             <li>Each Google Ads keyword is matched to the same query text in Search Console for the same period. Keywords with fewer than {s.minPaidClicks} paid clicks get no recommendation.</li>
             <li>Reduce is only proposed when the organic result is in the top {s.maxRankForReduce} and gets clicks. Positions 2 and 3 get half the cut of position 1.</li>
             <li>The cut is capped by competition, measured as the share of impressions lost to ad rank: up to {pct(s.maxCut.nonBrand.low)} when low, {pct(s.maxCut.nonBrand.medium)} when medium, {pct(s.maxCut.nonBrand.high)} when high. Brand terms: {pct(s.maxCut.brand.low)}, {pct(s.maxCut.brand.medium)} and no cut at all under high pressure. Unknown competition counts as medium.</li>
-            <li>Clicks organic keeps: {pct(s.recovery.rank1)} of removed paid clicks at organic position 1, {pct(s.recovery.rank2to4)} at positions 2 to 4 (upper end; the lower end is half). These rates come from Google's published study on ad click incrementality by organic position. They are cross-industry averages and should be replaced by this client's own test results.</li>
+            <li>Clicks organic keeps: {pct(s.recovery.rank1)} of removed paid clicks at organic position 1, {pct(s.recovery.rank2to4)} at positions 2 to 4 (upper end; the lower end is half). {customRules ? 'These rates are set per client in Settings.' : "These rates come from Google's published study on ad click incrementality by organic position. They are cross-industry averages and should be replaced by this client's own test results."}</li>
             <li>Increase is proposed when organic is beyond position {s.minRankForIncrease} or absent, paid converts at or below the account average cost per conversion, and at least {pct(s.minRankLostForIncrease)} of impressions are lost to ad rank.</li>
             <li>These are estimates to design a test, not a forecast. Change spend in steps and compare total clicks (paid + organic) before and after.</li>
           </ul>

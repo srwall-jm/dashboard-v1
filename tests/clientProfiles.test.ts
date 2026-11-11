@@ -79,6 +79,18 @@ describe('sanitizeProfile', () => {
   });
 });
 
+describe('recommendation rules in a profile', () => {
+  it('keeps known numeric rules, bounded, and drops everything else', () => {
+    const r = sanitizeProfile({ ...profile, recommendation: { cutNonBrandLow: 0.3, cutBrandHigh: 7, minPaidClicks: 49.6, bogus: 1, increaseStep: 'x' } });
+    expect(r.profile.recommendation).toEqual({ cutNonBrandLow: 0.3, cutBrandHigh: 1, minPaidClicks: 50 });
+  });
+
+  it('stores no rules when none are valid', () => {
+    expect('recommendation' in sanitizeProfile({ ...profile, recommendation: { bogus: 1 } }).profile).toBe(false);
+    expect('recommendation' in sanitizeProfile(profile).profile).toBe(false);
+  });
+});
+
 describe('/api/clients', () => {
   it('saves a profile with who changed it, and lists it back', async () => {
     const saved = await put(kv, 'acme-sports', profile);

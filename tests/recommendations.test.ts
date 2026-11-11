@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   recommendKeyword, recommendKeywords, summarizeRecommendations, getPressure, getRecoveryRate, combineShares,
-  DEFAULT_SETTINGS, type KeywordSignal,
+  DEFAULT_SETTINGS, settingsFromOverrides, overridesFromSettings, isDefaultSettings, MAX_ALLOWED_CUT, type KeywordSignal,
 } from '../recommendations';
 
 const signal = (over: Partial<KeywordSignal> = {}): KeywordSignal => ({
@@ -169,5 +169,51 @@ describe('combineShares', () => {
   it('returns nulls when no row carries a share', () => {
     expect(combineShares([{ impressions: 50, impressionShare: null, rankLostShare: null, topImpressionShare: null }]))
       .toEqual({ impressionShare: null, rankLostShare: null, topImpressionShare: null });
+  });
+});
+
+describe('rules adjusted per client', () => {
+  it('falls back to the defaults when nothing is stored', () => {
+    expect(settingsFromOverrides(undefined)).toEqual(DEFAULT_SETTINGS);
+    expect(settingsFromOverrides({})).toEqual(DEFAULT_SETTINGS);
+    expect(isDefaultSettings(settingsFromOverrides(null))).toBe(true);
+  });
+
+  it('round-trips through the stored form', () => {
+    const custom = settingsFromOverrides({ cutNonBrandLow: 0.3, cutNonBrandMedium: 0.2, cutNonBrandHigh: 0.1, minPaidClicks: 50, recoveryRank1: 0.6 });
+    expect(custom.maxCut.nonBrand).toEqual({ low: 0.3, medium: 0.2, high: 0.1 });
+    expect(custom.minPaidClicks).toBe(50);
+    expect(custom.recovery.rank1).toBe(0.6);
+    expect(isDefaultSettings(custom)).toBe(false);
+    expect(settingsFromOverrides(overridesFromSettings(custom))).toEqual(custom);
+  });
+
+  it('never allows a cut that takes spend to zero', () => {
+    const s = settingsFromOverrides({ cutNonBrandLow: 1, cutNonBrandMedium: 5, cutNonBrandHigh: 1, cutBrandLow: 2 });
+    expect(s.maxCut.nonBrand.low).toBe(MAX_ALLOWED_CUT);
+    expect(s.maxCut.brand.low).toBe(MAX_ALLOWED_CUT);
+    const r = recommendKeyword(signal(), 40, s);
+    expect(r.action).toBe('REDUCE');
+    expect(r.suggestedSpend).toBeGreaterThan(0);
+    expect(r.suggestedSpend).toBeCloseTo(100);
+  });
+
+  it('keeps cuts from growing as competition rises', () => {
+    const s = settingsFromOverrides({ cutNonBrandLow: 0.2, cutNonBrandMedium: 0.5, cutNonBrandHigh: 0.8 });
+    expect(s.maxCut.nonBrand).toEqual({ low: 0.2, medium: 0.2, high: 0.2 });
+  });
+
+  it('ignores values that are not numbers and pulls the rest into range', () => {
+    const s = settingsFromOverrides({ cutBrandLow: Number.NaN, minPaidClicks: -4, increaseStep: 9, recoveryRank1: 0.3, recoveryRank2to4: 0.8 } as any);
+    expect(s.maxCut.brand.low).toBe(DEFAULT_SETTINGS.maxCut.brand.low);
+    expect(s.minPaidClicks).toBe(1);
+    expect(s.increaseStep).toBe(1);
+    expect(s.recovery.rank2to4).toBe(0.3);
+  });
+
+  it('changes the recommendation for the client that set them', () => {
+    const cautious = settingsFromOverrides({ cutNonBrandLow: 0.1, cutNonBrandMedium: 0.1, cutNonBrandHigh: 0.05 });
+    expect(recommendKeyword(signal(), 40).changePct).toBeCloseTo(-0.5);
+    expect(recommendKeyword(signal(), 40, cautious).changePct).toBeCloseTo(-0.1);
   });
 });
