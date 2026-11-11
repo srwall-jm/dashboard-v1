@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { MousePointer2, Eye, Percent, TrendingUp, Tag, ShoppingBag, Globe, FileText, Trophy, RefreshCw } from 'lucide-react';
 import { DailyData, KeywordData, QueryType } from '../types';
-import { exportToCSV, formatDate, getStartOfWeek, normalizeCountry, parseLocalDate } from '../utils';
+import { exportToCSV, formatDate, getStartOfWeek, normalizeCountry, parseLocalDate, isOrganicSearch } from '../utils';
 import { KpiCard } from '../components/KpiCard';
 import { ComparisonTooltip } from '../components/ComparisonTooltip';
 import { EmptyState } from '../components/EmptyState';
@@ -173,7 +173,7 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
   isLoading?: boolean;
 }) => {
   const [brandedMetric, setBrandedMetric] = useState<'clicks' | 'impressions'>('clicks');
-  const organicGa4 = useMemo(() => aggregate(data.filter((d: any) => d.channel?.toLowerCase().includes('organic'))), [data, aggregate]);
+  const organicGa4 = useMemo(() => aggregate(data.filter((d: any) => isOrganicSearch(d.channel))), [data, aggregate]);
   const gscStats = useMemo(() => {
     if (!gscTotals) return { current: { clicks: 0, impressions: 0, ctr: 0 }, changes: { clicks: 0, impressions: 0, ctr: 0 } };
     const getRangeStats = (label: 'current' | 'previous') => {
@@ -247,7 +247,7 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
 
   const countryPerformanceData = useMemo(() => {
     const map: Record<string, { country: string; traffic: number; revenue: number; sales: number }> = {};
-    data.filter((d: any) => d.dateRangeLabel === 'current' && d.channel?.toLowerCase().includes('organic'))
+    data.filter((d: any) => d.dateRangeLabel === 'current' && isOrganicSearch(d.channel))
       .forEach((d: any) => { 
         const normalizedName = normalizeCountry(d.country);
         if (!map[normalizedName]) map[normalizedName] = { country: normalizedName, traffic: 0, revenue: 0, sales: 0 }; 

@@ -7,7 +7,7 @@ import {
   AlertOctagon, Zap, ShieldCheck, FileText, ExternalLink, Search, Filter, ChevronDown, ChevronRight, ChevronUp, CornerDownRight, BarChart2, TrendingUp, DollarSign, Info, LayoutList, Key, Settings, CheckSquare, Square, RefreshCw
 } from 'lucide-react';
 import { BridgeData, DailyData, KeywordBridgeData, GoogleAdsCustomer } from '../types';
-import { exportToCSV, formatDate, parseLocalDate } from '../utils';
+import { exportToCSV, formatDate, parseLocalDate, isOrganicSearch, isPaidSearch } from '../utils';
 import { KpiCard } from '../components/KpiCard';
 import { ComparisonTooltip } from '../components/ComparisonTooltip'; 
 import { EmptyState } from '../components/EmptyState';
@@ -225,8 +225,8 @@ const BridgeAnalysisTable: React.FC<{
             const b = getBucket(d.date);
             if (!map[b]) map[b] = { org: 0, paid: 0, date: d.date };
             
-            const isOrg = d.channel?.toLowerCase().includes('organic');
-            const isPaid = d.channel?.toLowerCase().includes('paid') || d.channel?.toLowerCase().includes('cpc');
+            const isOrg = isOrganicSearch(d.channel);
+            const isPaid = isPaidSearch(d.channel);
 
             if (isOrg) map[b].org += d.sessions;
             if (isPaid) map[b].paid += d.sessions;

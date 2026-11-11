@@ -5,7 +5,7 @@ import {
 import { DashboardTab, DashboardFilters, DailyData, KeywordData, Ga4Property, GscSite, GoogleAdsCustomer, QueryType, BridgeData, AiTrafficData, KeywordBridgeData, GoogleAdsGlobalMetrics } from './types';
 import { getDashboardInsights, getOpenAiInsights } from './insightsService';
 import GoogleLogin from './GoogleLogin'; 
-import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry, extractPath, normalizeUrl, parseLocalDate, AI_SOURCE_REGEX_STRING, parseGoogleAdsMetric } from './utils';
+import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry, extractPath, normalizeUrl, parseLocalDate, AI_SOURCE_REGEX_STRING, parseGoogleAdsMetric, isOrganicSearch, isPaidSearch } from './utils';
 import { ga4RunReportAll, gscQueryAll, isAuthExpired } from './dataFetch';
 import { generateMockBridgeData, generateMockAiTrafficData } from './mockData';
 // Import New Components and Views
@@ -547,7 +547,7 @@ const App: React.FC = () => {
                     dimensionFilter: {
                         filter: {
                             fieldName: 'sessionDefaultChannelGroup',
-                            stringFilter: { matchType: 'CONTAINS', value: 'Organic', caseSensitive: false }
+                            stringFilter: { matchType: 'EXACT', value: 'Organic Search', caseSensitive: false }
                         }
                     },
                     limit: 100000
@@ -992,7 +992,7 @@ const App: React.FC = () => {
                 const transactions = parseFloat(row.metricValues[1].value) || 0;
                 const path = normalizeUrl(rawUrl);
                 
-                if ((channelGroup.includes('paid') || channelGroup.includes('cpc') || channelGroup.includes('ppc'))) {
+                if (isPaidSearch(channelGroup)) {
                     if (!ga4PaidMap[path]) ga4PaidMap[path] = { clicksOrSessions: 0, conversions: 0, cost: 0, impressions: 0, campaigns: new Set() };
                     ga4PaidMap[path].clicksOrSessions += sessions;
                     ga4PaidMap[path].conversions += transactions;
@@ -1752,8 +1752,8 @@ const App: React.FC = () => {
   
   const channelStats = useMemo(() => {
     const total = aggregateData(filteredDailyData);
-    const organic = aggregateData(filteredDailyData.filter(d => d.channel.toLowerCase().includes('organic')));
-    const paid = aggregateData(filteredDailyData.filter(d => d.channel.toLowerCase().includes('paid') || d.channel.toLowerCase().includes('cpc')));
+    const organic = aggregateData(filteredDailyData.filter(d => isOrganicSearch(d.channel)));
+    const paid = aggregateData(filteredDailyData.filter(d => isPaidSearch(d.channel)));
     
     const searchWeightSessions = total.current.sessions > 0 ? ((organic.current.sessions + paid.current.sessions) / total.current.sessions) * 100 : 0;
     const prevSearchWeightSessions = total.previous.sessions > 0 ? ((organic.previous.sessions + paid.previous.sessions) / total.previous.sessions) * 100 : 0;

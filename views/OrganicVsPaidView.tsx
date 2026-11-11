@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { TrendingUp, Percent, Tag, ShoppingBag, Globe, FileText, ChevronDown, RefreshCw, Megaphone, ArrowUpRight, ArrowDownRight, PieChart as PieIcon } from 'lucide-react';
 import { DailyData } from '../types';
-import { exportToCSV, formatDate, getStartOfWeek, normalizeCountry, parseLocalDate } from '../utils';
+import { exportToCSV, formatDate, getStartOfWeek, normalizeCountry, parseLocalDate, isOrganicSearch, isPaidSearch } from '../utils';
 import { KpiCard } from '../components/KpiCard';
 import { ComparisonTooltip } from '../components/ComparisonTooltip';
 import { EmptyState } from '../components/EmptyState';
@@ -208,8 +208,8 @@ const CountryPerformanceTable = ({ title, data, type, currencySymbol, comparison
 }) => {
   const countryStats = useMemo(() => {
     const channelData = data.filter(d => 
-      type === 'Organic' ? d.channel.toLowerCase().includes('organic') : 
-      (d.channel.toLowerCase().includes('paid') || d.channel.toLowerCase().includes('cpc'))
+      type === 'Organic' ? isOrganicSearch(d.channel) : 
+      isPaidSearch(d.channel)
     );
 
     const map: Record<string, { country: string; current: any; previous: any }> = {};
@@ -424,8 +424,8 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
           org: 0, paid: 0, orgRev: 0, paidRev: 0, totalSess: 0, totalRev: 0 
         };
         
-        const isOrg = d.channel?.toLowerCase().includes('organic');
-        const isPaid = d.channel?.toLowerCase().includes('paid') || d.channel?.toLowerCase().includes('cpc');
+        const isOrg = isOrganicSearch(d.channel);
+        const isPaid = isPaidSearch(d.channel);
         
         if (isOrg) { 
           map[b].org += d.sessions; 

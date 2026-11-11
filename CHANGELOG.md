@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+Changed
+- "Organic" and "Paid" now mean search only: GA4 `Organic Search` and `Paid Search`. Organic Social, Organic Shopping, Organic Video, Paid Social, Paid Shopping, Paid Video and Paid Other no longer count in the channel KPIs, charts, country tables or the per URL join.
+
 ## 1.2.0 (2026-11-11) Data accuracy
 
 Fixed
