@@ -1,10 +1,13 @@
 
 import React, { useState, useMemo } from 'react';
+import { withCurrency } from '../utils';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend
 } from 'recharts';
 import { TrendingUp, Percent, Tag, ShoppingBag, Globe, FileText, ChevronDown, RefreshCw, Megaphone, ArrowUpRight, ArrowDownRight, PieChart as PieIcon } from 'lucide-react';
 import { DailyData } from '../types';
+import { ShareBars } from '../components/ShareBars';
+import { SERIES } from '../theme';
 import { exportToCSV, formatDate, getStartOfWeek, normalizeCountry, parseLocalDate, isOrganicSearch, isPaidSearch } from '../utils';
 import { KpiCard } from '../components/KpiCard';
 import { ComparisonTooltip } from '../components/ComparisonTooltip';
@@ -14,7 +17,7 @@ const UnifiedFunnel = ({ title, data }: any) => {
   return (
     <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm h-full">
       <div className="flex justify-between items-center mb-8">
-        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">{title}</h4>
+        <h4 className="jf-display text-xl text-slate-900">{title}</h4>
       </div>
       <div className="space-y-8">
         {data.map((stage: any, i: number) => {
@@ -27,15 +30,15 @@ const UnifiedFunnel = ({ title, data }: any) => {
               <div className="flex justify-between items-end mb-2">
                 <span className="text-[11px] font-bold text-slate-800 uppercase tracking-tight">{stage.stage}</span>
                 <div className="flex flex-col items-end">
-                  <span className="text-[11px] font-bold text-slate-900">{total.toLocaleString()} Total</span>
+                  <span className="text-[11px] font-bold text-slate-900">{total.toLocaleString('en-US')} Total</span>
                   <div className="flex gap-3 mt-1">
                     <div className="flex items-center gap-1.5">
                       <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full" />
-                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-tighter">Org: <span className="text-slate-900">{stage.organic.toLocaleString()}</span> ({organicPercent.toFixed(1)}%)</span>
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-tighter">Org: <span className="text-slate-900">{stage.organic.toLocaleString('en-US')}</span> ({organicPercent.toFixed(1)}%)</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <div className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
-                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-tighter">Paid: <span className="text-slate-900">{stage.paid.toLocaleString()}</span> ({paidPercent.toFixed(1)}%)</span>
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-tighter">Paid: <span className="text-slate-900">{stage.paid.toLocaleString('en-US')}</span> ({paidPercent.toFixed(1)}%)</span>
                     </div>
                   </div>
                 </div>
@@ -73,10 +76,10 @@ const EcommerceFunnel = ({ title, data, color }: any) => {
   return (
     <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
       <div className="flex justify-between items-center mb-8">
-        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">{title}</h4>
+        <h4 className="jf-display text-xl text-slate-900">{title}</h4>
         <button 
           onClick={() => exportToCSV(data, `${title.replace(/ /g, "_")}_Funnel`)} 
-          className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
+          className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 flex-shrink-0"
         >
           <FileText size={12} /> Export CSV
         </button>
@@ -88,7 +91,7 @@ const EcommerceFunnel = ({ title, data, color }: any) => {
             <div key={stage.stage} className="relative">
               <div className="flex justify-between items-center mb-1.5">
                 <span className="text-[11px] font-bold text-slate-800 uppercase tracking-tight">{stage.stage}</span>
-                <span className="text-[11px] font-bold text-slate-500">{stage.value.toLocaleString()}</span>
+                <span className="text-[11px] font-bold text-slate-500">{stage.value.toLocaleString('en-US')}</span>
               </div>
               <div className="h-9 bg-slate-50 rounded-xl overflow-hidden border border-slate-100 p-1">
                 <div className={`h-full bg-${color}-600 rounded-lg transition-all duration-1000 ease-out flex items-center justify-end px-3 min-w-[5%]`} style={{ width: `${width}%` }}><span className="text-[11px] font-bold text-white">{width.toFixed(1)}%</span></div>
@@ -126,69 +129,16 @@ const ShareOfSearchAnalysis = ({ stats, currencySymbol }: { stats: any, currency
   const COLORS = ['#1D4ED8', '#94a3b8']; 
 
   const renderDonut = (data: any[], title: string, metric: string, isCurrency = false) => (
-    <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center h-full">
-      <div className="w-full flex justify-between items-center mb-6">
-        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide self-start">{title}</h4>
-        <button 
-          onClick={() => exportToCSV(data, `${title.replace(/ /g, "_")}`)} 
-          className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
-        >
-          <FileText size={12} /> Export CSV
-        </button>
-      </div>
-      <div className="w-full h-[220px] relative">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={data}
-              cx="50%"
-              cy="50%"
-              innerRadius={60}
-              outerRadius={80}
-              paddingAngle={5}
-              dataKey="value"
-              stroke="none"
-            >
-              {data.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip 
-              content={({ active, payload }: any) => {
-                if (active && payload && payload.length) {
-                  const d = payload[0].payload;
-                  return (
-                    <div className="bg-slate-900 text-white p-3 rounded-xl border border-white/10 shadow-xl">
-                      <p className="text-[11px] font-bold uppercase tracking-wide mb-1">{d.name}</p>
-                      <p className="text-[11px] font-bold">
-                        {isCurrency ? `${currencySymbol}${d.value.toLocaleString()}` : d.value.toLocaleString()} {metric}
-                      </p>
-                      <p className="text-[11px] text-slate-500">{d.percent.toFixed(1)}% weight</p>
-                    </div>
-                  );
-                }
-                return null;
-              }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="text-xl font-bold text-slate-900">{data[0].percent.toFixed(1)}%</span>
-          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Search Share</span>
-        </div>
-      </div>
-      <div className="w-full space-y-3 mt-4">
-        {data.map((item, i) => (
-          <div key={i} className="flex justify-between items-center text-[11px] font-bold">
-            <div className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[i] }} />
-              <span className="text-slate-600">{item.name}</span>
-            </div>
-            <span className="text-slate-900">{isCurrency ? `${currencySymbol}${item.value.toLocaleString()}` : item.value.toLocaleString()}</span>
-          </div>
-        ))}
-      </div>
-    </div>
+    <ShareBars
+      title={title}
+      headline={`${data[0].percent.toFixed(1)}%`}
+      headlineLabel={`of all ${metric.toLowerCase()} comes from search (organic + paid)`}
+      rows={data.map(d => ({ label: d.name, value: d.value, percent: d.percent }))}
+      formatValue={v => (isCurrency ? `${withCurrency(currencySymbol, Math.round(v).toLocaleString('en-US'))}` : Math.round(v).toLocaleString('en-US'))}
+      colors={[SERIES.total, SERIES.context]}
+      keepOrder
+      onExport={() => exportToCSV(data, `${title.replace(/ /g, "_")}`)}
+    />
   );
 
   return (
@@ -265,7 +215,7 @@ const CountryPerformanceTable = ({ title, data, type, currencySymbol, comparison
   const RenderValueWithComparison = ({ value, change, isCurrency = false, isPercent = false }: any) => (
     <div className="flex flex-col items-end">
       <span className="font-bold text-slate-900 text-[11px]">
-        {isCurrency ? `${currencySymbol}${value.toLocaleString()}` : isPercent ? `${value.toFixed(2)}%` : value.toLocaleString()}
+        {isCurrency ? `${withCurrency(currencySymbol, value.toLocaleString('en-US'))}` : isPercent ? `${value.toFixed(2)}%` : value.toLocaleString('en-US')}
       </span>
       {comparisonEnabled && (
         <div className={`flex items-center text-[11px] font-bold ${change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
@@ -285,7 +235,7 @@ const CountryPerformanceTable = ({ title, data, type, currencySymbol, comparison
           </div>
           <h4 className="text-[11px] font-bold text-slate-800 uppercase tracking-wide">{title}</h4>
         </div>
-        <button onClick={handleDownload} className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md">
+        <button onClick={handleDownload} className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 flex-shrink-0">
           <FileText size={12} /> Export CSV
         </button>
       </div>
@@ -524,7 +474,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <KpiCard title="Sessions" value={ch.s.current.sessions} comparison={comparisonEnabled ? ch.s.changes.sessions : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sessions : undefined} icon={<TrendingUp />} color={ch.color} />
               <KpiCard title="Conv. Rate" value={`${(Number(ch.s.current.cr) || 0).toFixed(2)}%`} comparison={comparisonEnabled ? ch.s.changes.cr : undefined} icon={<Percent />} isPercent color={ch.color} />
-              <KpiCard title="Revenue" value={`${currencySymbol}${ch.s.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? ch.s.changes.revenue : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<Tag />} prefix={currencySymbol} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
+              <KpiCard title="Revenue" value={`${withCurrency(currencySymbol, ch.s.current.revenue.toLocaleString('en-US'))}`} comparison={comparisonEnabled ? ch.s.changes.revenue : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.revenue : undefined} icon={<Tag />} prefix={currencySymbol} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
               <KpiCard title="Sales" value={ch.s.current.sales} comparison={comparisonEnabled ? ch.s.changes.sales : undefined} absoluteChange={comparisonEnabled ? ch.s.abs.sales : undefined} icon={<ShoppingBag />} color={ch.type === 'ORG' ? 'emerald' : 'rose'} />
             </div>
           </div>
@@ -540,13 +490,13 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
       <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
-            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Global Search Share Trend (Time Overlay)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Overlapping periods by relative position in time</p>
+            <h4 className="jf-display text-xl text-slate-900">Global Search Share Trend (Time Overlay)</h4>
+            <p className="text-xs font-medium text-slate-600 mt-0.5">Overlapping periods by relative position in time</p>
           </div>
           <div className="flex items-center gap-4">
              <button 
                 onClick={() => exportToCSV(chartData, "Global_Share_Trend")} 
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
+                className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 flex-shrink-0"
               >
                 <FileText size={12} /> Export CSV
               </button>
@@ -579,8 +529,8 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
       <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
-            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Global Search Impressions</h4>
-            <p className="text-[11px] font-bold text-slate-600">Combined GSC (Organic) and Google Ads (Paid) daily impressions</p>
+            <h4 className="jf-display text-xl text-slate-900">Global Search Impressions</h4>
+            <p className="text-xs font-medium text-slate-600 mt-0.5">Combined GSC (Organic) and Google Ads (Paid) daily impressions</p>
           </div>
           <div className="flex items-center gap-4">
             {googleAdsDailyTotals.length === 0 && onFetchAdsData && (
@@ -602,7 +552,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
             )}
             <button 
               onClick={() => exportToCSV(impressionsData, "Global_Search_Impressions")} 
-              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
+              className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 flex-shrink-0"
             >
               <FileText size={12} /> Export CSV
             </button>
@@ -628,7 +578,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
                                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
                                   <span className="text-[11px] font-bold text-white uppercase">{entry.name}</span>
                                 </div>
-                                <span className="text-[11px] font-bold">{entry.value.toLocaleString()}</span>
+                                <span className="text-[11px] font-bold">{entry.value.toLocaleString('en-US')}</span>
                               </div>
                             ))}
                           </div>
@@ -683,13 +633,13 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
       <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Sessions Performance (Time Overlay)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Overlapping periods by relative position in time</p>
+            <h4 className="jf-display text-xl text-slate-900">Sessions Performance (Time Overlay)</h4>
+            <p className="text-xs font-medium text-slate-600 mt-0.5">Overlapping periods by relative position in time</p>
           </div>
           <div className="flex items-center gap-4">
             <button 
               onClick={() => exportToCSV(chartData, "Sessions_Performance_Overlay")} 
-              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
+              className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 flex-shrink-0"
             >
               <FileText size={12} /> Export CSV
             </button>
@@ -727,12 +677,12 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
       <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Revenue Evolution (Time Overlay)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Overlapping periods by relative position in time | Currency: {currencySymbol}</p>
+            <h4 className="jf-display text-xl text-slate-900">Revenue Evolution (Time Overlay)</h4>
+            <p className="text-xs font-medium text-slate-600 mt-0.5">Overlapping periods by relative position in time | Currency: {currencySymbol}</p>
           </div>
           <button 
             onClick={() => exportToCSV(chartData, "Revenue_Evolution_Overlay")} 
-            className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
+            className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 flex-shrink-0"
           >
             <FileText size={12} /> Export CSV
           </button>
@@ -743,7 +693,7 @@ export const OrganicVsPaidView = ({ stats, data, comparisonEnabled, grouping, se
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="date" tick={{fontSize: 12, fontWeight: 700}} axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} tickFormatter={(val) => `${withCurrency(currencySymbol, val.toLocaleString('en-US'))}`} />
                 <Tooltip content={<ComparisonTooltip currency currencySymbol={currencySymbol} />} />
                 <Legend verticalAlign="top" align="center" iconType="circle" />
                 

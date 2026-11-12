@@ -14,6 +14,13 @@ import { accessConfig, verifyAccessRequest } from '../server/access.js';
 const PREFIX = '/api/googleads';
 const FORWARDED_HEADERS = ['authorization', 'content-type', 'developer-token', 'login-customer-id'];
 
+// The dashboard only reads. These are the two calls it makes; anything else, including every
+// endpoint that changes an account, is refused even with valid credentials.
+const ALLOWED_CALLS = [
+  { method: 'GET', path: /^\/v\d+\/customers:listAccessibleCustomers$/ },
+  { method: 'POST', path: /^\/v\d+\/customers\/\d+\/googleAds:search$/ },
+];
+
 const json = (body, status) =>
   new Response(JSON.stringify(body), {
     status,
@@ -40,6 +47,11 @@ export async function onRequest(context) {
 
   if (!url.pathname.startsWith(`${PREFIX}/`)) {
     return context.next();
+  }
+
+  const adsPath = url.pathname.slice(PREFIX.length);
+  if (!ALLOWED_CALLS.some((call) => call.method === context.request.method && call.path.test(adsPath))) {
+    return json({ error: { message: 'This Google Ads call is not allowed through OneSearch.' } }, 403);
   }
 
   const headers = new Headers();

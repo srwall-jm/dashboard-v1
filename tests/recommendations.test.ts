@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  recommendKeyword, recommendKeywords, summarizeRecommendations, getPressure, getRecoveryRate, combineShares,
+  recommendKeyword, recommendKeywords, summarizeRecommendations, getPressure, getRecoveryRate, combineShares, coverSearchTerms,
   DEFAULT_SETTINGS, settingsFromOverrides, overridesFromSettings, isDefaultSettings, MAX_ALLOWED_CUT, type KeywordSignal,
 } from '../recommendations';
 
@@ -123,7 +123,7 @@ describe('recommendKeyword', () => {
   });
 
   it('increases where organic is absent, paid is efficient and there is room', () => {
-    const r = recommendKeyword(signal({ organicRank: null, organicClicks: 0, organicImpressions: 0, rankLostShare: 0.35 }), 50);
+    const r = recommendKeyword(signal({ organicRank: 14, organicClicks: 4, organicImpressions: 900, rankLostShare: 0.35 }), 50);
     expect(r.action).toBe('INCREASE');
     expect(r.suggestedSpend).toBeCloseTo(1200);
     expect(r.spendCut).toBe(0);
@@ -221,7 +221,7 @@ describe('rules adjusted per client', () => {
 describe('the figures that make the argument', () => {
   const recs = recommendKeywords([
     signal(), // reduce: 1000 spend, 500 paid clicks, 900 organic clicks, cut 50%
-    signal({ keyword: 'only ads', organicRank: null, organicClicks: 0, organicImpressions: 0, rankLostShare: 0.35, cost: 400, paidClicks: 200, paidConversions: 20 }),
+    signal({ keyword: 'only ads', organicRank: 22, organicClicks: 0, organicImpressions: 300, rankLostShare: 0.35, cost: 400, paidClicks: 200, paidConversions: 20 }),
     signal({ keyword: 'tiny', paidClicks: 3, cost: 6, paidConversions: 0 }),
   ]);
   const s = summarizeRecommendations(recs, 30);
@@ -259,5 +259,111 @@ describe('the figures that make the argument', () => {
     expect(none.addedClickCost).toBeNull();
     expect(none.lossShareOfSearch).toBeNull();
     expect(none.netChange).toBe(0);
+  });
+});
+
+describe('no advice from missing data', () => {
+  it('never recommends an increase when there is no organic data for the keyword', () => {
+    for (const rankLostShare of [0.05, 0.35, 0.8, null]) {
+      const r = recommendKeyword(signal({ organicRank: null, organicClicks: 0, organicImpressions: 0, rankLostShare }), 50);
+      expect(r.action).toBe('HOLD');
+      expect(r.suggestedSpend).toBe(r.currentSpend);
+      expect(r.reason).toMatch(/No organic data/);
+    }
+  });
+
+  it('does not treat a top position with a handful of clicks as proof', () => {
+    expect(recommendKeyword(signal({ organicClicks: 9 }), 40).action).toBe('HOLD');
+    expect(recommendKeyword(signal({ organicClicks: 10 }), 40).action).toBe('REDUCE');
+  });
+
+  it('with no organic data at all, nothing is reduced or increased', () => {
+    const recs = recommendKeywords([
+      signal({ organicRank: null, organicClicks: 0, organicImpressions: 0 }),
+      signal({ keyword: 'b', organicRank: null, organicClicks: 0, organicImpressions: 0, rankLostShare: 0.5 }),
+    ]);
+    const s = summarizeRecommendations(recs, 30);
+    expect(s.counts.REDUCE).toBe(0);
+    expect(s.counts.INCREASE).toBe(0);
+    expect(s.spendCut).toBe(0);
+  });
+});
+
+describe('keywords judged by their search terms', () => {
+  const term = (t: string, cost: number, organicRank: number | null, organicClicks = 200) => ({ term: t, cost, clicks: cost / 2, organicRank, organicClicks });
+
+  it('measures how much of the spend is on searches where organic holds the top', () => {
+    const cover = coverSearchTerms([term('a', 600, 1.2), term('b', 300, 7), term('c', 100, null, 0)], 1250)!;
+    expect(cover.coverage).toBeCloseTo(0.8);
+    expect(cover.topOrganicShare).toBeCloseTo(0.6);
+    expect(cover.topOrganicRank).toBeCloseTo(1.2);
+    expect(cover.terms.map(t => t.term)).toEqual(['a', 'b', 'c']);
+    expect(coverSearchTerms([], 100)).toBeNull();
+  });
+
+  it('does not count a top position that gets almost no clicks', () => {
+    expect(coverSearchTerms([term('a', 500, 1, 3), term('b', 500, 1)], 1000)!.topOrganicShare).toBeCloseTo(0.5);
+  });
+
+  it('keeps a broad keyword whose own text ranks first but whose money goes elsewhere', () => {
+    const searchTerms = coverSearchTerms([term('running shoes', 200, 1.1), term('cheap trainers online', 500, null, 0), term('best sneakers 2026', 300, 18, 2)], 1000);
+    const r = recommendKeyword(signal({ searchTerms }), 40);
+    expect(r.action).toBe('HOLD');
+    expect(r.spendCut).toBe(0);
+    expect(r.why).toEqual({ code: 'mostlyOtherSearches', params: { share: 0.2, top: 3 } });
+    expect(r.reason).toMatch(/Only 20% of this keyword's spend/);
+  });
+
+  it('reduces a keyword whose text has no organic data when most of its searches are won organically, and only on that share', () => {
+    const searchTerms = coverSearchTerms([term('vuelos baratos madrid', 700, 1.3), term('vuelos low cost', 300, 12, 5)], 1000);
+    const r = recommendKeyword(signal({ organicRank: null, organicClicks: 0, organicImpressions: 0, searchTerms }), 40);
+    expect(r.action).toBe('REDUCE');
+    // low pressure, position 1: 50% cap, applied to the 70% of spend where organic holds the top
+    expect(r.changePct).toBeCloseTo(-0.35);
+    expect(r.suggestedSpend).toBeCloseTo(650);
+    expect(r.why!.code).toBe('reduceTerms');
+    expect(r.searchTerms!.terms).toHaveLength(2);
+  });
+
+  it('falls back to the keyword text when the known search terms cover too little of the spend', () => {
+    const searchTerms = coverSearchTerms([term('something else', 300, null, 0)], 1000);
+    expect(searchTerms!.coverage).toBeCloseTo(0.3);
+    const r = recommendKeyword(signal({ searchTerms }), 40);
+    expect(r.action).toBe('REDUCE');
+    expect(r.why!.code).toBe('reduce');
+  });
+
+  it('still never cuts to zero', () => {
+    const searchTerms = coverSearchTerms([term('a', 1000, 1)], 1000);
+    const r = recommendKeyword(signal({ searchTerms }), 40);
+    expect(r.suggestedSpend).toBeGreaterThanOrEqual(500);
+  });
+});
+
+describe('conversion value at risk', () => {
+  it('values the clicks that may be lost at the keyword value per paid click', () => {
+    const r = recommendKeyword(signal({ paidConversionValue: 5000 }), 40);
+    expect(r.valueAtRisk.low).toBeCloseTo(1250);
+    expect(r.valueAtRisk.high).toBeCloseTo(1875);
+    const s = summarizeRecommendations([r], 30);
+    expect(s.hasConversionValue).toBe(true);
+    // 500 saved against 1,875 to 1,250 of value: pays below a 27% margin in the worst case
+    expect(s.breakEvenMargin!.low).toBeCloseTo(500 / 1875);
+    expect(s.breakEvenMargin!.high).toBeCloseTo(0.4);
+  });
+
+  it('stays at zero, with no break-even, when the account records no value', () => {
+    const r = recommendKeyword(signal(), 40);
+    expect(r.valueAtRisk).toEqual({ low: 0, high: 0 });
+    const s = summarizeRecommendations([r], 30);
+    expect(s.hasConversionValue).toBe(false);
+    expect(s.breakEvenMargin).toBeNull();
+  });
+
+  it('estimates the value an increase buys at the current return', () => {
+    const r = recommendKeyword(signal({ organicRank: 22, organicClicks: 0, rankLostShare: 0.35, cost: 400, paidClicks: 200, paidConversions: 20, paidConversionValue: 2000 }), 50);
+    expect(r.action).toBe('INCREASE');
+    expect(r.expectedExtraValue).toBeCloseTo(2000 * DEFAULT_SETTINGS.increaseStep);
+    expect(summarizeRecommendations([r], 30).extraValue).toBeCloseTo(2000 * DEFAULT_SETTINGS.increaseStep);
   });
 });

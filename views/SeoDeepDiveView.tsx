@@ -88,8 +88,8 @@ return (
       
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
-          <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">URL & Keyword Precision Analysis</h4>
-          <p className="text-[11px] font-bold text-slate-600">URL hierarchy and top 20 corresponding queries (Aggregated)</p>
+          <h4 className="jf-display text-xl text-slate-900">URL & Keyword Precision Analysis</h4>
+          <p className="text-xs font-medium text-slate-600 mt-0.5">URL hierarchy and top 20 corresponding queries (Aggregated)</p>
         </div>
         
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
@@ -142,7 +142,9 @@ return (
                   <tr 
                     onClick={() => toggleUrl(page.url)}
                     className="group cursor-pointer hover:bg-slate-50/50 transition-colors border-b border-slate-50"
-                  >
+                                  tabIndex={0}
+                                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); (() => toggleUrl(page.url))(); } }}
+                              >
                     <td className="py-5 px-4 text-center">
                       {expandedUrls.has(page.url) ? 
                         <ChevronUp className="w-4 h-4 text-indigo-500" /> : 
@@ -159,10 +161,10 @@ return (
                       </div>
                     </td>
                     <td className="py-5 px-4 text-right">
-                      <div className="text-[11px] font-bold text-slate-900">{page.clicks.toLocaleString()}</div>
+                      <div className="text-[11px] font-bold text-slate-900">{page.clicks.toLocaleString('en-US')}</div>
                     </td>
                     <td className="py-5 px-4 text-right font-bold text-slate-600 text-[11px]">
-                      {page.impressions.toLocaleString()}
+                      {page.impressions.toLocaleString('en-US')}
                     </td>
                     <td className="py-5 px-4 text-right">
                       <div className="text-[11px] font-bold text-slate-900">{page.ctr.toFixed(2)}%</div>
@@ -203,10 +205,10 @@ return (
                                     </span>
                                   </td>
                                   <td className="py-2.5 px-4 text-right">
-                                    <span className="text-[11px] font-bold text-slate-900">{q.clicks.toLocaleString()}</span>
+                                    <span className="text-[11px] font-bold text-slate-900">{q.clicks.toLocaleString('en-US')}</span>
                                   </td>
                                   <td className="py-2.5 px-4 text-right font-bold text-slate-500 text-[11px]">
-                                    {q.impressions.toLocaleString()}
+                                    {q.impressions.toLocaleString('en-US')}
                                   </td>
                                   <td className="py-2.5 px-4 text-right font-bold text-slate-900 text-[11px]">
                                     {q.ctr.toFixed(2)}%

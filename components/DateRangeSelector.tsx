@@ -31,10 +31,10 @@ export const DateRangeSelector: React.FC<{
     { label: 'This quarter to date', getValue: () => { const d = new Date(); const q = Math.floor(d.getMonth() / 3); return { start: new Date(d.getFullYear(), q * 3, 1), end: d }; } },
     { label: 'This year', getValue: () => { const d = new Date(); const start = new Date(d.getFullYear(), 0, 1); const endOfYear = new Date(d.getFullYear(), 11, 31); return { start, end: endOfYear > d ? d : endOfYear }; } },
     { label: 'This year to date', getValue: () => { const d = new Date(); return { start: new Date(d.getFullYear(), 0, 1), end: d }; } },
-    { label: 'Last 7 days', getValue: () => { const end = new Date(); const start = new Date(); start.setDate(start.getDate() - 7); return { start, end }; } },
-    { label: 'Last 14 days', getValue: () => { const end = new Date(); const start = new Date(); start.setDate(start.getDate() - 14); return { start, end }; } },
-    { label: 'Last 28 days', getValue: () => { const end = new Date(); const start = new Date(); start.setDate(start.getDate() - 28); return { start, end }; } },
-    { label: 'Last 30 days', getValue: () => { const end = new Date(); const start = new Date(); start.setDate(start.getDate() - 30); return { start, end }; } },
+    { label: 'Last 7 days', getValue: () => { const end = new Date(); end.setDate(end.getDate() - 1); const start = new Date(end); start.setDate(start.getDate() - 6); return { start, end }; } },
+    { label: 'Last 14 days', getValue: () => { const end = new Date(); end.setDate(end.getDate() - 1); const start = new Date(end); start.setDate(start.getDate() - 13); return { start, end }; } },
+    { label: 'Last 28 days', getValue: () => { const end = new Date(); end.setDate(end.getDate() - 1); const start = new Date(end); start.setDate(start.getDate() - 27); return { start, end }; } },
+    { label: 'Last 30 days', getValue: () => { const end = new Date(); end.setDate(end.getDate() - 1); const start = new Date(end); start.setDate(start.getDate() - 29); return { start, end }; } },
     { label: 'Last week', getValue: () => { const d = new Date(); d.setDate(d.getDate() - 7); const start = getStartOfWeek(d); const end = new Date(start); end.setDate(end.getDate() + 6); return { start, end }; } },
     { label: 'Last month', getValue: () => { const d = new Date(); return { start: new Date(d.getFullYear(), d.getMonth() - 1, 1), end: new Date(d.getFullYear(), d.getMonth(), 0) }; } },
     { label: 'Last quarter', getValue: () => { const d = new Date(); const q = Math.floor(d.getMonth() / 3) - 1; return { start: new Date(d.getFullYear(), q * 3, 1), end: new Date(d.getFullYear(), (q + 1) * 3, 0) }; } },
@@ -72,7 +72,7 @@ export const DateRangeSelector: React.FC<{
       </button>
 
       {isOpen && (
-        <div className="absolute top-full mt-2 left-0 w-[480px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] overflow-hidden flex">
+        <div className="absolute top-full mt-2 left-0 w-[min(480px,calc(100vw-2rem))] bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] overflow-hidden flex">
           <div className="w-1/2 border-r border-slate-100 bg-slate-50/50 max-h-[420px] overflow-y-auto custom-scrollbar">
             <div className="p-2 grid grid-cols-1 gap-0.5">
               {ranges.map((r) => (

@@ -86,6 +86,26 @@ One-time setup, by someone who administers the Cloudflare account:
 2. Pages project > Settings > Bindings: add a KV namespace binding named `CLIENT_PROFILES` pointing to it, for Production and Preview.
 3. Redeploy. "Shared clients" in Settings then shows the save form instead of a "not set up" note.
 
+## Monthly report
+
+With a shared client chosen, the Summary has a "Monthly report" block. "Save this report" stores what the recommendations say for the period on screen: the decision per keyword, the totals, the rules in use and any data notices. When an earlier report exists, the block shows what changed since it: saving potential, keywords to reduce and increase, and which keywords left or joined each list and why.
+
+Reports are kept in the same KV namespace as the shared clients (`CLIENT_PROFILES`), so they need no extra setup. Nothing is saved automatically: someone has to press the button each month.
+
+## Agreed plan
+
+In Spend recommendations, the last column of the keyword table records what was agreed with the client: agreed, applied (with the date) or reverted, a note, and "do not reduce" for keywords the client wants left alone. A keyword marked "do not reduce" is kept as is and is taken out of the saving figures, with the note shown as the reason.
+
+For a shared client the plan is stored with it and the whole team sees it. Otherwise it is kept in the browser.
+
+"Measure applied changes" reads, for each keyword marked as applied, daily paid clicks and spend from Google Ads and daily organic clicks from Search Console (the keyword text and the main searches behind it), and compares the two weeks before the date with the two weeks from it. It needs two complete weeks after the date plus three days for Search Console to catch up. The result is an observation, not proof of cause: seasonality and promotions are in the figures too. Results are not stored; press the button again to refresh them.
+
+## Languages
+
+The selector in the page header switches what the client reads between English and Spanish. The texts live in `i18n.tsx`: the English sentence is written in the code and is also the key, and each language has a dictionary. A sentence with no translation is shown in English. To add a language, add a dictionary there and its entry in `LANGS`.
+
+The reason given for each keyword comes from the model as a case and its figures (`why` in `recommendations.ts`), so each language writes its own sentence.
+
 ## Known limits
 
 - Without Cloudflare Access configured (see "Restricting access"), the login screen identifies the user but does not restrict who can sign in.

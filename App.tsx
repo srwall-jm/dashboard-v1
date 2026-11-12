@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { withCurrency } from './utils';
 import { 
   RefreshCw, Filter, Globe, Tag, AlertCircle, Sparkles, Cpu, Menu, X, Printer, Presentation
 } from 'lucide-react';
@@ -8,9 +9,15 @@ import GoogleLogin from './GoogleLogin';
 import { CURRENCY_SYMBOLS, aggregateData, formatDate, normalizeCountry, extractPath, normalizeUrl, parseLocalDate, AI_SOURCE_REGEX_STRING, parseGoogleAdsMetric, isOrganicSearch, isPaidSearch } from './utils';
 import { ga4RunReportAll, gscQueryAll, isAuthExpired } from './dataFetch';
 import { generateMockBridgeData, generateMockAiTrafficData, generateMockKeywordSignals } from './mockData';
-import { KeywordSignal, ShareRow, combineShares, buildRecommendations, RecommendationOverrides, settingsFromOverrides } from './recommendations';
+import { KeywordSignal, ShareRow, SearchTermStat, combineShares, coverSearchTerms, buildRecommendations, RecommendationOverrides, settingsFromOverrides } from './recommendations';
 import { RecommendationRulesPanel } from './components/RecommendationRulesPanel';
 import { TAB_META } from './navigation';
+import { Lang, LANGS, LangProvider, isLang, translate } from './i18n';
+import { buildSnapshot } from './snapshots';
+import { DetailDay, DetailWeek, detailRange, toWeeks, emptyDay, sampleDetailDays } from './keywordDetail';
+import { KeywordResult, DailyPoint, measurementWindow, measureKeyword, coveringRange, gaqlString, queryRegexBatches, todayIso } from './planResults';
+import { Plan, PlanItem, withPlanItem, doNotReduceMap, loadLocalPlan, saveLocalPlan, fetchSharedPlan, saveSharedPlanItem } from './plan';
+import { MonthlyReport } from './components/MonthlyReport';
 import { ClientProfile, ClientProfileInput, ClientProfileList, fetchClientProfiles, saveClientProfile, deleteClientProfile } from './clientProfiles';
 import { PinnedAdsAccounts, clientKeyOf, resolveAdsAccounts, loadPinnedAdsAccounts, savePinnedAdsAccounts } from './adsAccounts';
 import { SummaryView } from './views/SummaryView';
@@ -137,8 +144,13 @@ const App: React.FC = () => {
   const [globalKeywordBridgeDataGoogleAds, setGlobalKeywordBridgeDataGoogleAds] = useState<KeywordBridgeData[]>([]);
   // One row per paid keyword with its organic counterpart, input of the recommendation model.
   const [keywordSignals, setKeywordSignals] = useState<KeywordSignal[]>([]);
+  // False when paid keywords loaded but Search Console queries did not: then nothing can be compared.
+  const [organicQueriesLoaded, setOrganicQueriesLoaded] = useState(true);
+  const isShowingSampleDataRef = useRef(false);
   // Search Console totals per query (all URLs together), filled while the bridge data loads.
   const gscQueryTotals = useRef<Record<string, { clicks: number; impressions: number; weightedRankSum: number }>>({});
+  // Keyword text exactly as written in Google Ads, by its lower-cased form.
+  const keywordSpellings = useRef<Record<string, Set<string>>>({});
   
   const [aiTrafficData, setAiTrafficData] = useState<AiTrafficData[]>([]); 
   const [gscDailyTotals, setGscDailyTotals] = useState<any[]>([]);
@@ -155,6 +167,14 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   // Non-blocking notices about incomplete data (row caps, accounts that failed), keyed by source.
   const [dataWarnings, setDataWarnings] = useState<Record<string, string>>({});
+  // The Google sign-in callbacks are created once. They read the current selections from here,
+  // so reconnecting after a token expires keeps the client that is on screen.
+  const ga4AuthRef = useRef(ga4Auth); ga4AuthRef.current = ga4Auth;
+  const ga4CurrencyRef = useRef<string | null>(null);
+  const gscAuthRef = useRef(gscAuth); gscAuthRef.current = gscAuth;
+  const googleAdsAuthRef = useRef(googleAdsAuth); googleAdsAuthRef.current = googleAdsAuth;
+  const selectedGoogleAdsCustomerRef = useRef(selectedGoogleAdsCustomer); selectedGoogleAdsCustomerRef.current = selectedGoogleAdsCustomer;
+
   const setWarning = (key: string, message: string | null) =>
     setDataWarnings(prev => {
       if (!message && !(key in prev)) return prev;
@@ -178,6 +198,45 @@ const App: React.FC = () => {
       return next;
     });
   };
+
+  // --- Language of what the client reads, per client ---
+  const [langByClient, setLangByClient] = useState<Record<string, Lang>>(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('lang_by_client') || '{}');
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch { return {}; }
+  });
+  const lang: Lang = langByClient[adsClientKey] || 'en';
+  const setLangForClient = (key: string, value: Lang) => {
+    setLangByClient(prev => {
+      const next = { ...prev, [key]: value };
+      try { localStorage.setItem('lang_by_client', JSON.stringify(next)); } catch { /* still applies for this session */ }
+      return next;
+    });
+  };
+  const t = (text: string, params?: Record<string, string | number>) => translate(lang, text, params);
+
+  // --- Brand terms, per client. No default: a guessed regex silently changes which keywords are protected. ---
+  const [brandByClient, setBrandByClient] = useState<Record<string, string>>(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('brand_regex_by_client') || '{}');
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch { return {}; }
+  });
+  // Carried over once from the single value older versions kept, unless it was the old built-in default.
+  const legacyBrandRegex = useMemo(() => {
+    const saved = localStorage.getItem('brand_regex') || '';
+    return saved === 'shop|brand|pro|sports' ? '' : saved;
+  }, []);
+  const brandRegexStr = brandByClient[adsClientKey] ?? legacyBrandRegex;
+  const setBrandForClient = (key: string, value: string) => {
+    setBrandByClient(prev => {
+      const next = { ...prev, [key]: value };
+      try { localStorage.setItem('brand_regex_by_client', JSON.stringify(next)); } catch { /* still applies for this session */ }
+      return next;
+    });
+  };
+  const setBrandRegexStr = (value: string) => setBrandForClient(adsClientKey, value);
 
   // --- Recommendation rules, per client (same key as the Google Ads accounts) ---
   const [rulesByClient, setRulesByClient] = useState<Record<string, RecommendationOverrides>>(() => {
@@ -216,9 +275,15 @@ const App: React.FC = () => {
     setActiveProfileId(profile?.id || null);
     if (profile) localStorage.setItem('active_client_profile', profile.id); else localStorage.removeItem('active_client_profile');
     if (!profile) { pendingProfile.current = null; return; }
+    if (!gscAuth?.token && !ga4Auth?.token && !googleAdsAuth?.token) {
+      // Sample figures must not sit under a real client's name.
+      setBridgeDataGA4([]); setBridgeDataGoogleAds([]); setKeywordSignals([]);
+    }
 
-    if (profile.brandRegex) setBrandRegexStr(profile.brandRegex);
+    // Always set, even when empty: a client saved without brand terms must not inherit another client's.
+    setBrandForClient(clientKeyOf(profile.ga4PropertyId, profile.gscSiteUrl), profile.brandRegex || '');
     setRulesForClient(clientKeyOf(profile.ga4PropertyId, profile.gscSiteUrl), profile.recommendation || null);
+    if (isLang(profile.language)) setLangForClient(clientKeyOf(profile.ga4PropertyId, profile.gscSiteUrl), profile.language);
     if (profile.adsAccountIds.length > 0) {
       const key = clientKeyOf(profile.ga4PropertyId, profile.gscSiteUrl);
       setPinnedAdsAccounts(prev => {
@@ -281,6 +346,7 @@ const App: React.FC = () => {
     adsAccountIds: activeAdsAccounts.map(a => a.id),
     brandRegex: brandRegexStr,
     recommendation: rulesByClient[adsClientKey] || undefined,
+    language: lang,
   });
 
   const handleSaveClientProfile = async (id: string, profile: ClientProfileInput) => {
@@ -305,6 +371,248 @@ const App: React.FC = () => {
   const handleSelectClientProfile = (id: string | null) =>
     applyClientProfile(clientProfiles.clients.find(p => p.id === id) || null);
 
+  // --- The plan agreed with the client, keyword by keyword ---
+  // Shared through the server for a shared client; otherwise kept in this browser for the client on screen.
+  const [plan, setPlan] = useState<Plan>({});
+  const planIsShared = clientProfiles.available && Boolean(activeProfile);
+  useEffect(() => {
+    let cancelled = false;
+    if (planIsShared && activeProfile) {
+      setPlan({});
+      fetchSharedPlan(activeProfile.id).then(result => { if (!cancelled) setPlan(result.plan); });
+    } else {
+      setPlan(loadLocalPlan(adsClientKey));
+    }
+    return () => { cancelled = true; };
+  }, [planIsShared, activeProfile?.id, adsClientKey]);
+
+  // --- What happened after the applied changes ---
+  const [planResults, setPlanResults] = useState<Record<string, KeywordResult>>({});
+  const [isMeasuringPlan, setIsMeasuringPlan] = useState(false);
+  const [planMeasureNote, setPlanMeasureNote] = useState<string | null>(null);
+  useEffect(() => { setPlanResults({}); setPlanMeasureNote(null); }, [adsClientKey, activeProfile?.id]);
+
+  const measurePlan = async () => {
+    const today = todayIso();
+    const applied = Object.entries(plan).filter(([, item]) => item.status === 'applied' && item.appliedOn);
+    const ready = applied
+      .map(([keyword, item]) => ({ keyword, window: measurementWindow(item.appliedOn as string, today) }))
+      .filter(entry => entry.window.ready)
+      .slice(0, 40);
+    if (ready.length === 0) {
+      setPlanMeasureNote(t(applied.length === 0 ? 'No keyword is marked as applied yet.' : 'None of the applied changes has two complete weeks after it yet.'));
+      return;
+    }
+    const range = coveringRange(ready.map(entry => entry.window));
+    if (!range) return;
+
+    setIsMeasuringPlan(true);
+    setPlanMeasureNote(null);
+    const problems: string[] = [];
+    const points: Record<string, Record<string, DailyPoint>> = {};
+    const point = (keyword: string, date: string) => {
+      const byDate = points[keyword] || (points[keyword] = {});
+      return byDate[date] || (byDate[date] = { date, paidClicks: 0, paidCost: 0, organicClicks: 0 });
+    };
+
+    try {
+      // Paid clicks and cost per day, for these keywords only.
+      if (googleAdsAuth?.token && activeAdsAccounts.length > 0) {
+        const texts = Array.from(new Set(ready.flatMap(entry => Array.from(keywordSpellings.current[entry.keyword] || [entry.keyword]))));
+        const query = `
+          SELECT ad_group_criterion.keyword.text, segments.date, metrics.clicks, metrics.cost_micros
+          FROM keyword_view
+          WHERE segments.date BETWEEN '${range.start}' AND '${range.end}'
+          AND ad_group_criterion.keyword.text IN (${texts.map(gaqlString).join(', ')})
+        `;
+        const wanted = new Set(ready.map(entry => entry.keyword));
+        const headers: Record<string, string> = {
+          Authorization: `Bearer ${googleAdsAuth.token}`,
+          'Content-Type': 'application/json',
+          'developer-token': (developerTokenRef.current || '').trim() || DEVELOPER_TOKEN,
+        };
+        if (selectedGoogleAdsCustomer) headers['login-customer-id'] = selectedGoogleAdsCustomer.id.toString().replace(/-/g, '');
+        let failedAccounts = 0;
+        for (const account of activeAdsAccounts) {
+          const customerId = account.id.toString().replace(/-/g, '');
+          let pageToken: string | undefined;
+          try {
+            do {
+              const res = await fetch(`/api/googleads/v25/customers/${customerId}/googleAds:search`, {
+                method: 'POST', headers, body: JSON.stringify(pageToken ? { query, pageToken } : { query }),
+              });
+              if (!res.ok) throw new Error(`status ${res.status}`);
+              const json = await res.json();
+              (json.results || []).forEach((row: any) => {
+                const keyword = String(row.adGroupCriterion?.keyword?.text || '').toLowerCase().trim();
+                const date = row.segments?.date;
+                if (!wanted.has(keyword) || !date) return;
+                const p = point(keyword, date);
+                p.paidClicks += parseGoogleAdsMetric(row.metrics?.clicks);
+                p.paidCost += parseGoogleAdsMetric(row.metrics?.costMicros) / 1000000;
+              });
+              pageToken = json.nextPageToken;
+            } while (pageToken);
+          } catch {
+            failedAccounts += 1;
+          }
+        }
+        if (failedAccounts > 0) problems.push(t('Google Ads could not be read for {n} of {total} accounts, so paid clicks are incomplete.', { n: failedAccounts, total: activeAdsAccounts.length }));
+      } else {
+        problems.push(t('Google Ads is not connected, so paid clicks are missing.'));
+      }
+
+      // Organic clicks per day: the keyword text and the main searches behind it.
+      if (gscAuth?.token && gscAuth.site) {
+        const queriesOf: Record<string, Set<string>> = {};
+        ready.forEach(entry => {
+          const terms = keywordSignals.find(k => k.keyword === entry.keyword)?.searchTerms?.terms || [];
+          queriesOf[entry.keyword] = new Set([entry.keyword, ...terms.map(term => term.term)]);
+        });
+        const allQueries = Array.from(new Set(Object.values(queriesOf).flatMap(set => Array.from(set))));
+        try {
+          for (const expression of queryRegexBatches(allQueries)) {
+            const result = await gscQueryAll(gscAuth.token, gscAuth.site.siteUrl, {
+              startDate: range.start,
+              endDate: range.end,
+              dimensions: ['date', 'query'],
+              dimensionFilterGroups: [{ filters: [{ dimension: 'query', operator: 'includingRegex', expression }] }],
+            });
+            result.rows.forEach((row: any) => {
+              const date = row.keys?.[0];
+              const query = String(row.keys?.[1] || '').toLowerCase().trim();
+              if (!date || !query) return;
+              ready.forEach(entry => { if (queriesOf[entry.keyword].has(query)) point(entry.keyword, date).organicClicks += row.clicks || 0; });
+            });
+          }
+        } catch (err: any) {
+          problems.push(t('Search Console could not be read ({reason}), so organic clicks are missing.', { reason: err?.message || 'request failed' }));
+        }
+      } else {
+        problems.push(t('Search Console is not connected, so organic clicks are missing.'));
+      }
+
+      const results: Record<string, KeywordResult> = {};
+      ready.forEach(entry => { results[entry.keyword] = measureKeyword(Object.values(points[entry.keyword] || {}), entry.window); });
+      setPlanResults(results);
+      const waiting = applied.length - ready.length;
+      setPlanMeasureNote([
+        t('Measured {n} applied keywords: two weeks before against two weeks after. An observation, not proof of cause: seasonality and promotions are in the figures too.', { n: ready.length }),
+        waiting > 0 ? t('{n} more are too recent to measure.', { n: waiting }) : '',
+        ...problems,
+      ].filter(Boolean).join(' '));
+    } finally {
+      setIsMeasuringPlan(false);
+    }
+  };
+
+  // One keyword, week by week, for the detail panel. Loaded when the analyst opens it.
+  const loadKeywordDetail = async (rawKeyword: string): Promise<{ weeks: DetailWeek[]; notes: string[] }> => {
+    const keyword = rawKeyword.trim().toLowerCase();
+    const range = detailRange(filters.dateRange.end, todayIso());
+    const signal = keywordSignals.find(k => k.keyword === keyword);
+    if (isShowingSampleData) {
+      const days = Math.max(1, periodDays);
+      return {
+        weeks: toWeeks(sampleDetailDays(keyword, {
+          paidCost: (signal?.cost || 0) / days,
+          paidClicks: (signal?.paidClicks || 0) / days,
+          organicClicks: (signal?.organicClicks || 0) / days,
+          organicImpressions: (signal?.organicImpressions || 0) / days,
+          organicRank: signal?.organicRank ?? null,
+        }, range), range),
+        notes: [],
+      };
+    }
+
+    const notes: string[] = [];
+    const byDate: Record<string, DetailDay> = {};
+    const day = (date: string) => byDate[date] || (byDate[date] = emptyDay(date));
+
+    if (googleAdsAuth?.token && activeAdsAccounts.length > 0) {
+      const texts = Array.from(keywordSpellings.current[keyword] || [keyword]);
+      const query = `
+        SELECT ad_group_criterion.keyword.text, segments.date, metrics.clicks, metrics.cost_micros
+        FROM keyword_view
+        WHERE segments.date BETWEEN '${range.start}' AND '${range.end}'
+        AND ad_group_criterion.keyword.text IN (${texts.map(gaqlString).join(', ')})
+      `;
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${googleAdsAuth.token}`,
+        'Content-Type': 'application/json',
+        'developer-token': (developerTokenRef.current || '').trim() || DEVELOPER_TOKEN,
+      };
+      if (selectedGoogleAdsCustomer) headers['login-customer-id'] = selectedGoogleAdsCustomer.id.toString().replace(/-/g, '');
+      let failedAccounts = 0;
+      await Promise.all(activeAdsAccounts.map(async account => {
+        const customerId = account.id.toString().replace(/-/g, '');
+        let pageToken: string | undefined;
+        try {
+          do {
+            const res = await fetch(`/api/googleads/v25/customers/${customerId}/googleAds:search`, {
+              method: 'POST', headers, body: JSON.stringify(pageToken ? { query, pageToken } : { query }),
+            });
+            if (!res.ok) throw new Error(`status ${res.status}`);
+            const json = await res.json();
+            (json.results || []).forEach((row: any) => {
+              const text = String(row.adGroupCriterion?.keyword?.text || '').toLowerCase().trim();
+              const date = row.segments?.date;
+              if (text !== keyword || !date) return;
+              const d = day(date);
+              d.paidClicks += parseGoogleAdsMetric(row.metrics?.clicks);
+              d.paidCost += parseGoogleAdsMetric(row.metrics?.costMicros) / 1000000;
+            });
+            pageToken = json.nextPageToken;
+          } while (pageToken);
+        } catch {
+          failedAccounts += 1;
+        }
+      }));
+      if (failedAccounts > 0) notes.push(t('Google Ads could not be read for {n} of {total} accounts, so paid clicks are incomplete.', { n: failedAccounts, total: activeAdsAccounts.length }));
+    } else {
+      notes.push(t('Google Ads is not connected, so paid clicks are missing.'));
+    }
+
+    if (gscAuth?.token && gscAuth.site) {
+      const queries = new Set([keyword, ...(signal?.searchTerms?.terms || []).map(term => term.term.trim().toLowerCase())]);
+      try {
+        for (const expression of queryRegexBatches(Array.from(queries))) {
+          const result = await gscQueryAll(gscAuth.token, gscAuth.site.siteUrl, {
+            startDate: range.start,
+            endDate: range.end,
+            dimensions: ['date', 'query'],
+            dimensionFilterGroups: [{ filters: [{ dimension: 'query', operator: 'includingRegex', expression }] }],
+          });
+          result.rows.forEach((row: any) => {
+            const date = row.keys?.[0];
+            const text = String(row.keys?.[1] || '').toLowerCase().trim();
+            if (!date || !queries.has(text)) return;
+            const d = day(date);
+            d.organicClicks += row.clicks || 0;
+            d.organicImpressions += row.impressions || 0;
+            d.positionSum += (row.position || 0) * (row.impressions || 0);
+          });
+        }
+      } catch (err: any) {
+        notes.push(t('Search Console could not be read ({reason}), so organic clicks are missing.', { reason: err?.message || 'request failed' }));
+      }
+    } else {
+      notes.push(t('Search Console is not connected, so organic clicks are missing.'));
+    }
+
+    return { weeks: toWeeks(Object.values(byDate), range), notes };
+  };
+
+  const handlePlanChange = (keyword: string, item: PlanItem) => {
+    const next = withPlanItem(plan, keyword, item);
+    setPlan(next);
+    if (planIsShared && activeProfile) {
+      saveSharedPlanItem(activeProfile.id, keyword, item).catch(err => setError(err?.message || 'The plan could not be saved.'));
+    } else {
+      saveLocalPlan(adsClientKey, next);
+    }
+  };
+
   useEffect(() => {
     if (!googleAdsAuth?.token || availableGoogleAdsSubAccounts.length === 0) {
       setWarning('adsAccounts', null);
@@ -322,7 +630,6 @@ const App: React.FC = () => {
   const [clientView, setClientView] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
-  const [brandRegexStr, setBrandRegexStr] = useState(() => localStorage.getItem('brand_regex') || 'shop|brand|pro|sports');
   const [grouping, setGrouping] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   
   const [aiProvider, setAiProvider] = useState<'gemini' | 'openai'>(() => {
@@ -331,6 +638,10 @@ const App: React.FC = () => {
   });
   const [openaiKey, setOpenaiKey] = useState(() => localStorage.getItem('openai_api_key') || '');
   const [developerToken, setDeveloperToken] = useState(() => localStorage.getItem('google_ads_developer_token') || '');
+  // Requests read the token from here. The Google sign-in callback is created once and would otherwise
+  // keep the token as it was at that moment: empty if it was typed after the page loaded.
+  const developerTokenRef = useRef(developerToken);
+  developerTokenRef.current = developerToken;
   const [googleAdsClientId, setGoogleAdsClientId] = useState(() => localStorage.getItem('google_ads_client_id') || DEFAULT_CLIENT_ID);
   
   const [activeTab, setActiveTab] = useState<DashboardTab>(DashboardTab.SUMMARY);
@@ -380,9 +691,7 @@ const App: React.FC = () => {
     // but debounced so it doesn't fire once per keystroke while typing.
     if (!googleAdsAuth?.token) return;
     const handle = setTimeout(() => {
-      if (!isLoadingGoogleAds) {
-        fetchGoogleAdsCustomers(googleAdsAuth.token);
-      }
+      fetchGoogleAdsCustomers(googleAdsAuth.token);
     }, 800);
     return () => clearTimeout(handle);
   }, [developerToken, googleAdsAuth?.token]);
@@ -406,6 +715,8 @@ const App: React.FC = () => {
 
   const isBranded = (text: string) => {
     if (!text || text.trim() === '') return false;
+    // An empty pattern matches everything; no brand terms means nothing is brand.
+    if (!brandRegexStr.trim()) return false;
     try {
       const regex = new RegExp(brandRegexStr, 'i');
       return regex.test(text.trim().toLowerCase());
@@ -445,7 +756,7 @@ const App: React.FC = () => {
         });
       });
       setAvailableProperties(props);
-      if (props.length > 0 && !ga4Auth?.property) {
+      if (props.length > 0 && !ga4AuthRef.current?.property) {
         setGa4Auth({ token, property: props[0] });
       }
     } catch (e) {
@@ -463,6 +774,7 @@ const App: React.FC = () => {
       const data = await resp.json();
       if (data.currencyCode) {
         setCurrencySymbol(CURRENCY_SYMBOLS[data.currencyCode] || data.currencyCode);
+        ga4CurrencyRef.current = data.currencyCode || null;
       }
     } catch (e) {
       console.error("Error fetching property details:", e);
@@ -476,11 +788,10 @@ const App: React.FC = () => {
       });
       if (!resp.ok) return;
       const data = await resp.json();
-      const filtered = (data.dimensions || []).filter((d: any) => {
-        const apiName = d.apiName.toLowerCase();
-        const relevant = ['session', 'source', 'medium', 'channel', 'campaign', 'country', 'region', 'page', 'landing', 'device'];
-        return relevant.some(r => apiName.includes(r));
-      });
+      // Only the dimensions the Organic Search / Paid Search split can read. Any other one
+      // (source, landing page, device...) left organic and paid at zero without saying so.
+      const SEARCH_SPLIT_DIMENSIONS = ['sessionDefaultChannelGroup', 'sessionMedium', 'sessionSourceMedium'];
+      const filtered = (data.dimensions || []).filter((d: any) => SEARCH_SPLIT_DIMENSIONS.includes(d.apiName));
       const mapped = filtered.map((d: any) => ({ label: d.uiName || d.apiName, value: d.apiName }));
       const sorted = mapped.sort((a: any, b: any) => {
         const aIndex = PRIORITY_DIMENSIONS.indexOf(a.value);
@@ -503,7 +814,7 @@ const App: React.FC = () => {
       const data = await resp.json();
       const sites = data.siteEntry || [];
       setAvailableSites(sites);
-      if (sites.length > 0 && !gscAuth?.site) {
+      if (sites.length > 0 && !gscAuthRef.current?.site) {
         setGscAuth({ token, site: sites[0] });
       }
     } catch (e) {
@@ -516,7 +827,7 @@ const App: React.FC = () => {
     try {
         setError(null);
         setIsLoadingGoogleAds(true);
-        const tokenToUse = (developerToken || '').trim() || DEVELOPER_TOKEN;
+        const tokenToUse = (developerTokenRef.current || '').trim() || DEVELOPER_TOKEN;
         const resp = await fetch('/api/googleads/v25/customers:listAccessibleCustomers', {
             method: 'GET',
             headers: { 
@@ -551,10 +862,10 @@ const App: React.FC = () => {
         setAvailableGoogleAdsCustomers(customers);
         
         if (customers.length > 0) {
-           if (!googleAdsAuth?.customer) {
+           if (!googleAdsAuthRef.current?.customer) {
                setGoogleAdsAuth({ token, customer: customers[0] });
            }
-           if (!selectedGoogleAdsCustomer) {
+           if (!selectedGoogleAdsCustomerRef.current) {
                const defaultCust = customers[0];
                setSelectedGoogleAdsCustomer(defaultCust);
                fetchGoogleAdsSubAccounts(token, defaultCust.id);
@@ -594,7 +905,7 @@ const App: React.FC = () => {
         headers: { 
           'Authorization': `Bearer ${token}`, 
           'Content-Type': 'application/json',
-          'developer-token': (developerToken || '').trim() || DEVELOPER_TOKEN,
+          'developer-token': (developerTokenRef.current || '').trim() || DEVELOPER_TOKEN,
           'login-customer-id': managerId 
         },
         body: JSON.stringify({ query })
@@ -725,19 +1036,57 @@ const App: React.FC = () => {
     }
   };
 
+  // Each load gets a number. When the client, the dates or the accounts change while a load is
+  // running, a newer one starts; the older one keeps fetching but none of its results are written.
+  const bridgeRun = useRef(0);
+  const ga4Run = useRef(0);
+  const gscRun = useRef(0);
+  const showingMock = useRef(false);
+  const guardSetters = <T extends Record<string, (...args: any[]) => void>>(setters: T, live: () => boolean): T =>
+    Object.fromEntries(Object.entries(setters).map(([name, fn]) => [name, (...args: any[]) => { if (live()) fn(...args); }])) as T;
+  const bridgeSetters = {
+    setBridgeDataGA4, setBridgeDataGoogleAds, setKeywordSignals, setIsLoadingBridge, setLoadingProgress,
+    setGoogleAdsDailyTotals, setGoogleAdsGlobalMetrics, setCurrencySymbol, setKeywordBridgeDataGoogleAds,
+    setGlobalKeywordBridgeDataGoogleAds, setIsGoogleAdsKeywordsLoaded, setError, setKeywordBridgeDataGA4, setWarning,
+  };
+
   // --- BRIDGE DATA: GA4 SESSIONS (ORGANIC vs PAID) ---
   // UPDATED: New granular logic with URL+Keyword
   const fetchBridgeData = async () => {
+    const runId = ++bridgeRun.current;
+    const live = () => runId === bridgeRun.current;
+    // Same names on purpose: every state update below goes through the check.
+    const {
+      setBridgeDataGA4, setBridgeDataGoogleAds, setKeywordSignals, setIsLoadingBridge, setLoadingProgress,
+      setGoogleAdsDailyTotals, setGoogleAdsGlobalMetrics, setCurrencySymbol, setKeywordBridgeDataGoogleAds,
+      setGlobalKeywordBridgeDataGoogleAds, setIsGoogleAdsKeywordsLoaded, setError, setKeywordBridgeDataGA4, setWarning,
+    } = guardSetters(bridgeSetters, live);
+    // Search Console totals per query are collected here and handed over only if this load is still current.
+    const queryTotals: Record<string, { clicks: number; impressions: number; weightedRankSum: number }> = {};
+
     setIsLoadingBridge(true);
     setLoadingProgress(0);
     
     // --- MOCK FALLBACK IF NOTHING CONNECTED ---
     if (!gscAuth?.token && !ga4Auth?.token && !googleAdsAuth?.token) {
+        // A chosen client never gets sample figures under its name.
+        if (activeProfileId) {
+            setBridgeDataGA4([]); setBridgeDataGoogleAds([]); setKeywordSignals([]);
+            setIsLoadingBridge(false);
+            return;
+        }
         if (!bridgeDataGA4.length) setBridgeDataGA4(generateMockBridgeData());
         if (!bridgeDataGoogleAds.length) setBridgeDataGoogleAds(generateMockBridgeData());
         if (!keywordSignals.length) setKeywordSignals(generateMockKeywordSignals());
+        showingMock.current = true;
         setIsLoadingBridge(false);
         return;
+    }
+
+    // Something is connected: sample rows must not sit next to real ones.
+    if (showingMock.current) {
+        showingMock.current = false;
+        setBridgeDataGA4([]); setBridgeDataGoogleAds([]); setKeywordSignals([]);
     }
     
     
@@ -797,7 +1146,6 @@ const App: React.FC = () => {
     
     // 1. TRY GSC FETCH (If Available)
     setWarning('gscBridge', null);
-    gscQueryTotals.current = {};
     if (gscAuth?.site && gscAuth.token) {
         try {
             const siteUrl = encodeURIComponent(gscAuth.site.siteUrl);
@@ -828,7 +1176,7 @@ const App: React.FC = () => {
                     const cleanPath = normalizeUrl(fullUrl);
 
                     const queryKey = String(query).toLowerCase().trim();
-                    const queryTotal = gscQueryTotals.current[queryKey] || (gscQueryTotals.current[queryKey] = { clicks: 0, impressions: 0, weightedRankSum: 0 });
+                    const queryTotal = queryTotals[queryKey] || (queryTotals[queryKey] = { clicks: 0, impressions: 0, weightedRankSum: 0 });
                     queryTotal.clicks += clicks;
                     queryTotal.impressions += impressions;
                     queryTotal.weightedRankSum += rank * impressions;
@@ -887,6 +1235,9 @@ const App: React.FC = () => {
         }
     }
     
+    if (!live()) return;
+    gscQueryTotals.current = queryTotals;
+
     // 2. TRY GOOGLE ADS FETCH (If Available & Selected)
     if (googleAdsAuth?.token && activeAdsAccounts.length > 0) {
          const googleAdsPaidMap: Record<string, { clicksOrSessions: number, conversions: number, cost: number, impressions: number, campaigns: Set<string> }> = {};
@@ -925,8 +1276,10 @@ const App: React.FC = () => {
          `;
 
          // Query 3: Customer-level metrics (The most accurate "Overview" total)
+         const adsCurrencies = new Set<string>();
          const googleAdsCustomerQuery = `
             SELECT 
+              customer.currency_code,
               segments.date,
               metrics.cost_micros, 
               metrics.clicks, 
@@ -948,7 +1301,7 @@ const App: React.FC = () => {
             const headers: any = { 
                 Authorization: `Bearer ${googleAdsAuth.token}`, 
                 'Content-Type': 'application/json',
-                'developer-token': (developerToken || '').trim() || DEVELOPER_TOKEN
+                'developer-token': (developerTokenRef.current || '').trim() || DEVELOPER_TOKEN
             };
             
             if (selectedGoogleAdsCustomer) {
@@ -1029,6 +1382,8 @@ const App: React.FC = () => {
                     customerResults.forEach(res => {
                         if (Array.isArray(res)) {
                             for (const row of res) {
+                                const currencyCode = row.customer?.currencyCode;
+                                if (currencyCode) adsCurrencies.add(String(currencyCode));
                                 const metrics = row.metrics;
                                 const segments = row.segments;
                                 const date = segments?.date;
@@ -1066,6 +1421,19 @@ const App: React.FC = () => {
                 
                 setGoogleAdsGlobalMetrics(globalMetrics);
                 globalAvgCpc = globalMetrics.avgCpc; // Used for fallback
+
+                // Paid amounts are in the accounts' own currency, which is not necessarily the GA4 property's.
+                const adsCodes = Array.from(adsCurrencies);
+                if (adsCodes.length > 1) {
+                    setWarning('adsCurrency', `Google Ads: the accounts chosen for this client use different currencies (${adsCodes.join(', ')}). Their spend is added up without conversion, so paid amounts are not reliable. Choose accounts in one currency.`);
+                } else if (adsCodes.length === 1 && !ga4AuthRef.current?.property) {
+                    setCurrencySymbol(CURRENCY_SYMBOLS[adsCodes[0]] || adsCodes[0]);
+                    setWarning('adsCurrency', null);
+                } else if (adsCodes.length === 1 && ga4CurrencyRef.current && ga4CurrencyRef.current !== adsCodes[0]) {
+                    setWarning('adsCurrency', `Google Ads spend is in ${adsCodes[0]} but the GA4 property reports in ${ga4CurrencyRef.current}. Paid amounts are shown with the GA4 currency symbol and are not converted.`);
+                } else {
+                    setWarning('adsCurrency', null);
+                }
             }
             
             // 1. Process URLs for Bridge Data (source of truth for URL-level metrics)
@@ -1178,11 +1546,17 @@ const App: React.FC = () => {
              setBridgeDataGoogleAds([]);
              setKeywordBridgeDataGoogleAds([]);
              setKeywordSignals([]);
+             setGoogleAdsGlobalMetrics(null);
+             setGoogleAdsDailyTotals([]);
          }
     } else {
          setBridgeDataGoogleAds([]);
          setKeywordBridgeDataGoogleAds([]);
          setKeywordSignals([]);
+         // Totals of the previous client must not stay under the new one's name.
+         setGoogleAdsGlobalMetrics(null);
+         setGoogleAdsDailyTotals([]);
+         setWarning('adsCurrency', null);
     }
     
     // 3. TRY GA4 FETCH (If Available)
@@ -1380,8 +1754,9 @@ const App: React.FC = () => {
     if (!googleAdsAuth?.token || isGoogleAdsKeywordsLoading || isGoogleAdsKeywordsLoaded || activeAdsAccounts.length === 0) return;
     
     setIsGoogleAdsKeywordsLoading(true);
+    const bridgeRunAtStart = bridgeRun.current;
     const allAccountIds = activeAdsAccounts.map(acc => acc.id);
-    const googleAdsGlobalKeywordMap: Record<string, { clicks: number, conversions: number, cost: number, impressions: number }> = {};
+    const googleAdsGlobalKeywordMap: Record<string, { clicks: number, conversions: number, conversionValue: number, cost: number, impressions: number }> = {};
     const googleAdsKeywordUrlMap: Record<string, { clicks: number, conversions: number, cost: number }> = {};
     
     const buildKwQuery = (withShares: boolean) => `
@@ -1391,6 +1766,7 @@ const App: React.FC = () => {
           metrics.cost_micros,
           metrics.clicks,
           metrics.conversions,
+          metrics.conversions_value,
           metrics.impressions${withShares ? `,
           metrics.search_impression_share,
           metrics.search_rank_lost_impression_share,
@@ -1416,7 +1792,7 @@ const App: React.FC = () => {
         const headers: any = { 
             Authorization: `Bearer ${googleAdsAuth.token}`, 
             'Content-Type': 'application/json',
-            'developer-token': (developerToken || '').trim() || DEVELOPER_TOKEN
+            'developer-token': (developerTokenRef.current || '').trim() || DEVELOPER_TOKEN
         };
         if (selectedGoogleAdsCustomer) {
             headers['login-customer-id'] = selectedGoogleAdsCustomer.id.toString().replace(/-/g, '');
@@ -1468,16 +1844,19 @@ const App: React.FC = () => {
                     const kw = row.adGroupCriterion?.keyword?.text;
                     if (!kw) return;
                     const cleanKw = kw.toLowerCase().trim();
+                    (keywordSpellings.current[cleanKw] || (keywordSpellings.current[cleanKw] = new Set())).add(kw);
                     const metrics = row.metrics;
                     const clicks = parseGoogleAdsMetric(metrics?.clicks || metrics?.clicks_val);
                     const costMicros = parseGoogleAdsMetric(metrics?.costMicros || metrics?.cost_micros);
                     const conversions = parseGoogleAdsMetric(metrics?.conversions || metrics?.conversions_val);
                     const impressions = parseGoogleAdsMetric(metrics?.impressions || metrics?.impressions_val);
+                    const conversionValue = parseGoogleAdsMetric(metrics?.conversionsValue || metrics?.conversions_value);
                     const cost = costMicros / 1000000;
 
                     if (!googleAdsGlobalKeywordMap[cleanKw]) {
-                        googleAdsGlobalKeywordMap[cleanKw] = { clicks: 0, conversions: 0, cost: 0, impressions: 0 };
+                        googleAdsGlobalKeywordMap[cleanKw] = { clicks: 0, conversions: 0, conversionValue: 0, cost: 0, impressions: 0 };
                     }
+                    googleAdsGlobalKeywordMap[cleanKw].conversionValue += conversionValue;
                     googleAdsGlobalKeywordMap[cleanKw].clicks += clicks;
                     googleAdsGlobalKeywordMap[cleanKw].conversions += conversions;
                     googleAdsGlobalKeywordMap[cleanKw].impressions += impressions;
@@ -1506,6 +1885,10 @@ const App: React.FC = () => {
                 });
             });
         }
+
+        // The client, dates or accounts changed while this was loading: these keywords belong to the old
+        // selection. Drop them; the load for the new selection starts on its own.
+        if (bridgeRunAtStart !== bridgeRun.current) return;
 
         // Now update the bridge data with the keywords
         setBridgeDataGoogleAds(prev => prev.map(item => {
@@ -1628,6 +2011,49 @@ const App: React.FC = () => {
             };
         });
 
+        // Search terms: what each keyword really spends on. A broad keyword shows ads for many searches,
+        // so it is judged by them and not by the single search that shares its text.
+        const termsByKeyword: Record<string, Record<string, { cost: number; clicks: number }>> = {};
+        let termsUnavailable = false;
+        const termQuery = `
+            SELECT
+              search_term_view.search_term,
+              segments.keyword.info.text,
+              metrics.clicks,
+              metrics.cost_micros
+            FROM search_term_view
+            WHERE segments.date BETWEEN '${filters.dateRange.start}' AND '${filters.dateRange.end}'
+            AND metrics.clicks > 0
+            ORDER BY metrics.cost_micros DESC
+            LIMIT 20000
+        `;
+        for (let i = 0; i < allAccountIds.length; i += 5) {
+            const chunk = allAccountIds.slice(i, i + 5);
+            const termResults = await Promise.all(chunk.map(async id => {
+                const cleanId = id.toString().replace(/-/g, '');
+                if (kwFailures.has(cleanId)) return []; // the account already failed; nothing more to ask
+                const rows = await fetchGoogleAds(termQuery, id);
+                if (kwFailures.has(cleanId)) {
+                    // Search terms are an extra: without them the keyword text is used, and the account is not reported as failed.
+                    kwFailures.delete(cleanId);
+                    termsUnavailable = true;
+                    return [];
+                }
+                return rows;
+            }));
+            termResults.forEach(rows => rows.forEach((row: any) => {
+                const kw = String(row.segments?.keyword?.info?.text || '').toLowerCase().trim();
+                const term = String(row.searchTermView?.searchTerm || '').toLowerCase().trim();
+                if (!kw || !term) return;
+                const byTerm = termsByKeyword[kw] || (termsByKeyword[kw] = {});
+                const entry = byTerm[term] || (byTerm[term] = { cost: 0, clicks: 0 });
+                entry.cost += parseGoogleAdsMetric(row.metrics?.costMicros) / 1000000;
+                entry.clicks += parseGoogleAdsMetric(row.metrics?.clicks);
+            }));
+        }
+        if (bridgeRunAtStart !== bridgeRun.current) return;
+        setWarning('adsTerms', termsUnavailable ? 'Google Ads: search terms could not be read for some accounts. Their keywords are judged by the keyword text only, which is less reliable for broad match.' : null);
+
         // One row per paid keyword, joined to the same query text in Search Console.
         const signals: KeywordSignal[] = Object.entries(googleAdsGlobalKeywordMap).map(([kw, paid]) => {
             const organic = gscQueryTotals.current[kw];
@@ -1638,13 +2064,24 @@ const App: React.FC = () => {
                 paidClicks: paid.clicks,
                 paidImpressions: paid.impressions,
                 paidConversions: paid.conversions,
+                paidConversionValue: paid.conversionValue,
                 ...combineShares(kwShareRows[kw] || []),
                 organicRank: organic && organic.impressions > 0 ? organic.weightedRankSum / organic.impressions : null,
                 organicClicks: organic?.clicks || 0,
                 organicImpressions: organic?.impressions || 0,
+                searchTerms: coverSearchTerms(
+                    Object.entries(termsByKeyword[kw] || {}).map(([term, t]): SearchTermStat => {
+                        const o = gscQueryTotals.current[term];
+                        return { term, cost: t.cost, clicks: t.clicks, organicRank: o && o.impressions > 0 ? o.weightedRankSum / o.impressions : null, organicClicks: o?.clicks || 0 };
+                    }),
+                    paid.cost
+                ),
             };
         });
         setKeywordSignals(signals);
+        const hasOrganicQueries = Object.keys(gscQueryTotals.current).length > 0;
+        setOrganicQueriesLoaded(hasOrganicQueries);
+        setWarning('recsOrganic', hasOrganicQueries ? null : 'Search Console queries are not loaded, so paid keywords cannot be compared with their organic position. Connect Search Console in Settings, choose the site and refresh. No recommendation is made until then.');
         setWarning('adsShares', sharesUnavailable ? 'Google Ads: impression share could not be read for some accounts. Competitive pressure is treated as medium on their keywords, so reductions are more cautious.' : null);
 
         setKeywordBridgeDataGoogleAds(googleAdsKwResults.sort((a, b) => b.paidSessions - a.paidSessions));
@@ -1665,6 +2102,7 @@ const App: React.FC = () => {
 
   const fetchGa4Data = async () => {
     if (!ga4Auth?.property || !ga4Auth.token) return;
+    const runId = ++ga4Run.current;
     
     setIsLoadingGa4(true);
     
@@ -1682,9 +2120,10 @@ const App: React.FC = () => {
         dimensions: [
           { name: 'date' }, 
           { name: filters.ga4Dimension }, 
-          { name: 'country' }, 
-          { name: 'landingPage' }
+          { name: 'country' }
         ],
+        // No landing page here on purpose. Nothing in the menu reads GA4 sessions by page, and
+        // adding it multiplied the rows until large sites hit the cap and totals came out low.
         metrics: [
           { name: 'sessions' }, 
           { name: 'totalRevenue' }, 
@@ -1694,7 +2133,7 @@ const App: React.FC = () => {
         ],
       }, { maxRows: 300000 });
       if (ga4Data.truncated) {
-        setWarning('ga4', `GA4: loaded ${ga4Data.rows.length.toLocaleString()} of ${(ga4Data.totalRows || 0).toLocaleString()} rows. Sessions and revenue are understated. Use a shorter date range.`);
+        setWarning('ga4', `GA4: loaded ${ga4Data.rows.length.toLocaleString('en-US')} of ${(ga4Data.totalRows || 0).toLocaleString('en-US')} rows. Sessions and revenue are understated. Use a shorter date range.`);
       }
       
       const currentStart = parseInt(filters.dateRange.start.replace(/-/g, ''), 10);
@@ -1718,7 +2157,7 @@ const App: React.FC = () => {
           channel: row.dimensionValues[1].value,
           country: normalizeCountry(row.dimensionValues[2].value),
           queryType: 'Non-Branded' as QueryType,
-          landingPage: row.dimensionValues[3].value,
+          landingPage: '(not set)',
           dateRangeLabel: label,
           sessions: parseInt(row.metricValues[0].value) || 0,
           revenue: parseFloat(row.metricValues[1].value) || 0,
@@ -1730,14 +2169,18 @@ const App: React.FC = () => {
         };
       });
       
+      if (runId !== ga4Run.current) return; // a newer load is on its way
       setRealDailyData(dailyMapped);
       
     } catch (err: any) {
+      if (runId !== ga4Run.current) return;
       console.error("Error fetching GA4:", err);
       setError(`GA4 Error: ${err.message}`);
+      // Figures of another client or period must not stay on screen after a failed load.
+      setRealDailyData([]);
       if (isAuthExpired(err)) { setGa4Auth(null); sessionStorage.removeItem('ga4_auth'); }
     } finally {
-      setIsLoadingGa4(false);
+      if (runId === ga4Run.current) setIsLoadingGa4(false);
     }
   };
   
@@ -1747,13 +2190,15 @@ const App: React.FC = () => {
         googleAdsAuth?.token && 
         !isGoogleAdsKeywordsLoaded && 
         !isGoogleAdsKeywordsLoading &&
+        !isLoadingBridge &&
         activeAdsAccounts.length > 0) {
       fetchGoogleAdsKeywords();
     }
-  }, [activeTab, isGoogleAdsKeywordsLoaded, isGoogleAdsKeywordsLoading, googleAdsAuth, activeAdsAccountsKey]);
+  }, [activeTab, isGoogleAdsKeywordsLoaded, isGoogleAdsKeywordsLoading, isLoadingBridge, googleAdsAuth, activeAdsAccountsKey]);
 
   const fetchGscData = async () => {
     if (!gscAuth?.site || !gscAuth.token) return;
+    const runId = ++gscRun.current;
     
     setIsLoadingGsc(true);
     try {
@@ -1832,6 +2277,7 @@ const App: React.FC = () => {
         previousTotals = prevData.totals;
       }
       
+      if (runId !== gscRun.current) return; // a newer load is on its way
       setRealKeywordData(combinedKeywords);
       setGscDailyTotals(combinedDailyTotals);
       setGscTotals({ current: currentTotals, previous: previousTotals });
@@ -1839,11 +2285,14 @@ const App: React.FC = () => {
         setWarning('gsc', 'Search Console: keyword tables show the top 50,000 query rows for the period. Totals are complete; keyword and branded splits are partial. Use a shorter date range for full detail.');
       }
     } catch (err: any) {
+      if (runId !== gscRun.current) return;
       console.error(err);
       setError(`GSC Error: ${err.message}`);
+      setRealKeywordData([]);
+      setGscDailyTotals([]);
       if (isAuthExpired(err)) { setGscAuth(null); sessionStorage.removeItem('gsc_auth'); }
     } finally {
-      setIsLoadingGsc(false);
+      if (runId === gscRun.current) setIsLoadingGsc(false);
     }
   };
   
@@ -1882,7 +2331,7 @@ const App: React.FC = () => {
           prompt: '',
           callback: (resp: any) => {
             if (resp.access_token) {
-              const newAuth = { token: resp.access_token, property: ga4Auth?.property || null };
+              const newAuth = { token: resp.access_token, property: ga4AuthRef.current?.property || null };
               setGa4Auth(newAuth);
               sessionStorage.setItem('ga4_auth', JSON.stringify(newAuth));
               fetchGa4Properties(resp.access_token);
@@ -1896,7 +2345,7 @@ const App: React.FC = () => {
           prompt: '',
           callback: (resp: any) => {
             if (resp.access_token) {
-              const newAuth = { token: resp.access_token, site: gscAuth?.site || null };
+              const newAuth = { token: resp.access_token, site: gscAuthRef.current?.site || null };
               setGscAuth(newAuth);
               sessionStorage.setItem('gsc_auth', JSON.stringify(newAuth));
               fetchGscSites(resp.access_token);
@@ -1925,7 +2374,7 @@ const App: React.FC = () => {
             prompt: '',
             callback: (resp: any) => {
               if (resp.access_token) {
-                const newAuth = { token: resp.access_token, customer: googleAdsAuth?.customer || null };
+                const newAuth = { token: resp.access_token, customer: googleAdsAuthRef.current?.customer || null };
                 setGoogleAdsAuth(newAuth);
                 sessionStorage.setItem('googleads_auth', JSON.stringify(newAuth));
                 fetchGoogleAdsCustomers(resp.access_token);
@@ -2057,14 +2506,14 @@ const App: React.FC = () => {
       if (activeTab === DashboardTab.ORGANIC_VS_PAID) {
         summary = `
           Context: Analysis of Organic vs Paid Search funnels.
-          Organic Stats: ${channelStats.organic.current.sessions} sessions, ${currencySymbol}${channelStats.organic.current.revenue.toLocaleString()} revenue, ${channelStats.organic.current.cr.toFixed(2)}% CR.
-          Paid Stats: ${channelStats.paid.current.sessions} sessions, ${currencySymbol}${channelStats.paid.current.revenue.toLocaleString()} revenue, ${channelStats.paid.current.cr.toFixed(2)}% CR.
+          Organic Stats: ${channelStats.organic.current.sessions} sessions, ${withCurrency(currencySymbol, channelStats.organic.current.revenue.toLocaleString('en-US'))} revenue, ${channelStats.organic.current.cr.toFixed(2)}% CR.
+          Paid Stats: ${channelStats.paid.current.sessions} sessions, ${withCurrency(currencySymbol, channelStats.paid.current.revenue.toLocaleString('en-US'))} revenue, ${channelStats.paid.current.cr.toFixed(2)}% CR.
           Search Weight: ${channelStats.shares.sessions.current.toFixed(1)}% share.
         `;
       } else if (activeTab === DashboardTab.SEO_BY_COUNTRY) {
         summary = `
           Context: Market-level SEO efficiency.
-          Organic GA4 Rev: ${currencySymbol}${channelStats.organic.current.revenue.toLocaleString()}.
+          Organic GA4 Rev: ${withCurrency(currencySymbol, channelStats.organic.current.revenue.toLocaleString('en-US'))}.
         `;
       } else if (activeTab === DashboardTab.PPC_SEO_BRIDGE) {
         const primaryBridgeData = bridgeDataGoogleAds.length > 0 ? bridgeDataGoogleAds : bridgeDataGA4;
@@ -2082,9 +2531,9 @@ const App: React.FC = () => {
           const avgCpa = totalConv > 0 ? totalCost / totalConv : 0;
           summary = `
             Context: Google Ads / Paid Search Performance Analysis by URL.
-            Total Spend: ${currencySymbol}${totalCost.toLocaleString()}.
+            Total Spend: ${withCurrency(currencySymbol, totalCost.toLocaleString('en-US'))}.
             Total Conversions: ${totalConv}.
-            Average CPA: ${currencySymbol}${avgCpa.toFixed(2)}.
+            Average CPA: ${withCurrency(currencySymbol, avgCpa.toFixed(2))}.
             Look for high CPA URLs and efficient high-volume URLs in the data provided.
           `;
       } else if (activeTab === DashboardTab.AI_TRAFFIC_MONITOR) {
@@ -2095,13 +2544,21 @@ const App: React.FC = () => {
           Top Sources identified in list.
         `;
       } else if (activeTab === DashboardTab.SEARCH_EFFICIENCY) {
-         const primaryData = bridgeDataGoogleAds.length > 0 ? bridgeDataGoogleAds : bridgeDataGA4;
-         const brandTax = primaryData.filter(d => isBranded(d.query) && d.organicRank !== null && d.organicRank <= 1.5).reduce((acc, d) => acc + d.ppcCost, 0);
+         const r = summaryRecs.summary;
+         const top = (action: string) => summaryRecs.recommendations
+           .filter(x => x.action === action)
+           .sort((a, b) => Math.abs(b.suggestedSpend - b.currentSpend) - Math.abs(a.suggestedSpend - a.currentSpend))
+           .slice(0, 8)
+           .map(x => `${x.keyword}: ${withCurrency(currencySymbol, Math.round(x.currentSpend))} to ${withCurrency(currencySymbol, Math.round(x.suggestedSpend))} (organic position ${x.organicRank === null ? 'unknown' : x.organicRank.toFixed(1)}, auction pressure ${x.pressure})`)
+           .join('; ');
          summary = `
-           Context: Search Efficiency & Cost Savings.
-           Goal: Identify wasted spend (Cannibalization) and incremental growth opportunities.
-           Estimated Potential Brand Savings (Brand Tax): ${currencySymbol}${brandTax.toLocaleString()}.
-           The dashboard highlights where we pay for Brand terms despite ranking #1 organically.
+           Context: keyword by keyword plan to move paid search spend, for a client presentation.
+           Rules you must respect: no keyword is ever taken to zero, a minimum always stays so a competitor cannot take the ad slot. These are estimates to design a test, not a forecast. Use only the figures below; do not invent numbers.
+           Spend analysed: ${withCurrency(currencySymbol, Math.round(r.spendAnalysed))}. Can come down: ${withCurrency(currencySymbol, Math.round(r.spendCut))} on ${r.counts.REDUCE} keywords. Extra budget proposed: ${withCurrency(currencySymbol, Math.round(r.spendToIncrease))} on ${r.counts.INCREASE} keywords. Net: ${withCurrency(currencySymbol, Math.round(r.netChange))}.
+           Paid clicks that may be lost: ${Math.round(r.clicksAtRisk.low)} to ${Math.round(r.clicksAtRisk.high)}. Clicks expected to still arrive through organic: ${Math.round(r.clicksRecovered.low)} to ${Math.round(r.clicksRecovered.high)}.
+           Largest reductions: ${top('REDUCE') || 'none'}.
+           Largest increases: ${top('INCREASE') || 'none'}.
+           Kept as is: ${r.counts.HOLD} keywords. Too few clicks to judge: ${r.counts.NO_DATA}.
          `;
       }
       
@@ -2124,18 +2581,44 @@ const App: React.FC = () => {
   };
   
   const periodDays = Math.round((parseLocalDate(filters.dateRange.end).getTime() - parseLocalDate(filters.dateRange.start).getTime()) / 86400000) + 1;
-  const periodLabel = `${filters.dateRange.start} to ${filters.dateRange.end}`;
+  const periodLabel = t('{start} to {end}', { start: filters.dateRange.start, end: filters.dateRange.end });
   const clientName = activeProfile?.name || (gscAuth?.site?.siteUrl || '').replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').replace(/\/$/, '') || ga4Auth?.property?.name || '';
   const summaryRecs = useMemo(
-    () => buildRecommendations(keywordSignals, isBranded, filters.queryType, periodDays, recommendationSettings),
-    [keywordSignals, brandRegexStr, filters.queryType, periodDays, recommendationSettings]
+    () => buildRecommendations(keywordSignals, isBranded, filters.queryType, periodDays, recommendationSettings, doNotReduceMap(plan)),
+    [keywordSignals, brandRegexStr, filters.queryType, periodDays, recommendationSettings, plan]
   );
+
+  useEffect(() => {
+    const needsBrand = keywordSignals.length > 0 && !brandRegexStr.trim() && !isShowingSampleDataRef.current;
+    setWarning('brandTerms', needsBrand ? "Brand terms are not set for this client, so every keyword is treated as non-brand and brand keywords may be cut more than they should. Set them in Settings, step 2." : null);
+  }, [keywordSignals.length, brandRegexStr]);
+
+  // AI text written for one client or period must not stay above another's data.
+  useEffect(() => {
+    setTabInsights(prev => Object.fromEntries(Object.keys(prev).map(k => [k, null])));
+  }, [adsClientKey, filters.dateRange.start, filters.dateRange.end]);
+
+  // The report of the period on screen, as it would be saved. Null while there is nothing to save.
+  const currentSnapshot = useMemo(() => {
+    if (summaryRecs.recommendations.length === 0 || !organicQueriesLoaded) return null;
+    return buildSnapshot({
+      periodStart: filters.dateRange.start,
+      periodEnd: filters.dateRange.end,
+      periodDays,
+      currencySymbol,
+      rules: rulesByClient[adsClientKey],
+      summary: summaryRecs.summary,
+      recommendations: summaryRecs.recommendations,
+      warnings: Object.values(dataWarnings),
+    });
+  }, [summaryRecs, organicQueriesLoaded, filters.dateRange.start, filters.dateRange.end, periodDays, currencySymbol, rulesByClient, adsClientKey, dataWarnings]);
 
   const SAMPLE_BRIDGE_TABS = [DashboardTab.SUMMARY, DashboardTab.PPC_SEO_BRIDGE, DashboardTab.GOOGLE_ADS_PERFORMANCE, DashboardTab.SEARCH_EFFICIENCY];
   const nothingConnected = !gscAuth?.token && !ga4Auth?.token && !googleAdsAuth?.token;
   const isShowingSampleData =
     (SAMPLE_BRIDGE_TABS.includes(activeTab) && nothingConnected && (bridgeDataGA4.length > 0 || bridgeDataGoogleAds.length > 0)) ||
     (activeTab === DashboardTab.AI_TRAFFIC_MONITOR && !ga4Auth?.property && aiTrafficData.length > 0);
+  isShowingSampleDataRef.current = isShowingSampleData;
 
   const isAnythingLoading = isLoadingGa4 || isLoadingGsc || isLoadingBridge || isLoadingAi || isLoadingGoogleAds;
   
@@ -2143,9 +2626,6 @@ const App: React.FC = () => {
     localStorage.setItem('ai_provider', aiProvider); 
   }, [aiProvider]);
 
-  useEffect(() => {
-    localStorage.setItem('brand_regex', brandRegexStr);
-  }, [brandRegexStr]);
   
   useEffect(() => { 
     localStorage.setItem('openai_api_key', openaiKey); 
@@ -2153,7 +2633,7 @@ const App: React.FC = () => {
   
   if (!user && accessSession.status === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="w-10 h-10 border-4 border-slate-900 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -2206,7 +2686,8 @@ const App: React.FC = () => {
   }
   
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex flex-col md:flex-row">
+    <LangProvider value={lang}>
+    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
       <button 
         onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
         aria-label={isSidebarOpen ? 'Close menu' : 'Open menu'}
@@ -2300,7 +2781,8 @@ const App: React.FC = () => {
       
       <main className={`flex-1 transition-all duration-300 ease-in-out p-5 md:p-8 xl:p-12 overflow-x-hidden print:ml-0 print:p-0 ${isSidebarOpen && !clientView ? 'xl:ml-60' : 'ml-0'}`}>
         <header className="flex flex-col gap-6 mb-10">
-          <div className="flex items-center gap-6">
+          {/* Wraps on narrow screens: logo and menu button, then the title on its own line, then the buttons. */}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
             <div className={`items-center gap-2 print:flex ${isSidebarOpen && !clientView ? 'hidden' : 'flex'}`}>
               <img src="/logo.png" alt="OneSearch Logo" className="w-8 h-8 rounded-xl object-cover" />
               <h1 className="text-xl font-bold text-slate-800 tracking-tighter">OneSearch</h1>
@@ -2318,26 +2800,26 @@ const App: React.FC = () => {
                 <Menu size={20} className="group-hover:scale-110 transition-transform" />
               </button>
             )}
-            <div>
+            <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
               <div className={`items-center gap-2 mb-2 print:hidden ${clientView ? 'hidden' : 'flex'}`} role="status">
                 <span className={`w-2 h-2 rounded-full ${isAnythingLoading ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} aria-hidden="true" />
                 <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
                   {isLoadingGa4 ? 'Syncing GA4...' : isLoadingGsc ? 'Syncing GSC...' : isLoadingGoogleAds ? 'Syncing Google Ads...' : isLoadingBridge ? 'Joining Data...' : isLoadingAi ? 'Scanning AI...' : 'Dashboard Active'}
                 </span>
               </div>
-              <h2 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tighter">{TAB_META[activeTab].title}</h2>
-              <p className="text-sm font-medium text-slate-500 mt-1">
-                <span className="print:hidden">{clientView ? [clientName, periodLabel].filter(Boolean).join(' · ') : TAB_META[activeTab].question}</span>
+              <h2 className="jf-display text-4xl md:text-5xl text-slate-900">{t(TAB_META[activeTab].title)}</h2>
+              <p className="text-sm font-semibold text-jf-gold mt-1.5">
+                <span className="print:hidden">{clientView ? [clientName, periodLabel].filter(Boolean).join(' · ') : t(TAB_META[activeTab].question)}</span>
                 <span className="hidden print:inline">
-                  {[clientName || 'Client not named', `${periodLabel} (${periodDays} days)`, `Prepared with OneSearch on ${formatDate(new Date())}`].join(' · ')}
+                  {[clientName || t('Client not named'), `${periodLabel} (${t('{n} days', { n: periodDays })})`, t('Prepared with OneSearch on {date}', { date: formatDate(new Date()) })].join(' · ')}
                 </span>
               </p>
             </div>
 
-            <div className="ml-auto flex items-center gap-2 print:hidden">
+            <div className="sm:ml-auto flex flex-wrap items-center gap-2 print:hidden">
               {clientView && (
                 <div className="flex rounded-lg border border-slate-200 bg-white p-0.5" role="group" aria-label="Page">
-                  {([[DashboardTab.SUMMARY, 'Summary'], [DashboardTab.SEARCH_EFFICIENCY, 'Keyword detail']] as const).map(([tab, label]) => (
+                  {([[DashboardTab.SUMMARY, t('Summary')], [DashboardTab.SEARCH_EFFICIENCY, t('Keyword detail')]] as [DashboardTab, string][]).map(([tab, label]) => (
                     <button
                       key={tab}
                       type="button"
@@ -2350,19 +2832,28 @@ const App: React.FC = () => {
                   ))}
                 </div>
               )}
+              <select
+                aria-label={t('Language')}
+                title={t('Language')}
+                value={lang}
+                onChange={e => { if (isLang(e.target.value)) setLangForClient(adsClientKey, e.target.value); }}
+                className="bg-white border border-slate-200 rounded-xl text-[11px] font-bold uppercase tracking-wide text-slate-600 px-3 py-2 outline-none cursor-pointer hover:border-slate-400"
+              >
+                {LANGS.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+              </select>
               <button
                 onClick={() => setClientView(v => !v)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wide border transition-colors ${clientView ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'}`}
                 title="Hide menu, filters and settings to present this page"
               >
-                <Presentation size={14} /> {clientView ? 'Exit client view' : 'Client view'}
+                <Presentation size={14} /> {clientView ? t('Exit client view') : t('Client view')}
               </button>
               <button
                 onClick={() => window.print()}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wide bg-white text-slate-600 border border-slate-200 hover:border-slate-400 transition-colors"
                 title="Print this page or save it as PDF"
               >
-                <Printer size={14} /> Print / PDF
+                <Printer size={14} /> {t('Print / PDF')}
               </button>
             </div>
           </div>
@@ -2371,7 +2862,7 @@ const App: React.FC = () => {
             <DateRangeSelector filters={filters} setFilters={setFilters} />
             
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm">
-              <div className="flex items-center gap-2 px-3 py-1.5 sm:border-r border-slate-100">
+              <div className={`items-center gap-2 px-3 py-1.5 sm:border-r border-slate-100 ${activeTab === DashboardTab.SUMMARY || activeTab === DashboardTab.SEARCH_EFFICIENCY ? 'hidden' : 'flex'}`}>
                  <Filter className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
                  <select 
                    className="bg-transparent text-[11px] font-bold uppercase outline-none cursor-pointer w-full" 
@@ -2382,7 +2873,7 @@ const App: React.FC = () => {
                     {availableDimensions.length === 0 && <option value="sessionDefaultChannelGroup">Channel Grouping</option>}
                  </select>
               </div>
-              <div className="flex items-center gap-2 px-3 py-1.5 sm:border-r border-slate-100">
+              <div className={`items-center gap-2 px-3 py-1.5 sm:border-r border-slate-100 ${activeTab === DashboardTab.SUMMARY || activeTab === DashboardTab.SEARCH_EFFICIENCY ? 'hidden' : 'flex'}`}>
                  <Globe className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
                  <select 
                    className="bg-transparent text-[11px] font-bold uppercase outline-none cursor-pointer w-full" 
@@ -2410,7 +2901,7 @@ const App: React.FC = () => {
                   <button 
                     onClick={handleManualRefresh}
                     disabled={isAnythingLoading}
-                    className="flex items-center gap-2 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[11px] font-bold transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                    className="flex items-center gap-2 px-4 py-1.5 bg-slate-900 hover:bg-slate-700 text-white rounded-2xl text-[11px] font-bold transition-all shadow-sm active:scale-95 disabled:opacity-50"
                   >
                     <RefreshCw size={12} className={isAnythingLoading ? 'animate-spin' : ''} />
                     {isAnythingLoading ? 'SYNCING...' : 'REFRESH'}
@@ -2444,7 +2935,7 @@ const App: React.FC = () => {
           </div>
         )}
         
-        {accessSession.status === 'open' && (
+        {accessSession.status === 'open' && !clientView && (
           <div className="mb-8 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3 text-rose-800 shadow-sm print:hidden">
             <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
             <div className="space-y-1">
@@ -2502,9 +2993,21 @@ const App: React.FC = () => {
               settings={recommendationSettings}
               periodDays={periodDays}
               isSample={isShowingSampleData}
+              organicMissing={!organicQueriesLoaded && keywordSignals.length > 0}
               comparisonEnabled={filters.comparison.enabled}
               isLoading={isGoogleAdsKeywordsLoading || isLoadingBridge}
               onOpenRecommendations={() => setActiveTab(DashboardTab.SEARCH_EFFICIENCY)}
+              afterHeadline={
+                <MonthlyReport
+                  clientId={activeProfile?.id || null}
+                  clientName={activeProfile?.name}
+                  available={clientProfiles.available}
+                  current={currentSnapshot}
+                  currencySymbol={currencySymbol}
+                  presentation={clientView}
+                  isSample={isShowingSampleData}
+                />
+              }
             />
           )}
 
@@ -2595,6 +3098,14 @@ const App: React.FC = () => {
                  periodDays={periodDays}
                  recommendationSettings={recommendationSettings}
                  presentation={clientView}
+                 plan={plan}
+                 onPlanChange={handlePlanChange}
+                 planShared={planIsShared}
+                 planResults={planResults}
+                 onMeasurePlan={measurePlan}
+                 isMeasuringPlan={isMeasuringPlan}
+                 planMeasureNote={planMeasureNote}
+                 onLoadKeywordDetail={loadKeywordDetail}
                  clientName={clientName}
                  periodLabel={periodLabel}
               />
@@ -2624,6 +3135,10 @@ const App: React.FC = () => {
             Generate {activeTab === DashboardTab.ORGANIC_VS_PAID ? 'Channel' : activeTab === DashboardTab.SEO_BY_COUNTRY ? 'Market' : activeTab === DashboardTab.PPC_SEO_BRIDGE ? 'Bridge' : activeTab === DashboardTab.GOOGLE_ADS_PERFORMANCE ? 'Paid' : activeTab === DashboardTab.AI_TRAFFIC_MONITOR ? 'AI' : 'SEO'} Insights
           </button>
         </div>
+        <footer className="hidden print:flex justify-between items-center mt-8 pt-3 border-t border-slate-200 text-[9px] text-slate-500">
+          <span>{t('Source: Google Ads, Google Search Console and GA4')} · {periodLabel}</span>
+          <span>© {new Date().getFullYear()} Jellyfish · {t('Proprietary & Confidential')}</span>
+        </footer>
       </main>
       {isLoadingBridge && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -2660,7 +3175,7 @@ const App: React.FC = () => {
             </div>
             <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
               <div 
-                className="bg-indigo-600 h-full transition-all duration-700 ease-in-out"
+                className="bg-jf-yellow h-full transition-all duration-700 ease-in-out"
                 style={{ width: `${loadingProgress}%` }}
               ></div>
             </div>
@@ -2669,6 +3184,7 @@ const App: React.FC = () => {
         </div>
       )}
     </div>
+    </LangProvider>
   );
 };
 

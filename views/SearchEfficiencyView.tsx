@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { withCurrency } from '../utils';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend
 } from 'recharts';
@@ -6,11 +7,18 @@ import {
   DollarSign, TrendingDown, PiggyBank, Target, AlertTriangle, CheckCircle, Search, FileText, Info, Zap, ChevronUp, ChevronDown, Key, ExternalLink, Filter, ChevronRight, RefreshCw
 } from 'lucide-react';
 import { KeywordBridgeData, GoogleAdsGlobalMetrics } from '../types';
+import { SortableTh } from '../components/SortableTh';
 import { KpiCard } from '../components/KpiCard';
 import { EmptyState } from '../components/EmptyState';
 import { exportToCSV } from '../utils';
 import { KeywordSignal, buildRecommendations, RecommendationSettings, DEFAULT_SETTINGS } from '../recommendations';
+import { Plan, PlanItem, doNotReduceMap } from '../plan';
+import type { KeywordResult } from '../planResults';
 import { KeywordRecommendations } from '../components/KeywordRecommendations';
+import { MoneyMoves, RuleAndCaveat, ClicksPrice, PositionBands, KeywordBars, PlanProgress } from '../components/SpendVisuals';
+import { useI18n } from '../i18n';
+import { KeywordDetail, LoadKeywordDetail } from '../components/KeywordDetail';
+import { planKeyOf } from '../plan';
 
 interface UrlEfficiencyRow {
   url: string;
@@ -48,19 +56,30 @@ export const SearchEfficiencyView: React.FC<{
   periodDays?: number;
   recommendationSettings?: RecommendationSettings;
   presentation?: boolean; // client view: recommendations only
+  plan?: Plan;
+  onPlanChange?: (keyword: string, item: PlanItem) => void;
+  planShared?: boolean;
+  planResults?: Record<string, KeywordResult>;
+  onMeasurePlan?: () => void;
+  isMeasuringPlan?: boolean;
+  planMeasureNote?: string | null;
   clientName?: string;
   periodLabel?: string;
-}> = ({ urlData, keywordData, currencySymbol, globalMetrics, totalGscClicks, isLoading, isBranded, onRefresh, queryTypeFilter, keywordSignals = [], periodDays = 30, recommendationSettings = DEFAULT_SETTINGS, presentation = false, clientName, periodLabel }) => {
+  onLoadKeywordDetail?: LoadKeywordDetail;
+}> = ({ urlData, keywordData, currencySymbol, globalMetrics, totalGscClicks, isLoading, isBranded, onRefresh, queryTypeFilter, keywordSignals = [], periodDays = 30, recommendationSettings = DEFAULT_SETTINGS, presentation = false, plan, onPlanChange, planShared, planResults, onMeasurePlan, isMeasuringPlan, planMeasureNote, clientName, periodLabel, onLoadKeywordDetail }) => {
   const [clusterFilter, setClusterFilter] = useState<'All' | 'Cannibalization Risk' | 'Paid Reliance' | 'Paid Gap'>('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ppcCost', direction: 'desc' });
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
   const [showLandingPages, setShowLandingPages] = useState(false);
+  const { tr } = useI18n();
+  const [detailKeyword, setDetailKeyword] = useState<string | null>(null);
+  const openDetail = onLoadKeywordDetail ? setDetailKeyword : undefined;
 
   // 0. Keyword recommendations (reduce / hold / increase), the source of every saving figure in this view
   const { recommendations, summary: recSummary } = useMemo(
-    () => buildRecommendations(keywordSignals, isBranded, queryTypeFilter, periodDays, recommendationSettings),
-    [keywordSignals, isBranded, queryTypeFilter, periodDays, recommendationSettings]
+    () => buildRecommendations(keywordSignals, isBranded, queryTypeFilter, periodDays, recommendationSettings, plan ? doNotReduceMap(plan) : undefined),
+    [keywordSignals, isBranded, queryTypeFilter, periodDays, recommendationSettings, plan]
   );
 
   // 1. Data Processing Engine & Scorecard Calculations
@@ -372,20 +391,7 @@ export const SearchEfficiencyView: React.FC<{
   };
 
   const SortableHeader = ({ label, sortKey, align = 'right', title }: { label: string, sortKey: keyof UrlEfficiencyRow, align?: 'left' | 'center' | 'right', title?: string }) => (
-    <th 
-        className={`py-2 px-2 text-[11px] font-bold text-slate-500 uppercase tracking-tight cursor-pointer hover:text-indigo-600 hover:bg-slate-50 transition-colors select-none text-${align}`}
-        onClick={() => handleSort(sortKey)}
-        title={title}
-    >
-        <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}>
-            <span className="whitespace-nowrap">{label}</span>
-            {title && <Info size={8} className="text-slate-300" />}
-            <div className="flex flex-col">
-                <ChevronUp size={8} className={`${sortConfig.key === sortKey && sortConfig.direction === 'asc' ? 'text-indigo-600' : 'text-slate-300'}`} />
-                <ChevronDown size={8} className={`${sortConfig.key === sortKey && sortConfig.direction === 'desc' ? 'text-indigo-600' : 'text-slate-300'}`} />
-            </div>
-        </div>
-    </th>
+    <SortableTh label={label} align={align} title={title} active={sortConfig.key === sortKey} direction={sortConfig.direction} onSort={() => handleSort(sortKey)} />
   );
 
   if (isLoading && urlData.length === 0) {
@@ -400,7 +406,40 @@ export const SearchEfficiencyView: React.FC<{
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">
 
-      {/* Section 1b: Keyword recommendations */}
+      <header>
+        <h2 className="jf-display text-3xl text-slate-900">{tr('Where paid spend can move')}</h2>
+        <p className="text-xs font-medium text-slate-600 mt-1">
+          {[clientName, periodLabel, tr('{n} days', { n: periodDays })].filter(Boolean).join(' · ')}
+        </p>
+      </header>
+
+      {/* The pictures: the answer, what it costs, why these keywords, where to start */}
+      {recommendations.length > 0 && (() => {
+        const shared = { recommendations, summary: recSummary, settings: recommendationSettings, currencySymbol, periodDays };
+        return (
+          <>
+            <MoneyMoves {...shared} />
+            <RuleAndCaveat />
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <ClicksPrice {...shared} />
+              <PositionBands {...shared} />
+            </div>
+            <KeywordBars {...shared} plan={plan} planResults={planResults} onOpenDetail={openDetail} />
+            <PlanProgress
+              summary={recSummary}
+              plan={plan}
+              planResults={planResults}
+              planShared={planShared}
+              onMeasure={onMeasurePlan}
+              isMeasuring={isMeasuringPlan}
+              measureNote={planMeasureNote}
+              presentation={presentation}
+            />
+          </>
+        );
+      })()}
+
+      {/* The complete list, with the agreed plan */}
       <KeywordRecommendations
         recommendations={recommendations}
         summary={recSummary}
@@ -411,7 +450,22 @@ export const SearchEfficiencyView: React.FC<{
         clientName={clientName}
         isLoading={isLoading}
         presentation={presentation}
+        plan={plan}
+        onPlanChange={presentation ? undefined : onPlanChange}
+        planShared={planShared}
+        planResults={planResults}
+        onMeasurePlan={onMeasurePlan}
+        isMeasuringPlan={isMeasuringPlan}
+        planMeasureNote={planMeasureNote}
+        onOpenDetail={openDetail}
       />
+
+      {detailKeyword && onLoadKeywordDetail && (() => {
+        const rec = recommendations.find(r => r.keyword === detailKeyword);
+        return rec ? (
+          <KeywordDetail rec={rec} planItem={plan?.[planKeyOf(rec.keyword)]} currencySymbol={currencySymbol} load={onLoadKeywordDetail} onClose={() => setDetailKeyword(null)} />
+        ) : null;
+      })()}
 
       {/* Analyst detail: landing pages. Not part of what the client sees. */}
       {!presentation && (
@@ -432,7 +486,7 @@ export const SearchEfficiencyView: React.FC<{
       <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
               <div>
-                <h4 className="text-base font-bold text-slate-900">Landing pages</h4>
+                <h4 className="jf-display text-xl text-slate-900">Landing pages</h4>
                 <p className="text-xs font-medium text-slate-600 mt-1">Overlap: organic top 3 and ads on the same page. Ads only: no organic top 10. Organic only: no ad spend.</p>
               </div>
               
@@ -514,6 +568,8 @@ export const SearchEfficiencyView: React.FC<{
                               <tr 
                                   className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors cursor-pointer ${expandedUrl === row.url ? 'bg-slate-50/80' : ''}`}
                                   onClick={() => toggleRow(row.url)}
+                                  tabIndex={0}
+                                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); (() => toggleRow(row.url))(); } }}
                               >
                                   <td className="py-2 px-2 text-slate-500">
                                       <ChevronRight size={14} className={`transition-transform ${expandedUrl === row.url ? 'rotate-90' : ''}`} />
@@ -558,7 +614,7 @@ export const SearchEfficiencyView: React.FC<{
                                   </td>
                                   <td className="py-2 px-2 text-right">
                                       <span className={`text-[11px] font-bold ${row.cluster === 'Cannibalization Risk' ? 'text-rose-600' : 'text-slate-800'}`}>
-                                          {currencySymbol}{formatCurrency(row.ppcCost)}
+                                          {withCurrency(currencySymbol, formatCurrency(row.ppcCost))}
                                       </span>
                                   </td>
                                   <td className="py-2 px-2 text-right">
@@ -573,7 +629,7 @@ export const SearchEfficiencyView: React.FC<{
                                   </td>
                                   <td className="py-2 px-2 text-right">
                                       <span className="text-[11px] font-bold text-slate-600">
-                                          {row.paidCpa > 0 ? `${currencySymbol}${formatCurrency(row.paidCpa)}` : '-'}
+                                          {row.paidCpa > 0 ? `${withCurrency(currencySymbol, formatCurrency(row.paidCpa))}` : '-'}
                                       </span>
                                   </td>
                               </tr>
@@ -621,7 +677,7 @@ export const SearchEfficiencyView: React.FC<{
                                                               <td className="py-2 px-4 text-xs text-center text-slate-600">{q.organicRank ? `#${q.organicRank.toFixed(1)}` : '-'}</td>
                                                               <td className="py-2 px-4 text-xs text-right text-slate-600">{formatNumber(q.organicClicks)}</td>
                                                               <td className="py-2 px-4 text-xs text-right text-slate-600">{formatNumber(q.paidSessions)}</td>
-                                                              <td className="py-2 px-4 text-xs text-right text-slate-600">{currencySymbol}{formatCurrency(q.ppcCost)}</td>
+                                                              <td className="py-2 px-4 text-xs text-right text-slate-600">{withCurrency(currencySymbol, formatCurrency(q.ppcCost))}</td>
                                                           </tr>
                                                       ))}
                                                   </tbody>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { withCurrency } from '../utils';
 import { ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 import { DELTA } from '../theme';
 
@@ -27,7 +28,7 @@ export const KpiCard: React.FC<KpiCardProps> = ({ title, value, comparison, abso
         </span>
       </div>
       <div>
-        <p className="text-2xl font-bold text-slate-900 tracking-tight tabular-nums break-words leading-tight">
+        <p className="jf-figure text-4xl text-slate-900 tabular-nums break-words">
           {typeof value === 'number' && !isPercent ? num(value) : value}
         </p>
         {hasComparison && (
@@ -35,7 +36,7 @@ export const KpiCard: React.FC<KpiCardProps> = ({ title, value, comparison, abso
             {direction === 'up' ? <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" /> : direction === 'down' ? <ArrowDownRight className="w-3.5 h-3.5" aria-hidden="true" /> : <Minus className="w-3.5 h-3.5" aria-hidden="true" />}
             {direction === 'flat' ? 'No change' : `${comparison! > 0 ? '+' : '-'}${Math.abs(comparison!).toFixed(1)}%`}
             {absoluteChange !== undefined && direction !== 'flat' && (
-              <span className="font-medium text-slate-600">({absoluteChange >= 0 ? '+' : '-'}{prefix}{num(Math.abs(absoluteChange))})</span>
+              <span className="font-medium text-slate-600">({absoluteChange >= 0 ? '+' : '-'}{withCurrency(prefix, num(Math.abs(absoluteChange)))})</span>
             )}
             <span className="font-medium text-slate-600">vs previous</span>
           </p>

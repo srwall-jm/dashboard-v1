@@ -33,7 +33,8 @@ export const PRESSURE_STYLE: Record<Pressure, { label: string; badge: string; ba
   unknown: { label: 'Unknown', badge: 'bg-white text-slate-500 border border-dashed border-slate-400', bars: 0 },
 };
 
-export const PRESSURE_HELP = "How often competitors' ads outrank yours on this keyword. The higher it is, the less we cut.";
+// Google reports how often the ad lost on ad rank. That is mostly competitors, but also low ad quality, so it is not called "competitors".
+export const PRESSURE_HELP = 'How often your ad did not show or was outranked on this keyword. The higher it is, the less we cut.';
 
 // Change versus the previous period.
 export const DELTA = { up: 'text-[#047857]', down: 'text-[#BE123C]', flat: 'text-slate-600' } as const;

@@ -107,7 +107,7 @@ export const AiTrafficView: React.FC<{
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <KpiCard 
           title="Total AI Referred Sessions" 
-          value={scorecards.totalSessions.toLocaleString()} 
+          value={scorecards.totalSessions.toLocaleString('en-US')} 
           icon={<Bot />} 
           color="slate"
         />
@@ -126,25 +126,25 @@ export const AiTrafficView: React.FC<{
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <KpiCard 
             title="ChatGPT" 
-            value={llmStats.chatgpt.toLocaleString()} 
+            value={llmStats.chatgpt.toLocaleString('en-US')} 
             icon={<MessageSquare />} 
             color="emerald"
             />
             <KpiCard 
             title="Perplexity" 
-            value={llmStats.perplexity.toLocaleString()} 
+            value={llmStats.perplexity.toLocaleString('en-US')} 
             icon={<Search />} 
             color="sky"
             />
             <KpiCard 
             title="Gemini" 
-            value={llmStats.gemini.toLocaleString()} 
+            value={llmStats.gemini.toLocaleString('en-US')} 
             icon={<Sparkles />} 
             color="violet"
             />
             <KpiCard 
             title="Claude" 
-            value={llmStats.claude.toLocaleString()} 
+            value={llmStats.claude.toLocaleString('en-US')} 
             icon={<Brain />} 
             color="amber"
             />
@@ -155,8 +155,8 @@ export const AiTrafficView: React.FC<{
       <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">AI Traffic Over Time</h4>
-            <p className="text-[11px] font-bold text-slate-600">Session Volume by Source</p>
+            <h4 className="jf-display text-xl text-slate-900">AI Traffic Over Time</h4>
+            <p className="text-xs font-medium text-slate-600 mt-0.5">Session Volume by Source</p>
           </div>
         </div>
         <div className="h-[350px]">
@@ -194,12 +194,12 @@ export const AiTrafficView: React.FC<{
       <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex justify-between items-center mb-8">
             <div>
-              <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Landing Page Impact</h4>
-              <p className="text-[11px] font-bold text-slate-600">Which content are LLMs referencing?</p>
+              <h4 className="jf-display text-xl text-slate-900">Landing Page Impact</h4>
+              <p className="text-xs font-medium text-slate-600 mt-0.5">Which content are LLMs referencing?</p>
             </div>
              <button 
                 onClick={() => exportToCSV(tableData, "AI_Landing_Page_Impact")} 
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
+                className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 flex-shrink-0"
               >
                 <FileText size={12} /> Export CSV
               </button>
@@ -220,10 +220,8 @@ export const AiTrafficView: React.FC<{
                   <td className="py-3 px-4 font-bold text-[11px] text-slate-800 truncate max-w-md">{row.page}</td>
                   <td className="py-3 px-4 text-right text-[11px] font-bold text-slate-600">{row.sessions}</td>
                   <td className="py-3 px-4 text-right text-[11px] font-bold text-slate-600">{row.engagementRate.toFixed(1)}%</td>
-                  <td className="py-3 px-4 text-right">
-                    <div className="flex justify-end">
-                        <div className={`w-2 h-2 rounded-full ${row.engagementRate > 60 ? 'bg-emerald-500' : row.engagementRate > 40 ? 'bg-amber-500' : 'bg-rose-500'}`} />
-                    </div>
+                  <td className="py-3 px-4 text-right text-xs font-semibold text-slate-700 whitespace-nowrap">
+                    {row.engagementRate > 60 ? 'High' : row.engagementRate > 40 ? 'Medium' : 'Low'}
                   </td>
                 </tr>
               ))}

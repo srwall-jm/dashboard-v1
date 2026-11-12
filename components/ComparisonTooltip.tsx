@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { withCurrency } from '../utils';
 
 export const ComparisonTooltip = ({ active, payload, label, currency = false, currencySymbol = '£', percent = false }: any) => {
   if (active && payload && payload.length) {
@@ -30,7 +31,7 @@ export const ComparisonTooltip = ({ active, payload, label, currency = false, cu
                 </div>
                 <div className="flex justify-between items-baseline gap-4 ml-4">
                   <span className="text-[11px] font-bold">
-                    {currency ? `${currencySymbol}${curVal.toLocaleString()}` : percent ? `${curVal.toFixed(1)}%` : curVal.toLocaleString()}
+                    {currency ? `${withCurrency(currencySymbol, curVal.toLocaleString('en-US'))}` : percent ? `${curVal.toFixed(1)}%` : curVal.toLocaleString('en-US')}
                   </span>
                   {prevVal !== null && (
                     <div className={`flex items-center text-[11px] font-bold ${diff >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -41,7 +42,7 @@ export const ComparisonTooltip = ({ active, payload, label, currency = false, cu
                 {prevVal !== null && (
                   <div className="flex justify-between text-[11px] text-slate-500 ml-4 font-medium uppercase italic">
                     <span>Prev Period:</span>
-                    <span>{currency ? `${currencySymbol}${prevVal.toLocaleString()}` : percent ? `${prevVal.toFixed(1)}%` : prevVal.toLocaleString()}</span>
+                    <span>{currency ? `${withCurrency(currencySymbol, prevVal.toLocaleString('en-US'))}` : percent ? `${prevVal.toFixed(1)}%` : prevVal.toLocaleString('en-US')}</span>
                   </div>
                 )}
               </div>

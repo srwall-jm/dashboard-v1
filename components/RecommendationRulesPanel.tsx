@@ -48,7 +48,7 @@ export const RecommendationRulesPanel: React.FC<{
       <div className="flex items-center justify-between gap-2 mb-2 text-slate-900">
         <div className="flex items-center gap-2">
           <div className="p-2 bg-slate-100 rounded-lg"><SlidersHorizontal size={16} className="text-indigo-600" /></div>
-          <h3 className="text-sm font-bold uppercase tracking-wide">Recommendation rules</h3>
+          <h3 className="text-sm font-bold">3. Recommendation rules (optional)</h3>
         </div>
         <button
           onClick={() => onChange(null)}
@@ -106,6 +106,7 @@ export const RecommendationRulesPanel: React.FC<{
             />
           </label>
         </div>
+        <p className="text-[11px] text-slate-500">Step when increasing: how much to raise spend per step on "increase" keywords. Minimum paid clicks: keywords below this number in the period get no recommendation.</p>
       </div>
     </section>
   );

@@ -12,6 +12,7 @@ export interface ClientProfile {
   adsAccountIds: string[];
   brandRegex: string;
   recommendation?: RecommendationOverrides; // rules adjusted for this client, if any
+  language?: 'en' | 'es'; // language of what the client reads
   updatedBy?: string;
   updatedAt?: string;
 }

@@ -1,10 +1,13 @@
 
 import React, { useState, useMemo } from 'react';
+import { withCurrency } from '../utils';
 import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ScatterChart, Scatter, ZAxis, Cell, Legend, PieChart, Pie, BarChart, Bar
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ScatterChart, Scatter, ZAxis, Cell, Legend, LabelList, PieChart, Pie, BarChart, Bar
 } from 'recharts';
 import { MousePointer2, Eye, Percent, TrendingUp, Tag, ShoppingBag, Globe, FileText, Trophy, RefreshCw } from 'lucide-react';
 import { DailyData, KeywordData, QueryType } from '../types';
+import { ShareBars } from '../components/ShareBars';
+import { SERIES } from '../theme';
 import { exportToCSV, formatDate, getStartOfWeek, normalizeCountry, parseLocalDate, isOrganicSearch } from '../utils';
 import { KpiCard } from '../components/KpiCard';
 import { ComparisonTooltip } from '../components/ComparisonTooltip';
@@ -37,69 +40,14 @@ const CountryShareAnalysis = ({ data, currencySymbol, onRefresh, isLoading }: { 
   })).sort((a,b) => b.efficiency - a.efficiency), [data]);
 
   const renderDonut = (shareData: any[], title: string, metric: string, isCurrency = false) => (
-    <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm h-full flex flex-col">
-      <div className="flex justify-between items-center mb-6">
-        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">{title}</h4>
-        <button 
-          onClick={() => exportToCSV(shareData, `${title.replace(/ /g, "_")}`)} 
-          className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
-        >
-          <FileText size={12} /> Export CSV
-        </button>
-      </div>
-      <div className="w-full h-[250px] relative">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={shareData}
-              cx="50%"
-              cy="50%"
-              innerRadius={70}
-              outerRadius={95}
-              paddingAngle={2}
-              dataKey="value"
-              stroke="none"
-            >
-              {shareData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.color} />
-              ))}
-            </Pie>
-            <Tooltip 
-              content={({ active, payload }: any) => {
-                if (active && payload && payload.length) {
-                  const d = payload[0].payload;
-                  return (
-                    <div className="bg-slate-900 text-white p-3 rounded-xl border border-white/10 shadow-xl">
-                      <p className="text-[11px] font-bold uppercase tracking-wide mb-1">{d.country}</p>
-                      <p className="text-[11px] font-bold">
-                        {isCurrency ? `${currencySymbol}${d.value.toLocaleString()}` : d.value.toLocaleString()} {metric}
-                      </p>
-                      <p className="text-[11px] text-slate-500">{d.percent.toFixed(1)}% contribution</p>
-                    </div>
-                  );
-                }
-                return null;
-              }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Market</span>
-          <span className="text-sm font-bold text-slate-900">Distribution</span>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-6 border-t border-slate-50 pt-6">
-        {shareData.slice(0, 8).map((item, i) => (
-          <div key={i} className="flex items-center justify-between text-[11px] font-bold">
-            <div className="flex items-center gap-1.5 truncate mr-2">
-              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
-              <span className="text-slate-600 truncate">{item.country}</span>
-            </div>
-            <span className="text-slate-900 flex-shrink-0">{item.percent.toFixed(1)}%</span>
-          </div>
-        ))}
-      </div>
-    </div>
+    <ShareBars
+      title={title}
+      subtitle={`Share of organic ${metric.toLowerCase()} by country, largest first.`}
+      rows={shareData.map(d => ({ label: d.country, value: d.value, percent: d.percent }))}
+      formatValue={v => (isCurrency ? `${withCurrency(currencySymbol, Math.round(v).toLocaleString('en-US'))}` : Math.round(v).toLocaleString('en-US'))}
+      colors={[SERIES.organic]}
+      onExport={() => exportToCSV(shareData, `${title.replace(/ /g, "_")}`)}
+    />
   );
 
   return (
@@ -111,13 +59,13 @@ const CountryShareAnalysis = ({ data, currencySymbol, onRefresh, isLoading }: { 
        <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex justify-between items-center mb-8">
             <div>
-              <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Country Efficiency Leaderboard</h4>
-              <p className="text-[11px] font-bold text-slate-600">Average revenue generated per organic session per country</p>
+              <h4 className="jf-display text-xl text-slate-900">Country Efficiency Leaderboard</h4>
+              <p className="text-xs font-medium text-slate-600 mt-0.5">Average revenue generated per organic session per country</p>
             </div>
             <div className="flex items-center gap-4">
               <button 
                 onClick={() => exportToCSV(efficiencyRank, "Country_Efficiency_Leaderboard")} 
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
+                className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 flex-shrink-0"
               >
                 <FileText size={12} /> Export CSV
               </button>
@@ -130,7 +78,7 @@ const CountryShareAnalysis = ({ data, currencySymbol, onRefresh, isLoading }: { 
             <ResponsiveContainer width="100%" height="100%">
               <BarChart layout="vertical" data={efficiencyRank} margin={{ left: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                <XAxis type="number" axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val}`} />
+                <XAxis type="number" axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} tickFormatter={(val) => `${withCurrency(currencySymbol, val)}`} />
                 <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 800, fill: '#1e293b'}} />
                 <Tooltip cursor={{fill: 'transparent'}} content={({ active, payload }: any) => {
                     if (active && payload && payload.length) {
@@ -138,7 +86,7 @@ const CountryShareAnalysis = ({ data, currencySymbol, onRefresh, isLoading }: { 
                       return (
                         <div className="bg-slate-900 text-white p-3 rounded-xl border border-white/10 shadow-xl">
                           <p className="text-[11px] font-bold uppercase tracking-wide mb-1">{d.name}</p>
-                          <p className="text-[11px] font-bold text-emerald-400">{currencySymbol}{d.efficiency.toFixed(2)} per session</p>
+                          <p className="text-[11px] font-bold text-emerald-400">{withCurrency(currencySymbol, d.efficiency.toFixed(2))} per session</p>
                         </div>
                       );
                     }
@@ -264,20 +212,20 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
         <KpiCard title="GSC Impressions" value={gscStats.current.impressions} comparison={comparisonEnabled ? gscStats.changes.impressions : undefined} icon={<Eye />} color="sky" />
         <KpiCard title="GSC Avg. CTR" value={`${gscStats.current.ctr.toFixed(2)}%`} comparison={comparisonEnabled ? gscStats.changes.ctr : undefined} icon={<Percent />} isPercent color="sky" />
         <KpiCard title="Organic Sessions" value={organicGa4.current.sessions} comparison={comparisonEnabled ? organicGa4.changes.sessions : undefined} icon={<TrendingUp />} color="indigo" />
-        <KpiCard title="Organic Revenue" value={`${currencySymbol}${organicGa4.current.revenue.toLocaleString()}`} comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} icon={<Tag />} prefix={currencySymbol} color="emerald" />
+        <KpiCard title="Organic Revenue" value={`${withCurrency(currencySymbol, organicGa4.current.revenue.toLocaleString('en-US'))}`} comparison={comparisonEnabled ? organicGa4.changes.revenue : undefined} icon={<Tag />} prefix={currencySymbol} color="emerald" />
         <KpiCard title="Organic Conv. Rate" value={`${organicGa4.current.cr.toFixed(2)}%`} comparison={comparisonEnabled ? organicGa4.changes.cr : undefined} icon={<ShoppingBag />} isPercent color="emerald" />
       </div>
 
       <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm overflow-hidden w-full mt-8">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Brand vs Generic Search (Time Overlay)</h4>
-            <p className="text-[11px] font-bold text-slate-600">Overlapping periods by relative position in time</p>
+            <h4 className="jf-display text-xl text-slate-900">Brand vs Generic Search (Time Overlay)</h4>
+            <p className="text-xs font-medium text-slate-600 mt-0.5">Overlapping periods by relative position in time</p>
           </div>
           <div className="flex items-center gap-4">
              <button 
                 onClick={() => exportToCSV(brandedTrendData, "Brand_vs_Generic_Trend")} 
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
+                className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 flex-shrink-0"
               >
                 <FileText size={12} /> Export CSV
               </button>
@@ -321,10 +269,10 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
 
       <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm mt-8">
         <div className="flex justify-between items-center mb-8">
-          <div><h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Market Efficiency Analysis (Current Period)</h4><p className="text-[11px] font-bold text-slate-600">Traffic vs Revenue | Size = Revenue Contribution</p></div>
+          <div><h4 className="jf-display text-xl text-slate-900">Market Efficiency Analysis (Current Period)</h4><p className="text-xs font-medium text-slate-600 mt-0.5">Traffic vs Revenue | Size = Revenue Contribution</p></div>
           <button 
             onClick={() => exportToCSV(countryPerformanceData, "Market_Efficiency_Analysis")} 
-            className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-[11px] font-bold uppercase transition-all shadow-md"
+            className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 flex-shrink-0"
           >
             <FileText size={12} /> Export CSV
           </button>
@@ -335,8 +283,8 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
               <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis type="number" dataKey="traffic" name="Traffic" unit=" sess." axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} />
-                <YAxis type="number" dataKey="revenue" name="Revenue" unit={` ${currencySymbol}`} axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} tickFormatter={(val) => `${currencySymbol}${val.toLocaleString()}`} />
-                <ZAxis type="number" dataKey="revenue" range={[100, 2000]} name="Market Value" unit={` ${currencySymbol}`} />
+                <YAxis type="number" dataKey="revenue" name="Revenue" unit={` ${currencySymbol}`} axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700}} tickFormatter={(val) => `${withCurrency(currencySymbol, val.toLocaleString('en-US'))}`} />
+                <ZAxis type="number" dataKey="traffic" range={[120, 1200]} name="Sessions" />
                 <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }: any) => { 
                   if (active && payload && payload.length) { 
                     const d = payload[0].payload; 
@@ -344,19 +292,17 @@ export const SeoMarketplaceView = ({ data, keywordData, gscDailyTotals, gscTotal
                       <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-white/10">
                         <p className="text-[11px] font-bold uppercase tracking-wide mb-2 border-b border-white/10 pb-2">{d.country}</p>
                         <div className="space-y-1">
-                          <p className="text-[11px] flex justify-between gap-4"><span>Traffic:</span> <span className="font-bold">{d.traffic.toLocaleString()} sess.</span></p>
-                          <p className="text-[11px] flex justify-between gap-4"><span>Revenue:</span> <span className="font-bold text-emerald-400">{currencySymbol}{d.revenue.toLocaleString()}</span></p>
-                          <p className="text-[11px] flex justify-between gap-4"><span>Efficiency:</span> <span className="font-bold text-indigo-400">{currencySymbol}{(d.revenue / d.traffic).toFixed(2)}/sess.</span></p>
+                          <p className="text-[11px] flex justify-between gap-4"><span>Traffic:</span> <span className="font-bold">{d.traffic.toLocaleString('en-US')} sess.</span></p>
+                          <p className="text-[11px] flex justify-between gap-4"><span>Revenue:</span> <span className="font-bold text-emerald-400">{withCurrency(currencySymbol, d.revenue.toLocaleString('en-US'))}</span></p>
+                          <p className="text-[11px] flex justify-between gap-4"><span>Efficiency:</span> <span className="font-bold text-indigo-400">{withCurrency(currencySymbol, (d.revenue / d.traffic).toFixed(2))}/sess.</span></p>
                         </div>
                       </div>
                     ); 
                   } 
                   return null; 
                 }} />
-                <Scatter name="Organic Markets" data={countryPerformanceData}>
-                  {countryPerformanceData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.revenue > 10000 ? '#10b981' : entry.revenue > 5000 ? '#1D4ED8' : '#D97706'} fillOpacity={0.6} strokeWidth={2} stroke={entry.revenue > 10000 ? '#059669' : entry.revenue > 5000 ? '#4f46e5' : '#d97706'} />
-                  ))}
+                <Scatter name="Organic Markets" data={countryPerformanceData} fill={SERIES.organic} fillOpacity={0.55} stroke={SERIES.organic} strokeWidth={1.5}>
+                  <LabelList dataKey="country" position="top" style={{ fontSize: 12, fontWeight: 600, fill: '#334155' }} />
                 </Scatter>
               </ScatterChart>
             </ResponsiveContainer>

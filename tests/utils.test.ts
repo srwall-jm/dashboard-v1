@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeUrl, extractPath, normalizeCountry, parseGoogleAdsMetric, aggregateData, formatDate, isOrganicSearch, isPaidSearch } from '../utils';
+import { normalizeUrl, extractPath, normalizeCountry, parseGoogleAdsMetric, aggregateData, formatDate, isOrganicSearch, isPaidSearch, withCurrency } from '../utils';
 import type { DailyData } from '../types';
 
 describe('normalizeUrl', () => {
@@ -100,5 +100,15 @@ describe('isOrganicSearch / isPaidSearch', () => {
   it('handles missing values', () => {
     expect(isOrganicSearch(undefined)).toBe(false);
     expect(isPaidSearch('')).toBe(false);
+  });
+});
+
+describe('withCurrency', () => {
+  it('puts the euro sign after the amount and keeps other currencies before it', () => {
+    expect(withCurrency('€', '45,991')).toBe('45,991 €');
+    expect(withCurrency('€', 45991)).toBe('45,991 €');
+    expect(withCurrency('$', '45,991')).toBe('$45,991');
+    expect(withCurrency('£', 12.5)).toBe('£12.5');
+    expect(withCurrency('', '10')).toBe('10');
   });
 });
