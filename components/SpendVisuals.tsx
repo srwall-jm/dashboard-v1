@@ -13,7 +13,7 @@
 // Plain HTML bars, not a chart library: few marks, direct labels, and they reflow on paper.
 
 import React, { useMemo, useState } from 'react';
-import { ShieldCheck, FlaskConical, ChevronRight } from 'lucide-react';
+import { ShieldCheck, FlaskConical, ChevronRight, LineChart } from 'lucide-react';
 import { KeywordRecommendation, RecommendationSummary, RecommendationSettings, DEFAULT_SETTINGS } from '../recommendations';
 import { Plan, planKeyOf, countPlan, PLAN_STATUS_LABEL } from '../plan';
 import type { KeywordResult } from '../planResults';
@@ -333,7 +333,7 @@ export const PositionBands: React.FC<Shared> = ({ recommendations, settings = DE
 // ---------------------------------------------------------------------
 const PRESSURE_ORDER: Record<string, number> = { low: 0, medium: 1, unknown: 2, high: 3 };
 
-export const KeywordBars: React.FC<Shared & { plan?: Plan; planResults?: Record<string, KeywordResult> }> = ({ recommendations, summary, currencySymbol, periodDays, plan, planResults }) => {
+export const KeywordBars: React.FC<Shared & { plan?: Plan; planResults?: Record<string, KeywordResult>; onOpenDetail?: (keyword: string) => void }> = ({ recommendations, summary, currencySymbol, periodDays, plan, planResults, onOpenDetail }) => {
   const i18n = useI18n();
   const { tr, dec, range, int } = i18n;
   const money = (v: number) => i18n.money(currencySymbol, v);
@@ -382,6 +382,11 @@ export const KeywordBars: React.FC<Shared & { plan?: Plan; planResults?: Record<
               {item.status !== 'none' ? `${tr(PLAN_STATUS_LABEL[item.status])}${item.appliedOn ? tr(' on {date}', { date: item.appliedOn }) : ''}` : tr('Do not reduce')}
               {result && result.totalChange !== null && result.verdict !== 'noData' && result.verdict !== 'noSpendChange' ? ` · ${tr('total clicks {change}', { change: `${result.totalChange > 0 ? '+' : ''}${Math.round(result.totalChange * 100)}%` })}` : ''}
             </p>
+          )}
+          {onOpenDetail && (
+            <button type="button" onClick={() => onOpenDetail(r.keyword)} className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-700 underline underline-offset-2 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 ring-slate-900/30 rounded">
+              <LineChart size={12} aria-hidden="true" /> {tr('Week by week')}<span className="sr-only">: {r.keyword}</span>
+            </button>
           )}
         </div>
 

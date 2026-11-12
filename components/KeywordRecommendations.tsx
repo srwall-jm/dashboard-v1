@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { withCurrency } from '../utils';
-import { ArrowDownRight, ArrowUpRight, Minus, HelpCircle, FileText, Search, ChevronDown, ChevronUp, ArrowDown, ArrowUp } from 'lucide-react';
+import { LineChart, ArrowDownRight, ArrowUpRight, Minus, HelpCircle, FileText, Search, ChevronDown, ChevronUp, ArrowDown, ArrowUp } from 'lucide-react';
 import {
   KeywordRecommendation, RecommendationSummary, RecAction, Range, DEFAULT_SETTINGS, RecommendationSettings, isDefaultSettings,
 } from '../recommendations';
@@ -169,7 +169,8 @@ const RecTable: React.FC<{
   onPlanChange?: (keyword: string, item: PlanItem) => void; // editable when given
   planResults?: Record<string, KeywordResult>;
   settings?: RecommendationSettings;
-}> = ({ rows, money, sort, onSort, caption, plan, onPlanChange, planResults, settings }) => {
+  onOpenDetail?: (keyword: string) => void;
+}> = ({ rows, money, sort, onSort, caption, plan, onPlanChange, planResults, settings, onOpenDetail }) => {
   const i18n = useI18n();
   const { tr } = i18n;
   const header = (label: string, key: SortKey | null, align: 'left' | 'right' = 'left') => {
@@ -214,6 +215,11 @@ const RecTable: React.FC<{
               <td className="py-3 px-3 text-[13px] font-semibold text-slate-900 max-w-[220px]">
                 <span className="break-words">{r.keyword}</span>
                 {r.isBrand && <span className="ml-2 px-1.5 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600">{tr('Brand')}</span>}
+                {onOpenDetail && (
+            <button type="button" onClick={() => onOpenDetail(r.keyword)} className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-700 underline underline-offset-2 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 ring-slate-900/30 rounded">
+              <LineChart size={12} aria-hidden="true" /> {tr('Week by week')}<span className="sr-only">: {r.keyword}</span>
+            </button>
+                )}
               </td>
               <td className="py-3 px-3">
                 <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap ${style.badge}`}>
@@ -262,7 +268,8 @@ export const KeywordRecommendations: React.FC<{
   onMeasurePlan?: () => void;
   isMeasuringPlan?: boolean;
   planMeasureNote?: string | null;
-}> = ({ recommendations, summary, settings, currencySymbol, periodDays, periodLabel, clientName, isLoading, presentation = false, plan, onPlanChange, planShared = false, planResults, onMeasurePlan, isMeasuringPlan = false, planMeasureNote }) => {
+  onOpenDetail?: (keyword: string) => void;
+}> = ({ recommendations, summary, settings, currencySymbol, periodDays, periodLabel, clientName, isLoading, presentation = false, plan, onPlanChange, planShared = false, planResults, onMeasurePlan, isMeasuringPlan = false, planMeasureNote, onOpenDetail }) => {
   const [filter, setFilter] = useState<Filter>('REDUCE');
   const [search, setSearch] = useState('');
   const [visible, setVisible] = useState(PAGE);
@@ -405,7 +412,7 @@ export const KeywordRecommendations: React.FC<{
               <p className="text-sm text-slate-600 py-8 text-center">{tr('No keywords in this group.')}</p>
             ) : (
               <div className="overflow-x-auto">
-                <RecTable rows={rows.slice(0, visible)} money={money} sort={sort} onSort={handleSort} caption={tr('Keyword recommendations')} plan={plan} onPlanChange={onPlanChange} planResults={planResults} settings={s} />
+                <RecTable rows={rows.slice(0, visible)} money={money} sort={sort} onSort={handleSort} caption={tr('Keyword recommendations')} plan={plan} onPlanChange={onPlanChange} planResults={planResults} settings={s} onOpenDetail={onOpenDetail} />
                 {rows.length > visible && (
                   <button type="button" onClick={() => setVisible(v => v + PAGE)} className="mt-4 text-xs font-semibold text-slate-700 underline underline-offset-2 hover:text-slate-900">
                     {tr('Show {n} more of {total}', { n: Math.min(PAGE, rows.length - visible), total: int(rows.length) })}
@@ -421,13 +428,13 @@ export const KeywordRecommendations: React.FC<{
               <h4 className="jf-display text-xl text-slate-900 mb-2">{tr('Reduce')}: {i18n.keywords(reduceRows.length)}</h4>
               {reduceRows.length === 0
                 ? <p className="text-sm text-slate-600">{tr('No keyword meets the conditions for a reduction in this period.')}</p>
-                : <div className="overflow-x-auto"><RecTable rows={reduceRows} money={money} caption={tr('Keywords to reduce')} plan={planHasEntries ? plan : undefined} planResults={planResults} settings={s} /></div>}
+                : <div className="overflow-x-auto"><RecTable rows={reduceRows} money={money} caption={tr('Keywords to reduce')} plan={planHasEntries ? plan : undefined} planResults={planResults} settings={s} onOpenDetail={onOpenDetail} /></div>}
             </section>
             <section>
               <h4 className="jf-display text-xl text-slate-900 mb-2">{tr('Increase')}: {i18n.keywords(increaseRows.length)}</h4>
               {increaseRows.length === 0
                 ? <p className="text-sm text-slate-600">{tr('No keyword meets the conditions for an increase in this period.')}</p>
-                : <div className="overflow-x-auto"><RecTable rows={increaseRows} money={money} caption={tr('Keywords to increase')} plan={planHasEntries ? plan : undefined} planResults={planResults} settings={s} /></div>}
+                : <div className="overflow-x-auto"><RecTable rows={increaseRows} money={money} caption={tr('Keywords to increase')} plan={planHasEntries ? plan : undefined} planResults={planResults} settings={s} onOpenDetail={onOpenDetail} /></div>}
             </section>
           </div>
         </>

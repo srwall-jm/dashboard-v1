@@ -14,6 +14,7 @@ import { RecommendationRulesPanel } from './components/RecommendationRulesPanel'
 import { TAB_META } from './navigation';
 import { Lang, LANGS, LangProvider, isLang, translate } from './i18n';
 import { buildSnapshot } from './snapshots';
+import { DetailDay, DetailWeek, detailRange, toWeeks, emptyDay, sampleDetailDays } from './keywordDetail';
 import { KeywordResult, DailyPoint, measurementWindow, measureKeyword, coveringRange, gaqlString, queryRegexBatches, todayIso } from './planResults';
 import { Plan, PlanItem, withPlanItem, doNotReduceMap, loadLocalPlan, saveLocalPlan, fetchSharedPlan, saveSharedPlanItem } from './plan';
 import { MonthlyReport } from './components/MonthlyReport';
@@ -503,6 +504,103 @@ const App: React.FC = () => {
     } finally {
       setIsMeasuringPlan(false);
     }
+  };
+
+  // One keyword, week by week, for the detail panel. Loaded when the analyst opens it.
+  const loadKeywordDetail = async (rawKeyword: string): Promise<{ weeks: DetailWeek[]; notes: string[] }> => {
+    const keyword = rawKeyword.trim().toLowerCase();
+    const range = detailRange(filters.dateRange.end, todayIso());
+    const signal = keywordSignals.find(k => k.keyword === keyword);
+    if (isShowingSampleData) {
+      const days = Math.max(1, periodDays);
+      return {
+        weeks: toWeeks(sampleDetailDays(keyword, {
+          paidCost: (signal?.cost || 0) / days,
+          paidClicks: (signal?.paidClicks || 0) / days,
+          organicClicks: (signal?.organicClicks || 0) / days,
+          organicImpressions: (signal?.organicImpressions || 0) / days,
+          organicRank: signal?.organicRank ?? null,
+        }, range), range),
+        notes: [],
+      };
+    }
+
+    const notes: string[] = [];
+    const byDate: Record<string, DetailDay> = {};
+    const day = (date: string) => byDate[date] || (byDate[date] = emptyDay(date));
+
+    if (googleAdsAuth?.token && activeAdsAccounts.length > 0) {
+      const texts = Array.from(keywordSpellings.current[keyword] || [keyword]);
+      const query = `
+        SELECT ad_group_criterion.keyword.text, segments.date, metrics.clicks, metrics.cost_micros
+        FROM keyword_view
+        WHERE segments.date BETWEEN '${range.start}' AND '${range.end}'
+        AND ad_group_criterion.keyword.text IN (${texts.map(gaqlString).join(', ')})
+      `;
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${googleAdsAuth.token}`,
+        'Content-Type': 'application/json',
+        'developer-token': (developerTokenRef.current || '').trim() || DEVELOPER_TOKEN,
+      };
+      if (selectedGoogleAdsCustomer) headers['login-customer-id'] = selectedGoogleAdsCustomer.id.toString().replace(/-/g, '');
+      let failedAccounts = 0;
+      await Promise.all(activeAdsAccounts.map(async account => {
+        const customerId = account.id.toString().replace(/-/g, '');
+        let pageToken: string | undefined;
+        try {
+          do {
+            const res = await fetch(`/api/googleads/v25/customers/${customerId}/googleAds:search`, {
+              method: 'POST', headers, body: JSON.stringify(pageToken ? { query, pageToken } : { query }),
+            });
+            if (!res.ok) throw new Error(`status ${res.status}`);
+            const json = await res.json();
+            (json.results || []).forEach((row: any) => {
+              const text = String(row.adGroupCriterion?.keyword?.text || '').toLowerCase().trim();
+              const date = row.segments?.date;
+              if (text !== keyword || !date) return;
+              const d = day(date);
+              d.paidClicks += parseGoogleAdsMetric(row.metrics?.clicks);
+              d.paidCost += parseGoogleAdsMetric(row.metrics?.costMicros) / 1000000;
+            });
+            pageToken = json.nextPageToken;
+          } while (pageToken);
+        } catch {
+          failedAccounts += 1;
+        }
+      }));
+      if (failedAccounts > 0) notes.push(t('Google Ads could not be read for {n} of {total} accounts, so paid clicks are incomplete.', { n: failedAccounts, total: activeAdsAccounts.length }));
+    } else {
+      notes.push(t('Google Ads is not connected, so paid clicks are missing.'));
+    }
+
+    if (gscAuth?.token && gscAuth.site) {
+      const queries = new Set([keyword, ...(signal?.searchTerms?.terms || []).map(term => term.term.trim().toLowerCase())]);
+      try {
+        for (const expression of queryRegexBatches(Array.from(queries))) {
+          const result = await gscQueryAll(gscAuth.token, gscAuth.site.siteUrl, {
+            startDate: range.start,
+            endDate: range.end,
+            dimensions: ['date', 'query'],
+            dimensionFilterGroups: [{ filters: [{ dimension: 'query', operator: 'includingRegex', expression }] }],
+          });
+          result.rows.forEach((row: any) => {
+            const date = row.keys?.[0];
+            const text = String(row.keys?.[1] || '').toLowerCase().trim();
+            if (!date || !queries.has(text)) return;
+            const d = day(date);
+            d.organicClicks += row.clicks || 0;
+            d.organicImpressions += row.impressions || 0;
+            d.positionSum += (row.position || 0) * (row.impressions || 0);
+          });
+        }
+      } catch (err: any) {
+        notes.push(t('Search Console could not be read ({reason}), so organic clicks are missing.', { reason: err?.message || 'request failed' }));
+      }
+    } else {
+      notes.push(t('Search Console is not connected, so organic clicks are missing.'));
+    }
+
+    return { weeks: toWeeks(Object.values(byDate), range), notes };
   };
 
   const handlePlanChange = (keyword: string, item: PlanItem) => {
@@ -3007,6 +3105,7 @@ const App: React.FC = () => {
                  onMeasurePlan={measurePlan}
                  isMeasuringPlan={isMeasuringPlan}
                  planMeasureNote={planMeasureNote}
+                 onLoadKeywordDetail={loadKeywordDetail}
                  clientName={clientName}
                  periodLabel={periodLabel}
               />

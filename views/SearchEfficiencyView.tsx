@@ -17,6 +17,8 @@ import type { KeywordResult } from '../planResults';
 import { KeywordRecommendations } from '../components/KeywordRecommendations';
 import { MoneyMoves, RuleAndCaveat, ClicksPrice, PositionBands, KeywordBars, PlanProgress } from '../components/SpendVisuals';
 import { useI18n } from '../i18n';
+import { KeywordDetail, LoadKeywordDetail } from '../components/KeywordDetail';
+import { planKeyOf } from '../plan';
 
 interface UrlEfficiencyRow {
   url: string;
@@ -63,13 +65,16 @@ export const SearchEfficiencyView: React.FC<{
   planMeasureNote?: string | null;
   clientName?: string;
   periodLabel?: string;
-}> = ({ urlData, keywordData, currencySymbol, globalMetrics, totalGscClicks, isLoading, isBranded, onRefresh, queryTypeFilter, keywordSignals = [], periodDays = 30, recommendationSettings = DEFAULT_SETTINGS, presentation = false, plan, onPlanChange, planShared, planResults, onMeasurePlan, isMeasuringPlan, planMeasureNote, clientName, periodLabel }) => {
+  onLoadKeywordDetail?: LoadKeywordDetail;
+}> = ({ urlData, keywordData, currencySymbol, globalMetrics, totalGscClicks, isLoading, isBranded, onRefresh, queryTypeFilter, keywordSignals = [], periodDays = 30, recommendationSettings = DEFAULT_SETTINGS, presentation = false, plan, onPlanChange, planShared, planResults, onMeasurePlan, isMeasuringPlan, planMeasureNote, clientName, periodLabel, onLoadKeywordDetail }) => {
   const [clusterFilter, setClusterFilter] = useState<'All' | 'Cannibalization Risk' | 'Paid Reliance' | 'Paid Gap'>('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ppcCost', direction: 'desc' });
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
   const [showLandingPages, setShowLandingPages] = useState(false);
   const { tr } = useI18n();
+  const [detailKeyword, setDetailKeyword] = useState<string | null>(null);
+  const openDetail = onLoadKeywordDetail ? setDetailKeyword : undefined;
 
   // 0. Keyword recommendations (reduce / hold / increase), the source of every saving figure in this view
   const { recommendations, summary: recSummary } = useMemo(
@@ -419,7 +424,7 @@ export const SearchEfficiencyView: React.FC<{
               <ClicksPrice {...shared} />
               <PositionBands {...shared} />
             </div>
-            <KeywordBars {...shared} plan={plan} planResults={planResults} />
+            <KeywordBars {...shared} plan={plan} planResults={planResults} onOpenDetail={openDetail} />
             <PlanProgress
               summary={recSummary}
               plan={plan}
@@ -452,7 +457,15 @@ export const SearchEfficiencyView: React.FC<{
         onMeasurePlan={onMeasurePlan}
         isMeasuringPlan={isMeasuringPlan}
         planMeasureNote={planMeasureNote}
+        onOpenDetail={openDetail}
       />
+
+      {detailKeyword && onLoadKeywordDetail && (() => {
+        const rec = recommendations.find(r => r.keyword === detailKeyword);
+        return rec ? (
+          <KeywordDetail rec={rec} planItem={plan?.[planKeyOf(rec.keyword)]} currencySymbol={currencySymbol} load={onLoadKeywordDetail} onClose={() => setDetailKeyword(null)} />
+        ) : null;
+      })()}
 
       {/* Analyst detail: landing pages. Not part of what the client sees. */}
       {!presentation && (

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+Added (keyword, week by week)
+- Each keyword in Spend recommendations opens a panel with its last 12 weeks: paid spend, clicks (paid and organic) and organic position, with the week a change was applied marked. Loaded on demand from Google Ads and Search Console.
+
 Added (conversion value at risk)
 - Google Ads conversion value is read per keyword. The tab shows the conversion value of the clicks that may be lost next to the saving, and the margin below which the reductions pay for themselves. Shown per keyword and in the CSV; hidden when the account records no conversion value.
 
